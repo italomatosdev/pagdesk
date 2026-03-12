@@ -56,6 +56,10 @@ jobs:
             docker exec pagdesk-app php artisan view:clear
             docker exec pagdesk-app php artisan cache:clear
             
+            echo "🔄 Reiniciando container app para aplicar limpeza..."
+            docker restart pagdesk-app
+            sleep 10
+            
             echo "🔄 Reiniciando workers..."
             docker exec pagdesk-app php artisan queue:restart
             

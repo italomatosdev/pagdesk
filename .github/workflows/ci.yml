@@ -6,10 +6,8 @@
 name: CI
 
 on:
-  push:
-    branches: [dev, develop]
   pull_request:
-    branches: [main, master, dev, develop]
+    branches: [main, master]
 
 env:
   PHP_VERSION: '8.2'
