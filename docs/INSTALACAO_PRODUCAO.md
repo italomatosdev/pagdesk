@@ -986,27 +986,56 @@ docker compose logs --tail=50 app
 
 **Erro: Uploads/imagens não aparecem (404)**
 
-O storage de arquivos públicos usa um volume Docker separado. Se os arquivos não aparecerem:
+Se arquivos de storage retornam 404, verifique:
 
 ```bash
-# 1. Verificar se o nginx consegue ver o storage
-docker exec pagdesk-nginx ls -la /var/www/html/public/storage/
-
-# 2. Verificar se os arquivos existem no app
+# 1. Verificar se os arquivos existem no container app
 docker exec pagdesk-app ls -la /var/www/html/storage/app/public/
 
-# 3. Se os arquivos estiverem no volume antigo, copiar para o novo
-docker run --rm -v pagdesk-storage:/src -v pagdesk-storage-public:/dest alpine sh -c "cp -r /src/public/* /dest/"
+# 2. Verificar se nginx consegue acessar (deve mostrar os mesmos arquivos)
+docker exec pagdesk-nginx ls -la /var/www/html/storage/app/public/
+
+# 3. Testar acesso interno
+docker exec pagdesk-nginx curl -I http://localhost/storage/PASTA/ARQUIVO.jpg
 ```
 
-**Estrutura de Volumes para Storage:**
+**Causa comum:** A configuração do Nginx precisa ter `^~` no location `/storage`:
 
-| Volume | Caminho no Container | Descrição |
-|--------|---------------------|-----------|
-| `pagdesk-storage` | `/var/www/html/storage/app` | Storage geral do app |
-| `pagdesk-storage-public` | `/var/www/html/storage/app/public` (app) e `/var/www/html/public/storage` (nginx) | Arquivos públicos acessíveis via URL |
+```nginx
+# CORRETO - ^~ dá prioridade sobre regex de assets
+location ^~ /storage {
+    alias /var/www/html/storage/app/public;
+}
 
-> **Nota:** O volume `pagdesk-storage-public` é montado tanto no app quanto no nginx para que uploads feitos pelo app sejam servidos pelo nginx.
+# INCORRETO - regex de assets (.jpg, .png) captura antes
+location /storage {
+    alias /var/www/html/storage/app/public;
+}
+```
+
+Se fizer alteração no `default.conf`, reinicie o nginx:
+```bash
+docker compose restart nginx
+```
+
+**Como Funciona o Storage de Arquivos Públicos:**
+
+O Nginx serve arquivos de `/storage/*` diretamente usando a diretiva `alias`:
+
+```nginx
+# Em docker/nginx/default.conf
+location ^~ /storage {
+    alias /var/www/html/storage/app/public;
+    try_files $uri =404;
+}
+```
+
+| URL | Caminho Real no Container |
+|-----|---------------------------|
+| `/storage/clientes/foto.jpg` | `/var/www/html/storage/app/public/clientes/foto.jpg` |
+| `/storage/comprovantes/doc.pdf` | `/var/www/html/storage/app/public/comprovantes/doc.pdf` |
+
+> **Importante:** O `^~` é necessário para dar prioridade ao location `/storage` sobre a regex de assets estáticos (`.jpg`, `.png`, etc.). Sem ele, a regex captura a requisição antes e causa 404.
 
 ---
 
@@ -1112,6 +1141,7 @@ Senha: (definida no .env - GRAFANA_ADMIN_PASSWORD)
 | 2026-03-12 | Configuração CI/CD com GitHub Actions |
 | 2026-03-12 | Configuração SMTP SendGrid no Grafana (porta 2525) |
 | 2026-03-12 | Configuração alertas: CPU, Memória, Disco, Container |
+| 2026-03-12 | Correção Nginx: `^~` no location /storage para servir uploads |
 | 2026-03-12 | **Infraestrutura de produção completa!** |
 
 ---
