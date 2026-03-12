@@ -8,11 +8,12 @@
 name: Deploy Staging
 
 on:
-  push:
-    branches:
-      - dev
-      - staging
-      - develop
+  # Desabilitado - não há servidor de staging configurado
+  # push:
+  #   branches:
+  #     - dev
+  #     - staging
+  #     - develop
   workflow_dispatch:
     inputs:
       skip_tests:
