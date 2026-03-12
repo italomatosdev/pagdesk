@@ -984,6 +984,30 @@ ssh deploy@172.235.157.83
 docker compose logs --tail=50 app
 ```
 
+**Erro: Uploads/imagens não aparecem (404)**
+
+O storage de arquivos públicos usa um volume Docker separado. Se os arquivos não aparecerem:
+
+```bash
+# 1. Verificar se o nginx consegue ver o storage
+docker exec pagdesk-nginx ls -la /var/www/html/public/storage/
+
+# 2. Verificar se os arquivos existem no app
+docker exec pagdesk-app ls -la /var/www/html/storage/app/public/
+
+# 3. Se os arquivos estiverem no volume antigo, copiar para o novo
+docker run --rm -v pagdesk-storage:/src -v pagdesk-storage-public:/dest alpine sh -c "cp -r /src/public/* /dest/"
+```
+
+**Estrutura de Volumes para Storage:**
+
+| Volume | Caminho no Container | Descrição |
+|--------|---------------------|-----------|
+| `pagdesk-storage` | `/var/www/html/storage/app` | Storage geral do app |
+| `pagdesk-storage-public` | `/var/www/html/storage/app/public` (app) e `/var/www/html/public/storage` (nginx) | Arquivos públicos acessíveis via URL |
+
+> **Nota:** O volume `pagdesk-storage-public` é montado tanto no app quanto no nginx para que uploads feitos pelo app sejam servidos pelo nginx.
+
 ---
 
 ## 22. Alertas no Grafana
