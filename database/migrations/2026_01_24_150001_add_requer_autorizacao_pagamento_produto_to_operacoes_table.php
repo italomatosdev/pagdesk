@@ -13,7 +13,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('operacoes', function (Blueprint $table) {
-            $table->boolean('requer_autorizacao_pagamento_produto')->default(false)->after('requer_liberacao');
+            $table->boolean('requer_autorizacao_pagamento_produto')->default(false);
         });
     }
 
