@@ -896,3 +896,7 @@ mysql -u root -e "STOP REPLICA; START REPLICA;"
 ---
 
 **Documento atualizado em:** 2026-03-12
+
+---
+
+*Deploy automático via GitHub Actions configurado.*
