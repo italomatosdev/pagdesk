@@ -613,6 +613,30 @@ Resultado:
 }
 ```
 
+### Executar Seeders Essenciais
+
+> **IMPORTANTE:** Os seeders não são executados automaticamente no deploy. Rode-os manualmente após a primeira instalação.
+
+```bash
+# Criar papéis (administrador, gestor, consultor, cliente)
+docker exec pagdesk-app php artisan db:seed --class=RoleSeeder --force
+
+# Criar permissões associadas aos papéis
+docker exec pagdesk-app php artisan db:seed --class=PermissionSeeder --force
+```
+
+**Verificar se os papéis foram criados:**
+```bash
+docker exec pagdesk-app php artisan tinker --execute="print_r(\App\Modules\Core\Models\Role::pluck('name')->toArray());"
+```
+
+Resultado esperado:
+```
+Array ( [0] => administrador [1] => cliente [2] => consultor [3] => gestor )
+```
+
+> **Nota:** Sem os seeders, funcionalidades como criação de usuários com papéis não funcionarão corretamente.
+
 ---
 
 ## 17. Configuração do Domínio (Cloudflare)
