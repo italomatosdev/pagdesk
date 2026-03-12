@@ -21,7 +21,7 @@ return new class extends Migration
             $table->string('tipo_documento', 80); // documento_cliente, selfie_documento, etc.
             $table->timestamps();
 
-            $table->unique(['operacao_id', 'tipo_documento']);
+            $table->unique(['operacao_id', 'tipo_documento'], 'op_docs_obrig_unique');
             $table->index('operacao_id');
         });
     }
