@@ -636,7 +636,50 @@ Resultado:
 
 ---
 
-## 18. Próximos Passos
+## 18. Criação do Super Admin
+
+O sistema possui dois níveis de acesso:
+
+| Tipo | Descrição |
+|------|-----------|
+| **Super Admin** | `is_super_admin=true`, sem empresa, acesso total ao sistema |
+| **Roles** | `administrador`, `gestor`, `consultor` - dentro de uma empresa/operação |
+
+### Criar Super Admin personalizado:
+
+```bash
+docker exec pagdesk-app php artisan tinker --execute="
+\App\Models\User::create([
+    'name' => 'Super Admin',
+    'email' => 'sadmin@pagdesk.com',
+    'password' => bcrypt('SuaSenhaForte'),
+    'email_verified_at' => now(),
+    'is_super_admin' => true,
+    'empresa_id' => null,
+]);
+echo 'Super Admin criado com sucesso!';
+"
+```
+
+### Alternativa: Rodar Seeders (usuários de exemplo)
+
+```bash
+docker exec pagdesk-app php artisan db:seed --class=RoleSeeder
+docker exec pagdesk-app php artisan db:seed --class=UserSeeder
+```
+
+Usuários criados pelos seeders:
+
+| Usuário | Email | Senha |
+|---------|-------|-------|
+| Super Admin | superadmin@sistema-cred.com | 12345678 |
+| Admin | admin@sistema-cred.com | 12345678 |
+| Gestor | gestor@sistema-cred.com | 12345678 |
+| Consultor | consultor@sistema-cred.com | 12345678 |
+
+---
+
+## 19. Próximos Passos
 
 - [x] ~~Instalar Docker no `pagdesk-app`~~
 - [x] ~~Configurar repositório GitHub~~
@@ -646,7 +689,7 @@ Resultado:
 - [x] ~~Executar migrations~~
 - [x] ~~Configurar domínio e DNS (Cloudflare)~~
 - [x] ~~Configurar HTTPS (Cloudflare Flexível)~~
-- [ ] Criar usuário administrador
+- [x] ~~Criar Super Admin~~
 - [ ] Configurar CI/CD com GitHub Actions (secrets)
 - [ ] Configurar monitoramento (Grafana/Prometheus)
 - [ ] Configurar backups automáticos
@@ -770,6 +813,7 @@ mysql -u root -e "STOP REPLICA; START REPLICA;"
 | 2026-03-12 | Configuração do domínio pagdesk.com no Cloudflare |
 | 2026-03-12 | Ativação do HTTPS via Cloudflare (modo Flexível) |
 | 2026-03-12 | **Aplicação online em https://pagdesk.com** |
+| 2026-03-12 | Criação do Super Admin |
 
 ---
 
