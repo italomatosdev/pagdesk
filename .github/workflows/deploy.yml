@@ -1,0 +1,258 @@
+# =============================================================================
+# DEPLOY - Continuous Deployment
+# Build, push e deploy automático para produção
+# =============================================================================
+
+name: Deploy
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Ambiente de deploy'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+env:
+  PHP_VERSION: '8.2'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Testes (antes de deploy)
+  # ---------------------------------------------------------------------------
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: testing
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, pdo, pdo_mysql, redis, bcmath, gd, zip, intl
+
+      - name: Cache Composer
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+
+      - name: Instalar dependências
+        run: composer install --prefer-dist --no-interaction
+
+      - name: Preparar ambiente
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Executar testes
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_DATABASE: testing
+          DB_USERNAME: root
+          DB_PASSWORD: root
+          REDIS_HOST: 127.0.0.1
+        run: php artisan test
+
+  # ---------------------------------------------------------------------------
+  # Build e Push da Imagem Docker
+  # ---------------------------------------------------------------------------
+  build-and-push:
+    name: Build & Push
+    runs-on: ubuntu-latest
+    needs: [test]
+    permissions:
+      contents: read
+      packages: write
+    
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      image_digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login no GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extrair metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=prod-
+            type=raw,value=prod-{{date 'YYYYMMDD-HHmmss'}}
+            type=ref,event=branch
+
+      - name: Build e Push
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            APP_ENV=production
+            APP_DEBUG=false
+
+      - name: Resumo do build
+        run: |
+          echo "## Build Docker 🐳" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Digest:** ${{ steps.build.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
+
+  # ---------------------------------------------------------------------------
+  # Deploy no Servidor
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    environment: production
+    
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            
+            echo "🚀 Iniciando deploy..."
+            cd /opt/pagdesk
+            
+            echo "📥 Baixando nova imagem..."
+            docker compose pull
+            
+            echo "🔄 Atualizando containers..."
+            docker compose up -d --remove-orphans
+            
+            echo "⏳ Aguardando containers ficarem saudáveis..."
+            sleep 10
+            
+            echo "🗄️ Executando migrations..."
+            docker compose exec -T app php artisan migrate --force
+            
+            echo "⚡ Otimizando aplicação..."
+            docker compose exec -T app php artisan optimize
+            
+            echo "🔄 Reiniciando workers..."
+            docker compose exec -T app php artisan queue:restart
+            
+            echo "🧹 Limpando imagens antigas..."
+            docker image prune -af --filter "until=168h"
+            
+            echo "✅ Deploy concluído com sucesso!"
+
+      - name: Verificar health check
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "🏥 Verificando saúde da aplicação..."
+            sleep 5
+            
+            # Tentar até 3 vezes com intervalo de 10s
+            for i in 1 2 3; do
+              echo "Tentativa $i/3..."
+              
+              response=$(curl -s http://localhost/health)
+              http_code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/health)
+              
+              if [ "$http_code" = "200" ]; then
+                status=$(echo "$response" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
+                
+                if [ "$status" = "healthy" ] || [ "$status" = "degraded" ]; then
+                  echo "✅ Aplicação saudável (status: $status)"
+                  echo "📊 Resposta: $response"
+                  exit 0
+                fi
+              fi
+              
+              if [ $i -lt 3 ]; then
+                echo "⏳ Aguardando 10s antes de tentar novamente..."
+                sleep 10
+              fi
+            done
+            
+            echo "❌ Health check falhou após 3 tentativas"
+            echo "HTTP Code: $http_code"
+            echo "Response: $response"
+            echo ""
+            echo "📋 Logs do container app:"
+            docker compose logs --tail=50 app
+            exit 1
+
+      - name: Resumo do deploy
+        if: success()
+        run: |
+          echo "## Deploy Concluído ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Servidor:** ${{ secrets.SSH_HOST }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Data:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notificar falha
+        if: failure()
+        run: |
+          echo "## Deploy Falhou ❌" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Verifique os logs acima para mais detalhes." >> $GITHUB_STEP_SUMMARY

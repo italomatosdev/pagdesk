@@ -1,0 +1,111 @@
+# =============================================================================
+# DOCKER COMPOSE - PagDesk (Desenvolvimento Local)
+# Override para ambiente de desenvolvimento
+# 
+# Uso: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # APP - PHP-FPM (Desenvolvimento)
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_ENV: local
+        APP_DEBUG: "true"
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - PHP_OPCACHE_VALIDATE_TIMESTAMPS=1
+    volumes:
+      # Monta código fonte para hot reload
+      - .:/var/www/html
+      - /var/www/html/vendor
+      - /var/www/html/node_modules
+      - /var/www/html/bootstrap/cache
+      - /var/www/html/storage/framework
+
+  # ---------------------------------------------------------------------------
+  # NGINX - Servidor Web (Desenvolvimento)
+  # ---------------------------------------------------------------------------
+  nginx:
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - .:/var/www/html:ro
+
+  # ---------------------------------------------------------------------------
+  # QUEUE - Worker de Filas (Desenvolvimento)
+  # ---------------------------------------------------------------------------
+  queue:
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+      - /var/www/html/bootstrap/cache
+      - /var/www/html/storage/framework
+    # Reinicia mais rápido em desenvolvimento
+    command: ["php", "artisan", "queue:work", "--sleep=1", "--tries=3", "--timeout=60"]
+
+  # ---------------------------------------------------------------------------
+  # SCHEDULER - Cron (Desenvolvimento)
+  # ---------------------------------------------------------------------------
+  scheduler:
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+      - /var/www/html/bootstrap/cache
+      - /var/www/html/storage/framework
+
+  # ---------------------------------------------------------------------------
+  # MYSQL - Banco de Dados Local (COMENTADO - usando MySQL local do host)
+  # Descomente se quiser usar MySQL no Docker
+  # ---------------------------------------------------------------------------
+  # mysql:
+  #   image: mysql:8.0
+  #   container_name: pagdesk-mysql
+  #   restart: unless-stopped
+  #   ports:
+  #     - "${DB_PORT:-3306}:3306"
+  #   environment:
+  #     - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-root}
+  #     - MYSQL_DATABASE=${DB_DATABASE:-pagdesk}
+  #     - MYSQL_USER=${DB_USERNAME:-pagdesk}
+  #     - MYSQL_PASSWORD=${DB_PASSWORD:-secret}
+  #   volumes:
+  #     - mysql-data:/var/lib/mysql
+  #   networks:
+  #     - app-network
+  #   healthcheck:
+  #     test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-root}"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # MAILPIT - Captura de E-mails (Desenvolvimento)
+  # ---------------------------------------------------------------------------
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: pagdesk-mailpit
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_HTTP_PORT:-8025}:8025"
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+    networks:
+      - app-network
+
+# =============================================================================
+# VOLUMES (Desenvolvimento)
+# =============================================================================
+# volumes:
+#   mysql-data:
+#     name: pagdesk-mysql-dev

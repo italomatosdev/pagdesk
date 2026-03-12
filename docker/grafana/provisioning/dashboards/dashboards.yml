@@ -1,0 +1,18 @@
+# =============================================================================
+# GRAFANA - Provisionamento de Dashboards
+# Carrega dashboards automaticamente ao iniciar
+# =============================================================================
+
+apiVersion: 1
+
+providers:
+  - name: 'PagDesk'
+    orgId: 1
+    folder: ''
+    folderUid: ''
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

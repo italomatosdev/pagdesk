@@ -1,0 +1,149 @@
+Você é um Tech Lead/Staff Engineer trabalhando dentro de um projeto Laravel 11 já iniciado a partir do template Webadmin (Themesdesign) com Bootstrap 5.3.3, Vite e NPM. NÃO crie um template do zero e NÃO redesenhe UI. Use as páginas, layouts, assets, componentes e estrutura existentes do Webadmin, reaproveitando ao máximo. Seu trabalho é implementar a base do meu sistema interno de crédito/cobrança de forma modular, com regras de negócio e permissões, mantendo o estilo do tema.
+
+PADRÃO DE LINGUAGEM (OBRIGATÓRIO)
+- Todo o projeto deve ser em português-BR (nomes de tabelas, colunas, models, services, métodos, rotas e views).
+- Sem acentos/cedilha em identificadores (apenas texto de UI pode ter acento).
+- Padrão: snake_case para tabelas/colunas; PascalCase para Models; camelCase para métodos.
+- Manter convenções do Laravel (Migrations, Eloquent, Requests, Policies etc.) e apenas adaptar nomes.
+
+CLIENTE ÚNICO + CPF
+- O Cliente é uma entidade global (não tem operacao_id).
+- CPF é a chave principal de busca e deve ser único no banco.
+- Implementar `clientes.cpf` como VARCHAR(11) (somente números), com UNIQUE INDEX.
+- Não usar CPF como primary key física: manter `clientes.id` como PK padrão do Laravel.
+- Ao cadastrar cliente, se CPF existir, o sistema deve indicar “cliente já cadastrado” e permitir vincular à operação.
+
+NOMENCLATURA SUGERIDA (exemplos)
+- Tabelas: clientes, operacoes, usuarios, emprestimos, parcelas, pagamentos, vinculos_cliente_operacao, auditorias, prestacoes_contas
+- Colunas: cpf, nome, telefone, data_nascimento, operacao_id, usuario_id, consultor_id, gestor_id, limite_credito, data_inicio, data_vencimento, valor, valor_total, status
+- Models: Cliente, Operacao, Usuario, Emprestimo, Parcela, Pagamento, VinculoClienteOperacao, Auditoria, PrestacaoConta
+
+
+CONTEXTO DO NEGÓCIO (resumo)
+- Sistema interno de crédito e cobranças.
+- Existem várias “Operações” (empresas internas) dentro do sistema. Cada operação tem seus consultores, limites e dados financeiros. Dados operacionais sempre pertencem a uma operação.
+- O Cliente é GLOBAL (cadastro único), podendo ter relações com múltiplas operações.
+- Existem 4 papéis: Administrador, Gestor, Consultor, Cliente.
+- Um usuário pode ter múltiplos papéis ao mesmo tempo (ex: Neto é Administrador e pode agir como Consultor). NÃO existem dois logins.
+- O sistema organiza, registra, audita. Decisão final sempre humana.
+
+REGRAS PRINCIPAIS (MÓDULO EMPRÉSTIMO EM DINHEIRO)
+- Empréstimos com parcelas: diária, semanal ou mensal.
+- Regra operacional: cliente só pode pegar novo dinheiro se quitar o empréstimo atual.
+- Porém não travamos: se o cliente tem dívida em aberto, o empréstimo entra como “PENDENTE” e o Administrador decide aprovar ou negar (exceção).
+- Cada cliente tem LIMITE DE CRÉDITO POR OPERAÇÃO, definido pelo Administrador (pode ser alterado, mas vale dali em diante; não retroage).
+- Se o valor do novo empréstimo ultrapassar o limite, também vira “PENDENTE” para aprovação do Administrador.
+- Aprovação automática só acontece quando: sem dívida em aberto E dentro do limite de crédito daquela operação.
+- O sistema precisa mostrar “cobranças do dia” (parcelas com vencimento hoje) e atrasadas.
+
+MODELO DE OPERAÇÃO DO DINHEIRO (fluxo)
+1) Consultor cadastra/seleciona cliente global e cria empréstimo.
+2) Se dentro de regra → aprovado automaticamente; senão → pendente.
+3) Administrador aprova pendências.
+4) Admin registra liberação do dinheiro (pagamento ao consultor). Consultor repassa ao cliente (registrável).
+5) Consultor cobra, recebe, registra pagamentos. Dinheiro fica em “caixa do consultor”.
+6) Consultor presta contas (repasse) e Gestor confere/valida; Administrador tem visão total.
+
+DECISÃO DE ARQUITETURA: SISTEMA POR MÓDULOS
+Implementar por módulos (bounded contexts) dentro do mesmo Laravel:
+- Core (Base): Users/Roles/Permissions, Operações, Clientes globais, Documentos KYC, Auditoria.
+- Empréstimo em Dinheiro: Loans, Parcelas (Installments), Cobranças do Dia, Recebimentos, Atrasos.
+- Caixa/Financeiro: Movimentações de Caixa (ledger), Prestação de Contas (settlement), Conferência.
+- Aprovações/Exceções: fila de aprovações, histórico de decisões.
+- (Futuro) Troca de Cheque.
+- (Futuro) Garantia/Empenho (carro etc).
+
+IMPORTANTE SOBRE “TROCA DE CHEQUE” E “EMPENHO”
+- Não implementar tudo agora. Apenas preparar a base modular com enums/tipos e estrutura que permita acrescentar:
+  - Módulo de Troca de Cheque: cheques, datas, status (pendente/compensado/devolvido), alertas.
+  - Módulo de Garantia: cadastro de bem, docs/fotos, vínculo com operação financeira.
+- Por padrão hoje só Administrador usa esses módulos, mas deve ser escalável via permissões no futuro.
+
+REQUISITOS NÃO-FUNCIONAIS
+- Auditoria obrigatória para ações críticas (criar empréstimo, aprovar, alterar limite, registrar pagamento, ajustar parcela, estornar, validar prestação de contas).
+- Multi-operação: dados operacionais devem sempre conter operation_id; Cliente global sem operation_id (mas com vínculo por tabela pivô).
+- Sem regra de negócio em Controller. Criar Services/Actions por módulo.
+- Migrations seguras.
+- Preparar jobs/scheduler para “marcar parcelas atrasadas” e “gerar alertas” (não precisa integrar WhatsApp agora).
+- Tudo deve seguir padrões do Laravel 11.
+
+STACK / ESTRUTURA
+- Laravel 11
+- Blade (do template) + componentes do tema. Evitar criar frontend novo.
+- Rotas web (auth do template). Se já existir auth, reaproveitar.
+- Vite/NPM já vem no template — não alterar base, só adicionar o necessário.
+- Banco: Postgres ou MySQL (escrever migrations agnósticas).
+
+O QUE EU QUERO COMO ENTREGÁVEL AGORA (FASE 1 - FUNDAÇÃO + MVP DO EMPRÉSTIMO)
+1) Analisar a estrutura do Webadmin Laravel atual:
+   - Onde ficam layouts, sidebar/menu, auth, dashboard.
+   - Identificar como adicionar novos menus/páginas mantendo padrão.
+2) Implementar CORE (mínimo):
+   - Entidades/tabelas: operations, users, roles/permissions (pode usar spatie/laravel-permission se já fizer sentido), clients, client_documents (KYC), operation_clients (vínculo e limite de crédito).
+   - Campo em operation_clients: credit_limit, status (ativo/bloqueado), notas internas.
+3) Implementar MÓDULO EMPRÉSTIMO EM DINHEIRO (mínimo viável):
+   - Tabelas: loans, installments, payments.
+   - Status do Loan: draft/pendente/aprovado/ativo/finalizado/cancelado (ajuste se preferir).
+   - Regras:
+     - Ao criar loan: validar cliente com empréstimo ativo/pendente na mesma operação; se existir → set pendente.
+     - Validar limite: se novo valor > credit_limit → pendente.
+     - Se ok → aprovado automaticamente.
+   - Gerar parcelas automaticamente conforme frequência e número de parcelas:
+     - daily/weekly/monthly + start_date.
+   - Tela “Cobranças do Dia” para Consultor:
+     - listar parcelas vencendo hoje e atrasadas (por operação e por consultor responsável).
+     - ação rápida “Registrar pagamento”.
+   - Registro de pagamento:
+     - marcar parcela como paga (suportar parcial? se não, implementar apenas total agora e deixar ganchos para parcial).
+     - criar registro payment com método (dinheiro/pix/outro) e optional comprovante.
+4) Implementar CAIXA + PRESTAÇÃO DE CONTAS (mínimo):
+   - Registrar que pagamentos recebidos entram no “caixa do consultor”.
+   - Tabelas: cash_ledger_entries (ou cash_movements) + settlements (prestação de contas).
+   - Gestor pode “conferir/validar” settlements; Administrador vê tudo.
+5) Implementar APROVAÇÕES:
+   - Tela para Administrador ver loans pendentes e aprovar/rejeitar.
+   - Ao aprovar: registrar approval com user_id e motivo opcional (audit).
+6) Menus/telas:
+   - Inserir menus no sidebar do Webadmin:
+     - Clientes
+     - Empréstimos
+     - Cobranças do Dia
+     - Caixa / Prestação de Contas
+     - Aprovações (admin)
+     - Operações (admin)
+     - Usuários/Permissões (admin)
+   - Usar páginas e componentes do template (cards, tables) existentes.
+7) Auditoria:
+   - Criar tabela audit_logs e middleware/helper para registrar eventos críticos.
+   - Em cada Service/Action crítico, disparar audit log.
+8) Seeders:
+   - Criar seed para papéis e permissões mínimas.
+   - Criar seed para um usuário admin e uma operação de exemplo (somente em ambiente dev).
+
+REGRAS DE PERMISSÃO (mínimo para fase 1)
+- Administrador:
+  - tudo.
+- Gestor:
+  - visualizar empréstimos/parcelas/pagamentos, conferir settlements, ver relatórios básicos.
+  - não aprovar exceções de crédito.
+- Consultor:
+  - criar cliente (ou vincular), criar empréstimo, ver suas cobranças do dia, registrar pagamentos, criar settlement (prestação de contas).
+- Cliente:
+  - sem acesso nesta fase (apenas entidade de dados).
+
+COMO VOCÊ DEVE TRABALHAR (no Cursor)
+- Primeiro: faça um “plan” rápido listando arquivos/pastas do template que serão tocados e a estratégia de integração.
+- Depois: implemente incrementalmente com commits lógicos (ou listas de mudanças).
+- Evite mudanças globais no tema; priorize reuso.
+- Ao final: entregue uma lista de rotas principais e onde ficam as telas.
+
+OBSERVAÇÕES
+- Não implemente troca de cheque e empenho agora, apenas deixe preparado o design modular (enums/tables placeholders opcionais comentadas) para adicionar depois.
+- Se o template já tiver auth e dashboard, use-os.
+- Se existir um padrão de layout horizontal/vertical no Webadmin, mantenha o default.
+
+Comece analisando a base do projeto Webadmin Laravel atual e me diga:
+1) Onde inserir menus e páginas mantendo padrão;
+2) Qual a melhor forma de organizar pastas por módulo (ex: app/Modules/Core, app/Modules/Loans, etc ou app/Domain/...);
+3) Uma sequência de implementação (ordem dos PRs).
+Depois disso, implemente Fase 1.

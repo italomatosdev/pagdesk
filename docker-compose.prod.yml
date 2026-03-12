@@ -1,0 +1,126 @@
+# =============================================================================
+# DOCKER COMPOSE - PagDesk (Produção)
+# Override para ambiente de produção
+# 
+# Uso: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # APP - PHP-FPM (Produção)
+  # ---------------------------------------------------------------------------
+  app:
+    # Em produção, usar imagem do registry (não build local)
+    image: ${REGISTRY_IMAGE:-ghcr.io/seu-usuario/pagdesk}:${IMAGE_TAG:-latest}
+    build: !reset null
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - APP_URL=${APP_URL:-https://pagdesk.com.br}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_DATABASE=${DB_DATABASE:-pagdesk_production}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CACHE_DRIVER=redis
+      - QUEUE_CONNECTION=redis
+      - SESSION_DRIVER=redis
+      - LOG_CHANNEL=stack
+      - LOG_LEVEL=warning
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # ---------------------------------------------------------------------------
+  # NGINX - Servidor Web (Produção)
+  # ---------------------------------------------------------------------------
+  nginx:
+    ports:
+      - "80:80"
+      - "443:443"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # ---------------------------------------------------------------------------
+  # QUEUE - Worker de Filas (Produção)
+  # ---------------------------------------------------------------------------
+  queue:
+    image: ${REGISTRY_IMAGE:-ghcr.io/seu-usuario/pagdesk}:${IMAGE_TAG:-latest}
+    build: !reset null
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_DATABASE=${DB_DATABASE:-pagdesk_production}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - CACHE_DRIVER=redis
+      - QUEUE_CONNECTION=redis
+    command: ["php", "artisan", "queue:work", "--sleep=3", "--tries=3", "--max-time=3600", "--memory=256"]
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  # ---------------------------------------------------------------------------
+  # SCHEDULER - Cron (Produção)
+  # ---------------------------------------------------------------------------
+  scheduler:
+    image: ${REGISTRY_IMAGE:-ghcr.io/seu-usuario/pagdesk}:${IMAGE_TAG:-latest}
+    build: !reset null
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_DATABASE=${DB_DATABASE:-pagdesk_production}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - CACHE_DRIVER=redis
+      - QUEUE_CONNECTION=redis
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ---------------------------------------------------------------------------
+  # REDIS (Produção)
+  # ---------------------------------------------------------------------------
+  redis:
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    deploy:
+      resources:
+        limits:
+          memory: 576M
+
+  # ---------------------------------------------------------------------------
+  # GRAFANA - Dashboards (Produção)
+  # ---------------------------------------------------------------------------
+  grafana:
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_SERVER_ROOT_URL=${GRAFANA_URL:-https://grafana.pagdesk.com.br}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_DISABLE_GRAVATAR=true
+    # Em produção, Grafana pode ser acessado via proxy ou restrito
+    # ports:
+    #   - "127.0.0.1:3000:3000"
+
+  # ---------------------------------------------------------------------------
+  # PROMETHEUS (Produção)
+  # ---------------------------------------------------------------------------
+  prometheus:
+    # Em produção, Prometheus não deve ser exposto publicamente
+    ports: !reset
+      - "127.0.0.1:9090:9090"

@@ -1,0 +1,219 @@
+# =============================================================================
+# GitHub Actions - Deploy para Staging (Homologação)
+# PagDesk
+#
+# Trigger: Push para branches dev ou staging
+# =============================================================================
+
+name: Deploy Staging
+
+on:
+  push:
+    branches:
+      - dev
+      - staging
+      - develop
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Pular testes (apenas em emergência)'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # JOB: Testes
+  # ---------------------------------------------------------------------------
+  test:
+    name: Testes
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.skip_tests != 'true' }}
+    
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: pagdesk_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, pdo, pdo_mysql, redis, bcmath, gd
+          coverage: none
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install Dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Prepare Environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Run Tests
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_DATABASE: pagdesk_test
+          DB_USERNAME: root
+          DB_PASSWORD: password
+          REDIS_HOST: 127.0.0.1
+        run: php artisan test --parallel
+
+  # ---------------------------------------------------------------------------
+  # JOB: Build e Push da Imagem
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build Docker
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login no GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Metadata da Imagem
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=staging-
+            type=raw,value=staging
+
+      - name: Build e Push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------------------
+  # JOB: Deploy em Staging
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy Staging
+    runs-on: ubuntu-latest
+    needs: [build]
+    environment: staging
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_SSH_HOST }}
+          port: ${{ secrets.STAGING_SSH_PORT }}
+          username: ${{ secrets.STAGING_SSH_USER }}
+          key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            
+            echo "=========================================="
+            echo "Deploy Staging - PagDesk"
+            echo "=========================================="
+            
+            cd /opt/pagdesk
+            
+            # Pull da nova imagem
+            echo "Baixando nova imagem..."
+            docker compose -f docker-compose.yml -f docker-compose.staging.yml pull
+            
+            # Subir containers
+            echo "Reiniciando containers..."
+            docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --remove-orphans
+            
+            # Aguardar app ficar healthy
+            echo "Aguardando app ficar healthy..."
+            sleep 10
+            
+            # Executar migrations
+            echo "Executando migrations..."
+            docker exec pagdesk-staging-app php artisan migrate --force
+            
+            # Limpar caches
+            echo "Otimizando..."
+            docker exec pagdesk-staging-app php artisan optimize
+            
+            # Reiniciar queue para pegar novas mudanças
+            echo "Reiniciando queue..."
+            docker exec pagdesk-staging-app php artisan queue:restart
+            
+            # Verificar saúde
+            echo "Verificando saúde da aplicação..."
+            curl -sf http://localhost/health || echo "AVISO: Health check falhou"
+            
+            # Limpar imagens antigas
+            echo "Limpando imagens antigas..."
+            docker image prune -af --filter "until=168h"
+            
+            echo "=========================================="
+            echo "Deploy concluído!"
+            echo "=========================================="
+
+      - name: Notificar Sucesso
+        if: success()
+        run: |
+          echo "Deploy em staging concluído com sucesso!"
+          # Adicionar notificação Slack/Discord se necessário
+
+      - name: Notificar Falha
+        if: failure()
+        run: |
+          echo "::error::Deploy em staging falhou!"
+          # Adicionar notificação Slack/Discord se necessário

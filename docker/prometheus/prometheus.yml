@@ -1,0 +1,87 @@
+# =============================================================================
+# PROMETHEUS - Configuração de Coleta de Métricas
+# PagDesk - Monitoramento
+# =============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'pagdesk'
+
+# =============================================================================
+# Alertmanager (opcional - para alertas)
+# =============================================================================
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - alertmanager:9093
+
+# =============================================================================
+# Regras de alerta (opcional)
+# =============================================================================
+# rule_files:
+#   - /etc/prometheus/rules/*.yml
+
+# =============================================================================
+# Targets de Coleta
+# =============================================================================
+scrape_configs:
+  # ---------------------------------------------------------------------------
+  # Prometheus (auto-monitoramento)
+  # ---------------------------------------------------------------------------
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    metrics_path: /metrics
+
+  # ---------------------------------------------------------------------------
+  # Node Exporter - Métricas do Host
+  # CPU, RAM, Disco, Rede do servidor
+  # ---------------------------------------------------------------------------
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'host'
+
+  # ---------------------------------------------------------------------------
+  # cAdvisor - Métricas dos Containers
+  # CPU, RAM, Rede por container Docker
+  # ---------------------------------------------------------------------------
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'docker'
+
+  # ---------------------------------------------------------------------------
+  # Redis - Métricas do Redis (via redis_exporter se instalado)
+  # Descomente se adicionar redis_exporter ao docker-compose
+  # ---------------------------------------------------------------------------
+  # - job_name: 'redis'
+  #   static_configs:
+  #     - targets: ['redis-exporter:9121']
+
+  # ---------------------------------------------------------------------------
+  # Nginx - Métricas do Nginx (via nginx_exporter se instalado)
+  # Descomente se adicionar nginx com stub_status
+  # ---------------------------------------------------------------------------
+  # - job_name: 'nginx'
+  #   static_configs:
+  #     - targets: ['nginx-exporter:9113']
+
+  # ---------------------------------------------------------------------------
+  # Laravel App - Métricas customizadas da aplicação
+  # Requer pacote como spatie/laravel-prometheus ou similar
+  # ---------------------------------------------------------------------------
+  # - job_name: 'laravel'
+  #   static_configs:
+  #     - targets: ['app:9000']
+  #   metrics_path: /metrics
+  #   scheme: http

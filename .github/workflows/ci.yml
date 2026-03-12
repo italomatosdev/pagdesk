@@ -1,0 +1,157 @@
+# =============================================================================
+# CI - Continuous Integration
+# Executa testes em PRs e pushes para branch dev
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [dev, develop]
+  pull_request:
+    branches: [main, master, dev, develop]
+
+env:
+  PHP_VERSION: '8.2'
+  NODE_VERSION: '20'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Testes PHP
+  # ---------------------------------------------------------------------------
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: testing
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, pdo, pdo_mysql, redis, bcmath, gd, zip, intl
+          coverage: none
+
+      - name: Cache Composer
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Instalar dependências PHP
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Copiar .env
+        run: cp .env.example .env
+
+      - name: Gerar APP_KEY
+        run: php artisan key:generate
+
+      - name: Configurar ambiente de teste
+        run: |
+          php artisan config:clear
+          php artisan cache:clear
+
+      - name: Executar testes
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: testing
+          DB_USERNAME: root
+          DB_PASSWORD: root
+          REDIS_HOST: 127.0.0.1
+          CACHE_DRIVER: redis
+          QUEUE_CONNECTION: redis
+          SESSION_DRIVER: redis
+        run: php artisan test --parallel
+
+  # ---------------------------------------------------------------------------
+  # Lint e Code Style
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Code Style
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          tools: php-cs-fixer
+
+      - name: Cache Composer
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Instalar dependências
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Verificar code style (Pint)
+        run: |
+          if [ -f "vendor/bin/pint" ]; then
+            ./vendor/bin/pint --test
+          else
+            echo "Laravel Pint não instalado, pulando verificação"
+          fi
+        continue-on-error: true
+
+  # ---------------------------------------------------------------------------
+  # Build Docker (validação)
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build Docker
+    runs-on: ubuntu-latest
+    needs: [test]
+    
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build imagem (teste)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: pagdesk:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
