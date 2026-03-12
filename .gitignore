@@ -1,4 +1,51 @@
-Y8V3XG5.zip
+# Laravel
+/vendor/
+/node_modules/
+/public/build/
+/public/hot
+/public/storage
+/storage/*.key
+/.env
+/.env.*
+!/.env.example
+!/.env.production.example
+!/.env.staging.example
+Homestead.json
+Homestead.yaml
+auth.json
+
+# IDE
+/.idea
+/.vscode
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+/coverage
+.phpunit.result.cache
+
+# Build
+/public/css/
+/public/js/
+/public/mix-manifest.json
+
+# Docker
+docker-compose.override.yml
+
+# Misc
 *.zip
+*.tar.gz
+*.rar
 template-webadmin/
-vendor/
+Y8V3XG5.zip
+
+# Cache
+/.phpunit.cache
+/bootstrap/cache/*.php
