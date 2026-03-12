@@ -949,7 +949,66 @@ docker compose logs --tail=50 app
 
 ---
 
-## 22. Próximos Passos
+## 22. Alertas no Grafana
+
+### 22.1 Configuração do Email (SendGrid)
+
+O Grafana foi configurado para enviar alertas por email usando SendGrid.
+
+**Configuração no `docker-compose.yml`:**
+```yaml
+grafana:
+  environment:
+    - GF_SMTP_ENABLED=true
+    - GF_SMTP_HOST=smtp.sendgrid.net:2525
+    - GF_SMTP_USER=apikey
+    - GF_SMTP_PASSWORD=${SENDGRID_API_KEY}
+    - GF_SMTP_FROM_ADDRESS=${GRAFANA_SMTP_FROM:-noreply@pagdesk.com}
+    - GF_SMTP_FROM_NAME=PagDesk Alertas
+```
+
+**Variáveis no `.env` de produção:**
+```bash
+SENDGRID_API_KEY=SG.xxx...
+GRAFANA_SMTP_FROM=noreply@pagdesk.com
+```
+
+> **Nota:** Usamos porta 2525 pois a porta 587 é bloqueada pelo provider.
+
+### 22.2 Contact Point
+
+Foi criado um Contact Point de email para receber alertas:
+- **Nome:** Email
+- **Tipo:** Email
+- **Destinatário:** italomatos@live.com
+
+### 22.3 Alertas Configurados
+
+| Alerta | Query | Threshold | Pending |
+|--------|-------|-----------|---------|
+| CPU Alta | `100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)` | > 80% | 5m |
+| Memória Alta | `100 - ((node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100)` | > 85% | 5m |
+| Disco Cheio | `100 - ((node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100)` | > 85% | 5m |
+| Container Reiniciando | `increase(container_last_seen{name=~"pagdesk.*"}[1h]) < 1` | < 1 | 5m |
+
+### 22.4 Estrutura dos Alertas
+
+- **Folder:** PagDesk
+- **Evaluation Group:** Infraestrutura (intervalo 5m)
+
+### 22.5 Acesso ao Grafana
+
+```
+URL: http://172.235.157.83:3000 (via SSH tunnel)
+     ssh -L 3000:localhost:3000 deploy@172.235.157.83
+
+Usuário: admin
+Senha: (definida no .env - GRAFANA_ADMIN_PASSWORD)
+```
+
+---
+
+## 23. Próximos Passos
 
 - [x] ~~Instalar Docker no `pagdesk-app`~~
 - [x] ~~Configurar repositório GitHub~~
@@ -962,7 +1021,9 @@ docker compose logs --tail=50 app
 - [x] ~~Criar Super Admin~~
 - [x] ~~Configurar backups automáticos~~
 - [x] ~~Configurar CI/CD com GitHub Actions~~
-- [ ] Configurar alertas no Grafana
+- [x] ~~Configurar alertas no Grafana~~
+
+**Infraestrutura de produção completa!**
 
 ---
 
@@ -988,6 +1049,9 @@ docker compose logs --tail=50 app
 | 2026-03-12 | Criação do Super Admin |
 | 2026-03-12 | Configuração de backup automático (Linode Object Storage) |
 | 2026-03-12 | Configuração CI/CD com GitHub Actions |
+| 2026-03-12 | Configuração SMTP SendGrid no Grafana (porta 2525) |
+| 2026-03-12 | Configuração alertas: CPU, Memória, Disco, Container |
+| 2026-03-12 | **Infraestrutura de produção completa!** |
 
 ---
 
