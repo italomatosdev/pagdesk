@@ -679,7 +679,84 @@ Usuários criados pelos seeders:
 
 ---
 
-## 19. Próximos Passos
+## 19. Backup Automático (Linode Object Storage)
+
+### Configuração do Object Storage
+
+| Item | Valor |
+|------|-------|
+| **Bucket** | `pagdesk-backups` |
+| **Região** | us-mia-1 (Miami) |
+| **Endpoint** | us-mia-1.linodeobjects.com |
+
+### Instalação no servidor DB Primary
+
+```bash
+ssh deploy@172.235.157.93
+sudo su -
+
+# Instalar s3cmd
+apt install -y s3cmd
+
+# Configurar credenciais
+cat > /root/.s3cfg << 'EOF'
+[default]
+access_key = SUA_ACCESS_KEY
+secret_key = SUA_SECRET_KEY
+host_base = us-mia-1.linodeobjects.com
+host_bucket = %(bucket)s.us-mia-1.linodeobjects.com
+use_https = True
+EOF
+```
+
+### Script de backup
+
+Localização: `/root/backup-mysql.sh`
+
+```bash
+#!/bin/bash
+DB_NAME="pagdesk"
+BACKUP_DIR="/root/backups"
+S3_BUCKET="s3://pagdesk-backups"
+RETENTION_DAYS=30
+DATE=$(date +%Y-%m-%d_%H-%M-%S)
+BACKUP_FILE="pagdesk_${DATE}.sql.gz"
+
+mkdir -p $BACKUP_DIR
+echo "[$(date)] Iniciando backup..."
+mysqldump -u root $DB_NAME | gzip > $BACKUP_DIR/$BACKUP_FILE
+
+if [ -f "$BACKUP_DIR/$BACKUP_FILE" ]; then
+    s3cmd put $BACKUP_DIR/$BACKUP_FILE $S3_BUCKET/
+    rm -f $BACKUP_DIR/$BACKUP_FILE
+fi
+echo "[$(date)] Backup concluído!"
+```
+
+### Cron (diário às 3h UTC)
+
+```bash
+crontab -e
+# Adicionar:
+0 3 * * * /root/backup-mysql.sh >> /var/log/backup-mysql.log 2>&1
+```
+
+### Comandos úteis
+
+```bash
+# Listar backups
+s3cmd ls s3://pagdesk-backups/
+
+# Download de backup
+s3cmd get s3://pagdesk-backups/pagdesk_2026-03-12_17-07-23.sql.gz
+
+# Restore
+gunzip -c pagdesk_2026-03-12_17-07-23.sql.gz | mysql -u root pagdesk
+```
+
+---
+
+## 20. Próximos Passos
 
 - [x] ~~Instalar Docker no `pagdesk-app`~~
 - [x] ~~Configurar repositório GitHub~~
@@ -690,9 +767,9 @@ Usuários criados pelos seeders:
 - [x] ~~Configurar domínio e DNS (Cloudflare)~~
 - [x] ~~Configurar HTTPS (Cloudflare Flexível)~~
 - [x] ~~Criar Super Admin~~
+- [x] ~~Configurar backups automáticos~~
 - [ ] Configurar CI/CD com GitHub Actions (secrets)
-- [ ] Configurar monitoramento (Grafana/Prometheus)
-- [ ] Configurar backups automáticos
+- [ ] Configurar alertas no Grafana
 
 ---
 
@@ -814,6 +891,7 @@ mysql -u root -e "STOP REPLICA; START REPLICA;"
 | 2026-03-12 | Ativação do HTTPS via Cloudflare (modo Flexível) |
 | 2026-03-12 | **Aplicação online em https://pagdesk.com** |
 | 2026-03-12 | Criação do Super Admin |
+| 2026-03-12 | Configuração de backup automático (Linode Object Storage) |
 
 ---
 
