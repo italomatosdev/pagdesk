@@ -72,6 +72,11 @@ class EmprestimoController extends Controller
             $query->where('cliente_id', $request->cliente_id);
         }
 
+        // Filtro: apenas com parcelas atrasadas
+        if ($request->boolean('apenas_atrasadas')) {
+            $query->whereHas('parcelas', fn ($q) => $q->where('status', 'atrasada'));
+        }
+
         // Contadores (respeitam os mesmos filtros da listagem)
         $stats = [
             'total' => (clone $query)->count(),
@@ -137,6 +142,11 @@ class EmprestimoController extends Controller
         }
         if ($request->filled('cliente_id')) {
             $query->where('cliente_id', $request->cliente_id);
+        }
+
+        // Filtro: apenas com parcelas atrasadas
+        if ($request->boolean('apenas_atrasadas')) {
+            $query->whereHas('parcelas', fn ($q) => $q->where('status', 'atrasada'));
         }
 
         $emprestimos = $query->orderBy('created_at', 'desc')->get();
