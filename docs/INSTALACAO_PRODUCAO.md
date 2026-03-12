@@ -756,21 +756,6 @@ gunzip -c pagdesk_2026-03-12_17-07-23.sql.gz | mysql -u root pagdesk
 
 ---
 
-## 20. Próximos Passos
-
-- [x] ~~Instalar Docker no `pagdesk-app`~~
-- [x] ~~Configurar repositório GitHub~~
-- [x] ~~Clone do código no servidor~~
-- [x] ~~Criar arquivo `.env` de produção~~
-- [x] ~~Build e deploy dos containers~~
-- [x] ~~Executar migrations~~
-- [x] ~~Configurar domínio e DNS (Cloudflare)~~
-- [x] ~~Configurar HTTPS (Cloudflare Flexível)~~
-- [x] ~~Criar Super Admin~~
-- [x] ~~Configurar backups automáticos~~
-- [ ] Configurar CI/CD com GitHub Actions (secrets)
-- [ ] Configurar alertas no Grafana
-
 ---
 
 ## Comandos Úteis
@@ -871,6 +856,116 @@ mysql -u root -e "STOP REPLICA; START REPLICA;"
 
 ---
 
+## 21. CI/CD com GitHub Actions
+
+### Fluxo de Branches
+
+```
+[dev] ──(trabalho)──▶ [main] ──(push)──▶ [GitHub Actions] ──▶ [Produção]
+```
+
+| Branch | Propósito |
+|--------|-----------|
+| `dev` | Desenvolvimento (não dispara deploy) |
+| `main` | Produção (dispara deploy automático) |
+
+### Secrets Configurados no GitHub
+
+Localização: `Settings > Secrets and variables > Actions`
+
+| Secret | Valor |
+|--------|-------|
+| `SSH_HOST` | `172.235.157.83` |
+| `SSH_PORT` | `22` |
+| `SSH_USER` | `deploy` |
+| `SSH_PRIVATE_KEY` | Chave privada SSH (~/.ssh/id_ed25519) |
+
+### Pré-requisitos no Servidor (IMPORTANTE)
+
+Antes do CI/CD funcionar, execute no servidor `pagdesk-app`:
+
+```bash
+ssh deploy@172.235.157.83
+
+# 1. Adicionar safe.directory para o Git
+git config --global --add safe.directory /var/www/pagdesk
+
+# 2. Garantir permissões corretas
+sudo chown -R deploy:deploy /var/www/pagdesk
+```
+
+> **Sem esses comandos, o deploy automático falhará com erros de permissão.**
+
+### O que o Deploy Faz
+
+1. `git pull origin main` - Atualiza código
+2. `docker compose build` - Reconstrói imagens
+3. `docker compose up -d` - Atualiza containers
+4. `php artisan migrate --force` - Executa migrations
+5. `php artisan config:clear` + outros - Limpa caches
+6. `php artisan queue:restart` - Reinicia workers
+7. Health check automático - Verifica se está saudável
+
+### Fluxo de Trabalho Diário
+
+```bash
+# 1. Trabalhar na dev
+git checkout dev
+# ... fazer alterações ...
+git add .
+git commit -m "feat: nova funcionalidade"
+git push origin dev
+
+# 2. Testar localmente (docker compose up)
+
+# 3. Quando pronto, merge para main
+git checkout main
+git merge dev
+git push origin main
+# → Deploy automático acontece!
+
+# 4. Acompanhar deploy
+# https://github.com/italomatosdev/pagdesk/actions
+```
+
+### Troubleshooting CI/CD
+
+**Erro: `dubious ownership in repository`**
+```bash
+git config --global --add safe.directory /var/www/pagdesk
+```
+
+**Erro: `Permission denied`**
+```bash
+sudo chown -R deploy:deploy /var/www/pagdesk
+```
+
+**Erro: Health check falhou**
+```bash
+# Verificar logs no servidor
+ssh deploy@172.235.157.83
+docker compose logs --tail=50 app
+```
+
+---
+
+## 22. Próximos Passos
+
+- [x] ~~Instalar Docker no `pagdesk-app`~~
+- [x] ~~Configurar repositório GitHub~~
+- [x] ~~Clone do código no servidor~~
+- [x] ~~Criar arquivo `.env` de produção~~
+- [x] ~~Build e deploy dos containers~~
+- [x] ~~Executar migrations~~
+- [x] ~~Configurar domínio e DNS (Cloudflare)~~
+- [x] ~~Configurar HTTPS (Cloudflare Flexível)~~
+- [x] ~~Criar Super Admin~~
+- [x] ~~Configurar backups automáticos~~
+- [x] ~~Configurar CI/CD com GitHub Actions~~
+- [ ] Configurar alertas no Grafana
+
+---
+
 ## Histórico de Instalação
 
 | Data | Ação |
@@ -892,11 +987,8 @@ mysql -u root -e "STOP REPLICA; START REPLICA;"
 | 2026-03-12 | **Aplicação online em https://pagdesk.com** |
 | 2026-03-12 | Criação do Super Admin |
 | 2026-03-12 | Configuração de backup automático (Linode Object Storage) |
+| 2026-03-12 | Configuração CI/CD com GitHub Actions |
 
 ---
 
 **Documento atualizado em:** 2026-03-12
-
----
-
-*Deploy automático via GitHub Actions configurado.*
