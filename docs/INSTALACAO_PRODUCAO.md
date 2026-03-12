@@ -317,25 +317,319 @@ mysql -u root -e "USE pagdesk; DROP TABLE teste_rep;"
 
 ---
 
-## 11. Próximos Passos
+## 11. Instalação do Docker no `pagdesk-app`
 
-- [ ] Instalar Docker no `pagdesk-app`
-- [ ] Configurar deploy da aplicação
-- [ ] Configurar CI/CD com GitHub Actions
+Conectar no servidor de aplicação:
+
+```bash
+ssh deploy@172.235.157.83
+sudo su -
+```
+
+### Instalar Docker:
+
+```bash
+# Adicionar repositório oficial do Docker
+apt update
+apt install -y ca-certificates curl gnupg
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+chmod a+r /etc/apt/keyrings/docker.gpg
+
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Instalar Docker
+apt update
+apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Adicionar usuário deploy ao grupo docker
+usermod -aG docker deploy
+```
+
+### Verificar instalação:
+
+```bash
+docker --version
+docker compose version
+```
+
+Resultado esperado:
+```
+Docker version 29.3.0, build 5927d80
+Docker Compose version v5.1.0
+```
+
+### Criar diretório da aplicação:
+
+```bash
+mkdir -p /var/www/pagdesk
+chown deploy:deploy /var/www/pagdesk
+```
+
+---
+
+## 12. Configuração do Repositório GitHub
+
+### Criar repositório no GitHub:
+
+1. Acessar https://github.com/new
+2. Nome do repositório: `pagdesk`
+3. Visibilidade: **Private**
+4. Criar repositório
+
+### Configurar Personal Access Token (PAT):
+
+1. Acessar https://github.com/settings/tokens
+2. **Generate new token (classic)**
+3. Configurações:
+   - **Note:** `pagdesk-deploy`
+   - **Expiration:** 90 days (ou mais)
+   - **Scopes:**
+     - ✅ `repo` (Full control of private repositories)
+     - ✅ `workflow` (Update GitHub Action workflows)
+     - ✅ `write:packages` (Upload packages to GitHub Package Registry)
+     - ✅ `read:packages` (Download packages from GitHub Package Registry)
+4. Gerar e salvar o token em local seguro
+
+### No computador local - Preparar repositório:
+
+```bash
+cd /Users/italomatos/Documents/Projetos/sistema-cred
+
+# Inicializar Git (se necessário)
+git init
+
+# Configurar branch principal
+git branch -M main
+
+# Adicionar remote
+git remote add origin https://github.com/italomatosdev/pagdesk.git
+# ou se já existir:
+git remote set-url origin https://github.com/italomatosdev/pagdesk.git
+```
+
+### Garantir que arquivos sensíveis estão no .gitignore:
+
+O `.gitignore` deve conter:
+
+```gitignore
+# Laravel
+/vendor/
+/node_modules/
+/public/build/
+/public/hot
+/public/storage
+/storage/*.key
+/.env
+/.env.*
+!/.env.example
+!/.env.production.example
+!/.env.staging.example
+
+# IDE
+/.idea
+/.vscode
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+
+# Testing
+/coverage
+.phpunit.result.cache
+
+# Docker
+docker-compose.override.yml
+
+# Arquivos grandes/desnecessários
+*.zip
+*.tar.gz
+template-webadmin/
+```
+
+### Fazer primeiro push:
+
+```bash
+# Verificar status
+git status
+
+# Adicionar arquivos
+git add .
+
+# Commit inicial
+git commit -m "Initial commit: PagDesk application"
+
+# Push para GitHub
+git push -u origin main
+```
+
+> **Nota:** Ao fazer push, use o **username** do GitHub e o **PAT** como senha.
+
+---
+
+## 13. Clone do Repositório no Servidor
+
+### No servidor `pagdesk-app`:
+
+```bash
+ssh deploy@172.235.157.83
+cd /var/www/pagdesk
+
+# Clonar repositório
+git clone https://github.com/italomatosdev/pagdesk.git .
+```
+
+> **Nota:** Use o PAT como senha quando solicitado.
+
+### Verificar clone:
+
+```bash
+ls -la
+```
+
+Deve listar os arquivos do projeto (Dockerfile, docker-compose.yml, app/, etc.)
+
+---
+
+## 14. Criar Arquivo .env de Produção (PRÓXIMO PASSO)
+
+No servidor `pagdesk-app`, criar o arquivo `.env`:
+
+```bash
+ssh deploy@172.235.157.83
+cd /var/www/pagdesk
+nano .env
+```
+
+Conteúdo do `.env` de produção:
+
+```env
+APP_NAME=PagDesk
+APP_ENV=production
+APP_KEY=
+APP_DEBUG=false
+APP_TIMEZONE=America/Sao_Paulo
+APP_URL=https://seu-dominio.com.br
+
+# Banco de Dados (MySQL Primary via VPC)
+DB_CONNECTION=mysql
+DB_HOST=10.0.0.3
+DB_PORT=3306
+DB_DATABASE=pagdesk
+DB_USERNAME=pagdesk
+DB_PASSWORD=Pg2020dsk*pd
+
+# Cache e Sessão
+CACHE_STORE=redis
+SESSION_DRIVER=redis
+QUEUE_CONNECTION=redis
+
+# Redis
+REDIS_HOST=redis
+REDIS_PASSWORD=null
+REDIS_PORT=6379
+
+# Log
+LOG_CHANNEL=stack
+LOG_LEVEL=error
+
+# Docker
+COMPOSE_PROJECT_NAME=pagdesk
+NGINX_HTTP_PORT=80
+NGINX_HTTPS_PORT=443
+
+# Grafana (usar senha forte!)
+GRAFANA_ADMIN_PASSWORD=SuaSenhaForteAqui123!
+```
+
+> **IMPORTANTE:** Gere uma APP_KEY com `php artisan key:generate --show` localmente e adicione ao arquivo.
+
+---
+
+## 15. Build e Deploy Inicial (PRÓXIMO PASSO)
+
+Após criar o `.env`:
+
+```bash
+cd /var/www/pagdesk
+
+# Build das imagens
+docker compose build
+
+# Subir containers
+docker compose up -d
+
+# Verificar se estão rodando
+docker ps
+
+# Executar migrations
+docker exec pagdesk-app php artisan migrate --force
+
+# Otimizar aplicação
+docker exec pagdesk-app php artisan optimize
+
+# Verificar health check
+curl http://localhost/health
+```
+
+---
+
+## 16. Próximos Passos
+
+- [x] ~~Instalar Docker no `pagdesk-app`~~
+- [x] ~~Configurar repositório GitHub~~
+- [x] ~~Clone do código no servidor~~
+- [ ] Criar arquivo `.env` de produção no servidor
+- [ ] Fazer build e subir containers Docker
+- [ ] Executar migrations
+- [ ] Configurar CI/CD com GitHub Actions (secrets)
 - [ ] Configurar HTTPS com certificado SSL
+- [ ] Configurar domínio e DNS
 - [ ] Configurar monitoramento (Grafana/Prometheus)
 - [ ] Configurar backups automáticos
-- [ ] Configurar domínio e DNS
 
 ---
 
 ## Comandos Úteis
+
+### Docker (no servidor de aplicação):
+
+```bash
+# Ver containers rodando
+docker ps
+
+# Ver logs da aplicação
+docker compose logs -f app
+
+# Ver logs de todos os serviços
+docker compose logs -f
+
+# Reiniciar containers
+docker compose restart
+
+# Parar todos os containers
+docker compose down
+
+# Subir containers
+docker compose up -d
+
+# Executar comando no container
+docker exec -it pagdesk-app php artisan migrate:status
+```
 
 ### Verificar status dos serviços:
 
 ```bash
 # MySQL
 systemctl status mysql
+
+# Docker
+systemctl status docker
 
 # Firewall
 ufw status
@@ -404,11 +698,14 @@ mysql -u root -e "STOP REPLICA; START REPLICA;"
 | Data | Ação |
 |------|------|
 | 2026-03-12 | Criação da VPC `pagdesk-vpc` |
-| 2026-03-12 | Criação dos 3 Linodes |
+| 2026-03-12 | Criação dos 3 Linodes (us-mia) |
 | 2026-03-12 | Configuração inicial (usuário deploy, SSH, UFW, fail2ban) |
 | 2026-03-12 | Instalação MySQL Primary com replicação |
 | 2026-03-12 | Instalação MySQL Replica e configuração da replicação |
 | 2026-03-12 | Teste de replicação bem-sucedido |
+| 2026-03-12 | Instalação Docker no servidor de aplicação |
+| 2026-03-12 | Criação do repositório GitHub (privado) |
+| 2026-03-12 | Clone do repositório no servidor |
 
 ---
 
