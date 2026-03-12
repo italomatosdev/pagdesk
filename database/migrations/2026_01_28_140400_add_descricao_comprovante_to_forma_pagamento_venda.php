@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasColumn('forma_pagamento_venda', 'descricao')) {
+            return;
+        }
         Schema::table('forma_pagamento_venda', function (Blueprint $table) {
             $table->string('descricao', 255)->nullable()->after('valor');
             $table->string('comprovante_path', 500)->nullable()->after('descricao');
