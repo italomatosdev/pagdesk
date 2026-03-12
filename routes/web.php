@@ -272,6 +272,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::get('/categorias', [App\Modules\Cash\Controllers\CategoriaMovimentacaoController::class, 'index'])->name('categorias.index');
         Route::get('/categorias/create', [App\Modules\Cash\Controllers\CategoriaMovimentacaoController::class, 'create'])->name('categorias.create');
         Route::post('/categorias', [App\Modules\Cash\Controllers\CategoriaMovimentacaoController::class, 'store'])->name('categorias.store');
+        Route::post('/categorias/ajax', [App\Modules\Cash\Controllers\CategoriaMovimentacaoController::class, 'storeAjax'])->name('categorias.store.ajax');
         Route::get('/categorias/{id}/edit', [App\Modules\Cash\Controllers\CategoriaMovimentacaoController::class, 'edit'])->name('categorias.edit');
         Route::put('/categorias/{id}', [App\Modules\Cash\Controllers\CategoriaMovimentacaoController::class, 'update'])->name('categorias.update');
         Route::delete('/categorias/{id}', [App\Modules\Cash\Controllers\CategoriaMovimentacaoController::class, 'destroy'])->name('categorias.destroy');
