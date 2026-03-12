@@ -496,9 +496,9 @@ Deve listar os arquivos do projeto (Dockerfile, docker-compose.yml, app/, etc.)
 
 ---
 
-## 14. Criar Arquivo .env de Produção (PRÓXIMO PASSO)
+## 14. Arquivo .env de Produção
 
-No servidor `pagdesk-app`, criar o arquivo `.env`:
+No servidor `pagdesk-app`, foi criado o arquivo `.env`:
 
 ```bash
 ssh deploy@172.235.157.83
@@ -511,12 +511,11 @@ Conteúdo do `.env` de produção:
 ```env
 APP_NAME=PagDesk
 APP_ENV=production
-APP_KEY=
+APP_KEY=base64:AlJG6lvjCjM/3zNkbdPy2yctEDVrD9abF5d7lq7RxxA=
 APP_DEBUG=false
 APP_TIMEZONE=America/Sao_Paulo
-APP_URL=https://seu-dominio.com.br
+APP_URL=https://pagdesk.com
 
-# Banco de Dados (MySQL Primary via VPC)
 DB_CONNECTION=mysql
 DB_HOST=10.0.0.3
 DB_PORT=3306
@@ -524,36 +523,27 @@ DB_DATABASE=pagdesk
 DB_USERNAME=pagdesk
 DB_PASSWORD=Pg2020dsk*pd
 
-# Cache e Sessão
 CACHE_STORE=redis
 SESSION_DRIVER=redis
 QUEUE_CONNECTION=redis
 
-# Redis
 REDIS_HOST=redis
 REDIS_PASSWORD=null
 REDIS_PORT=6379
 
-# Log
 LOG_CHANNEL=stack
 LOG_LEVEL=error
 
-# Docker
 COMPOSE_PROJECT_NAME=pagdesk
 NGINX_HTTP_PORT=80
 NGINX_HTTPS_PORT=443
 
-# Grafana (usar senha forte!)
-GRAFANA_ADMIN_PASSWORD=SuaSenhaForteAqui123!
+GRAFANA_ADMIN_PASSWORD=PgDesk2026Grafana!
 ```
-
-> **IMPORTANTE:** Gere uma APP_KEY com `php artisan key:generate --show` localmente e adicione ao arquivo.
 
 ---
 
-## 15. Build e Deploy Inicial (PRÓXIMO PASSO)
-
-Após criar o `.env`:
+## 15. Build e Deploy
 
 ```bash
 cd /var/www/pagdesk
@@ -564,32 +554,100 @@ docker compose build
 # Subir containers
 docker compose up -d
 
-# Verificar se estão rodando
+# Verificar containers
 docker ps
+```
 
-# Executar migrations
-docker exec pagdesk-app php artisan migrate --force
-
-# Otimizar aplicação
-docker exec pagdesk-app php artisan optimize
-
-# Verificar health check
-curl http://localhost/health
+Resultado:
+```
+✔ Container pagdesk-redis         Healthy
+✔ Container pagdesk-app           Healthy
+✔ Container pagdesk-nginx         Started
+✔ Container pagdesk-scheduler     Started
+✔ Container pagdesk-queue         Started
+✔ Container pagdesk-prometheus    Started
+✔ Container pagdesk-grafana       Started
+✔ Container pagdesk-node-exporter Started
+✔ Container pagdesk-cadvisor      Started
 ```
 
 ---
 
-## 16. Próximos Passos
+## 16. Execução das Migrations
+
+```bash
+docker exec pagdesk-app php artisan migrate --force
+```
+
+> **Nota:** Algumas migrations precisaram de correções de ordem/sintaxe durante a execução inicial. Todas as correções foram commitadas no repositório.
+
+### Limpar caches após migrations:
+
+```bash
+docker exec pagdesk-app php artisan config:clear
+docker exec pagdesk-app php artisan route:clear
+docker exec pagdesk-app php artisan view:clear
+docker exec pagdesk-app php artisan cache:clear
+```
+
+### Verificar health check:
+
+```bash
+curl http://localhost/health
+```
+
+Resultado:
+```json
+{
+  "status": "healthy",
+  "app": "PagDesk",
+  "version": "1.0.0",
+  "environment": "production",
+  "checks": {
+    "database": {"status": "ok"},
+    "redis": {"status": "ok"},
+    "cache": {"status": "ok"},
+    "queue": {"status": "ok"},
+    "scheduler": {"status": "no_data"}
+  }
+}
+```
+
+---
+
+## 17. Configuração do Domínio (Cloudflare)
+
+### DNS
+
+| Tipo | Nome | Conteúdo | Proxy |
+|------|------|----------|-------|
+| A | pagdesk.com | 172.235.157.83 | Com proxy (laranja) |
+| CNAME | www | pagdesk.com | Com proxy (laranja) |
+
+### SSL/TLS
+
+- **Modo:** Flexível
+- Isso habilita HTTPS entre visitante ↔ Cloudflare, e HTTP entre Cloudflare ↔ servidor
+
+### Acesso
+
+- **URL:** https://pagdesk.com
+- **Health Check:** https://pagdesk.com/health
+
+---
+
+## 18. Próximos Passos
 
 - [x] ~~Instalar Docker no `pagdesk-app`~~
 - [x] ~~Configurar repositório GitHub~~
 - [x] ~~Clone do código no servidor~~
-- [ ] Criar arquivo `.env` de produção no servidor
-- [ ] Fazer build e subir containers Docker
-- [ ] Executar migrations
+- [x] ~~Criar arquivo `.env` de produção~~
+- [x] ~~Build e deploy dos containers~~
+- [x] ~~Executar migrations~~
+- [x] ~~Configurar domínio e DNS (Cloudflare)~~
+- [x] ~~Configurar HTTPS (Cloudflare Flexível)~~
+- [ ] Criar usuário administrador
 - [ ] Configurar CI/CD com GitHub Actions (secrets)
-- [ ] Configurar HTTPS com certificado SSL
-- [ ] Configurar domínio e DNS
 - [ ] Configurar monitoramento (Grafana/Prometheus)
 - [ ] Configurar backups automáticos
 
@@ -706,6 +764,12 @@ mysql -u root -e "STOP REPLICA; START REPLICA;"
 | 2026-03-12 | Instalação Docker no servidor de aplicação |
 | 2026-03-12 | Criação do repositório GitHub (privado) |
 | 2026-03-12 | Clone do repositório no servidor |
+| 2026-03-12 | Criação do `.env` de produção |
+| 2026-03-12 | Build e deploy dos containers Docker |
+| 2026-03-12 | Execução das migrations (com correções de ordem) |
+| 2026-03-12 | Configuração do domínio pagdesk.com no Cloudflare |
+| 2026-03-12 | Ativação do HTTPS via Cloudflare (modo Flexível) |
+| 2026-03-12 | **Aplicação online em https://pagdesk.com** |
 
 ---
 
