@@ -847,60 +847,95 @@ Importar dashboard oficial: **ID 7362** (MySQL Overview)
 
 | Tipo | Frequência | Retenção | Destino |
 |------|------------|----------|---------|
-| Dump MySQL (completo) | Diário 3:00 AM | 30 dias | S3/Storage externo |
+| Dump MySQL (completo) | Diário 3:00 AM UTC | 30 dias | Linode Object Storage |
 | Snapshot VPS App | Semanal | 4 semanas | Provedor VPS |
 | Snapshot VPS MySQL | Semanal | 4 semanas | Provedor VPS |
 | Teste de Restore | Mensal | - | Ambiente isolado |
 
-### 8.2 Script de Backup MySQL
+### 8.2 Object Storage (S3-compatível)
 
-Localização: `/opt/scripts/backup-mysql.sh` (no servidor MySQL)
+**Provedor:** Linode Object Storage  
+**Região:** us-mia-1 (Miami)  
+**Ferramenta:** s3cmd
+
+**Configuração do s3cmd** (`/root/.s3cfg`):
+```ini
+[default]
+access_key = SUA_ACCESS_KEY
+secret_key = SUA_SECRET_KEY
+host_base = us-mia-1.linodeobjects.com
+host_bucket = %(bucket)s.us-mia-1.linodeobjects.com
+use_https = True
+```
+
+### 8.3 Script de Backup MySQL
+
+Localização: `/root/backup-mysql.sh` (no servidor MySQL Primary)
 
 ```bash
 #!/bin/bash
-# Backup diário do MySQL
+# Backup diário do MySQL para Linode Object Storage
 
-DATE=$(date +%Y-%m-%d)
-BACKUP_DIR="/backups/mysql"
+DB_NAME="pagdesk"
+BACKUP_DIR="/root/backups"
+S3_BUCKET="s3://pagdesk-backups"
 RETENTION_DAYS=30
+DATE=$(date +%Y-%m-%d_%H-%M-%S)
+BACKUP_FILE="pagdesk_${DATE}.sql.gz"
 
-# Criar backup (usa credenciais de ~/.my.cnf)
-mysqldump \
-  --single-transaction \
-  --routines \
-  --triggers \
-  pagdesk_production | gzip > "$BACKUP_DIR/pagdesk_$DATE.sql.gz"
+mkdir -p $BACKUP_DIR
+echo "[$(date)] Iniciando backup..."
 
-# Enviar para storage externo (exemplo S3)
-aws s3 cp "$BACKUP_DIR/pagdesk_$DATE.sql.gz" s3://pagdesk-backups/mysql/
+# Criar dump compactado
+mysqldump -u root $DB_NAME | gzip > $BACKUP_DIR/$BACKUP_FILE
 
-# Limpar backups antigos
-find $BACKUP_DIR -name "*.sql.gz" -mtime +$RETENTION_DAYS -delete
+if [ -f "$BACKUP_DIR/$BACKUP_FILE" ]; then
+    echo "[$(date)] Dump criado: $BACKUP_FILE"
+    
+    # Upload para Object Storage
+    s3cmd put $BACKUP_DIR/$BACKUP_FILE $S3_BUCKET/
+    
+    if [ $? -eq 0 ]; then
+        echo "[$(date)] Upload concluído"
+        rm -f $BACKUP_DIR/$BACKUP_FILE
+    fi
+fi
+
+echo "[$(date)] Backup concluído!"
 ```
 
-> **Configuração de credenciais:** Crie o arquivo `~/.my.cnf` com permissão 600:
-> ```ini
-> [client]
-> user=backup_user
-> password=<senha-segura>
-> ```
-
-**Cron (no servidor MySQL):**
+**Cron (no servidor MySQL Primary):**
 ```bash
-0 3 * * * /opt/scripts/backup-mysql.sh >> /var/log/backup-mysql.log 2>&1
+0 3 * * * /root/backup-mysql.sh >> /var/log/backup-mysql.log 2>&1
 ```
 
-### 8.3 Restore
+### 8.4 Comandos Úteis
+
+```bash
+# Listar backups
+s3cmd ls s3://pagdesk-backups/
+
+# Download de backup
+s3cmd get s3://pagdesk-backups/pagdesk_2026-03-12_17-07-23.sql.gz
+
+# Upload manual
+s3cmd put arquivo.sql.gz s3://pagdesk-backups/
+
+# Remover backup antigo
+s3cmd del s3://pagdesk-backups/pagdesk_2026-01-01_03-00-00.sql.gz
+```
+
+### 8.5 Restore
 
 **1. Baixar backup:**
 ```bash
-aws s3 cp s3://pagdesk-backups/mysql/pagdesk_2026-01-24.sql.gz ./
-gunzip pagdesk_2026-01-24.sql.gz
+s3cmd get s3://pagdesk-backups/pagdesk_2026-03-12_17-07-23.sql.gz ./
+gunzip pagdesk_2026-03-12_17-07-23.sql.gz
 ```
 
 **2. Restaurar:**
 ```bash
-mysql -u root -p pagdesk_production < pagdesk_2026-01-24.sql
+mysql -u root pagdesk < pagdesk_2026-03-12_17-07-23.sql
 ```
 
 **3. Verificar:**
@@ -1147,9 +1182,9 @@ EOF
 }
 ```
 
-#### Criptografia de Backups
+#### Criptografia de Backups (Opcional)
 
-**Criptografar backups antes de enviar para S3:**
+**Criptografar backups antes de enviar para Object Storage:**
 ```bash
 # No script de backup
 gpg --symmetric --cipher-algo AES256 \
@@ -1157,7 +1192,7 @@ gpg --symmetric --cipher-algo AES256 \
     -o "$BACKUP_FILE.gpg" "$BACKUP_FILE"
 
 # Upload do arquivo criptografado
-aws s3 cp "$BACKUP_FILE.gpg" s3://pagdesk-backups/mysql/
+s3cmd put "$BACKUP_FILE.gpg" s3://pagdesk-backups/
 
 # Para descriptografar
 gpg --decrypt --batch --passphrase-file /etc/backup-key \
