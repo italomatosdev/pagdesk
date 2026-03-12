@@ -893,6 +893,16 @@ mysql -u root -e "STOP REPLICA; START REPLICA;"
 | `dev` | Desenvolvimento (não dispara deploy) |
 | `main` | Produção (dispara deploy automático) |
 
+### Workflows Configurados
+
+| Arquivo | Nome | Trigger | Descrição |
+|---------|------|---------|-----------|
+| `deploy.yml` | Deploy Production | Push para `main` | Deploy automático para produção |
+| `ci.yml` | CI | PR para `main` | Testes e validação (apenas em PRs) |
+| `deploy-staging.yml` | Deploy Staging | Manual | Desabilitado (sem servidor staging) |
+
+> **Nota:** Push para `dev` não dispara nenhuma action. Isso permite trabalhar livremente na branch de desenvolvimento.
+
 ### Secrets Configurados no GitHub
 
 Localização: `Settings > Secrets and variables > Actions`
@@ -926,9 +936,12 @@ sudo chown -R deploy:deploy /var/www/pagdesk
 2. `docker compose build` - Reconstrói imagens
 3. `docker compose up -d` - Atualiza containers
 4. `php artisan migrate --force` - Executa migrations
-5. `php artisan config:clear` + outros - Limpa caches
-6. `php artisan queue:restart` - Reinicia workers
-7. Health check automático - Verifica se está saudável
+5. Limpa caches (config, route, view, cache)
+6. `docker restart pagdesk-app` - Reinicia container para aplicar limpeza
+7. `php artisan queue:restart` - Reinicia workers
+8. Health check automático - Verifica se está saudável
+
+> **Importante:** O restart do container após limpar caches evita problemas de views compiladas corrompidas.
 
 ### Fluxo de Trabalho Diário
 
