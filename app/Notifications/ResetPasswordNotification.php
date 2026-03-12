@@ -21,7 +21,8 @@ class ResetPasswordNotification extends ResetPasswordBase
         $expire = config('auth.passwords.'.config('auth.defaults.passwords').'.expire', 60);
 
         return (new MailMessage)
-            ->subject('Notificação de redefinição de senha')
+            ->subject('Redefinição de senha - PagDesk')
+            ->greeting('Olá!')
             ->line('Você está recebendo este e-mail porque recebemos uma solicitação de redefinição de senha para sua conta.')
             ->action('Redefinir senha', $url)
             ->line('Este link expira em '.$expire.' minutos.')
