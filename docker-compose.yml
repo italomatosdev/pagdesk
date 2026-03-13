@@ -17,6 +17,8 @@ services:
     container_name: pagdesk-app
     restart: unless-stopped
     working_dir: /var/www/html
+    env_file:
+      - .env
     environment:
       - APP_ENV=${APP_ENV:-production}
       - APP_DEBUG=${APP_DEBUG:-false}
@@ -83,6 +85,8 @@ services:
     container_name: pagdesk-queue
     restart: unless-stopped
     working_dir: /var/www/html
+    env_file:
+      - .env
     command: ["php", "artisan", "queue:work", "--sleep=3", "--tries=3", "--max-time=3600"]
     environment:
       - APP_ENV=${APP_ENV:-production}
@@ -124,6 +128,8 @@ services:
     container_name: pagdesk-scheduler
     restart: unless-stopped
     working_dir: /var/www/html
+    env_file:
+      - .env
     command: ["/usr/local/bin/scheduler.sh"]
     environment:
       - APP_ENV=${APP_ENV:-production}
