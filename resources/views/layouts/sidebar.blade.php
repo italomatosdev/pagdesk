@@ -77,12 +77,6 @@
                     </a>
                 </li>
                 <li>
-                    <a href="{{ route('clientes.link-cadastro') }}">
-                        <i class="bx bx-link-alt icon nav-icon"></i>
-                        <span class="menu-item">Link de cadastro</span>
-                    </a>
-                </li>
-                <li>
                     <a href="{{ route('super-admin.auditoria.index') }}">
                         <i class="bx bx-list-check icon nav-icon"></i>
                         <span class="menu-item">Logs de Auditoria</span>
@@ -109,12 +103,6 @@
                     <a href="{{ route('clientes.index') }}">
                         <i class="bx bx-user icon nav-icon"></i>
                         <span class="menu-item">Clientes</span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ route('clientes.link-cadastro') }}">
-                        <i class="bx bx-link-alt icon nav-icon"></i>
-                        <span class="menu-item">Link de cadastro</span>
                     </a>
                 </li>
 
