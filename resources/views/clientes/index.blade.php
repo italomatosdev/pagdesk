@@ -87,6 +87,9 @@
                         <div class="d-flex align-items-center justify-content-between">
                             <h4 class="card-title mb-0">Lista de Clientes</h4>
                             <div class="d-flex gap-2">
+                                <a href="{{ route('clientes.link-cadastro') }}" class="btn btn-outline-info">
+                                    <i class="bx bx-link-alt"></i> Link de cadastro
+                                </a>
                                 <a href="{{ route('clientes.export', request()->only(['documento', 'cpf', 'nome'])) }}" class="btn btn-outline-success">
                                     <i class="bx bx-download"></i> Exportar CSV
                                 </a>
