@@ -6,11 +6,12 @@
     <div class="container py-5">
         <div class="row justify-content-center">
             <div class="col-lg-8">
-                <div class="card shadow">
-                    <div class="card-header bg-primary text-white">
-                        <h4 class="card-title mb-0">Preencha seus dados</h4>
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-primary text-white py-4">
+                        <h4 class="card-title mb-1 text-white">Complete seu cadastro</h4>
+                        <p class="mb-0 small text-white opacity-90">Preencha os campos abaixo. Seus dados serão usados apenas para contato e documentação.</p>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body py-4 px-lg-4">
                         @if(session('error'))
                             <div class="alert alert-danger">{{ session('error') }}</div>
                         @endif
@@ -28,11 +29,13 @@
                             @csrf
                             <input type="hidden" name="ref" value="{{ $ref }}">
 
+                            <h6 class="text-muted mb-3 mt-2">Seus dados</h6>
+
                             <div class="mb-3">
-                                <label class="form-label">Tipo de Pessoa <span class="text-danger">*</span></label>
+                                <label class="form-label">Você é pessoa física ou empresa? <span class="text-danger">*</span></label>
                                 <select name="tipo_pessoa" id="tipo_pessoa" class="form-select" required>
-                                    <option value="fisica" {{ old('tipo_pessoa', 'fisica') == 'fisica' ? 'selected' : '' }}>Pessoa Física</option>
-                                    <option value="juridica" {{ old('tipo_pessoa') == 'juridica' ? 'selected' : '' }}>Pessoa Jurídica</option>
+                                    <option value="fisica" {{ old('tipo_pessoa', 'fisica') == 'fisica' ? 'selected' : '' }}>Pessoa física</option>
+                                    <option value="juridica" {{ old('tipo_pessoa') == 'juridica' ? 'selected' : '' }}>Pessoa jurídica (empresa)</option>
                                 </select>
                             </div>
 
@@ -40,11 +43,12 @@
                                 <label class="form-label" id="label-documento">CPF <span class="text-danger">*</span></label>
                                 <input type="text" name="documento" id="documento" class="form-control"
                                        placeholder="000.000.000-00" value="{{ old('documento') }}" required>
+                                <small class="text-muted">Apenas números</small>
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">Nome <span class="text-danger">*</span></label>
-                                <input type="text" name="nome" id="nome" class="form-control" value="{{ old('nome') }}" required>
+                                <label class="form-label">Nome completo <span class="text-danger">*</span></label>
+                                <input type="text" name="nome" id="nome" class="form-control" value="{{ old('nome') }}" required placeholder="Como está no documento">
                             </div>
 
                             <div class="row">
@@ -52,22 +56,23 @@
                                     <label class="form-label">Telefone (WhatsApp) <span class="text-danger">*</span></label>
                                     <input type="text" name="telefone" id="telefone" class="form-control"
                                            placeholder="(00) 00000-0000" value="{{ old('telefone') }}" required>
+                                    <small class="text-muted">O consultor vai usar este número para falar com você</small>
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">E-mail</label>
-                                    <input type="email" name="email" class="form-control" value="{{ old('email') }}">
+                                    <input type="email" name="email" class="form-control" value="{{ old('email') }}" placeholder="seu@email.com">
                                 </div>
                             </div>
 
                             <div class="mb-3" id="campo-data-nascimento">
-                                <label class="form-label">Data de Nascimento</label>
+                                <label class="form-label">Data de nascimento</label>
                                 <input type="date" name="data_nascimento" id="data_nascimento" class="form-control"
                                        value="{{ old('data_nascimento') }}">
                             </div>
 
                             <div id="campos-responsavel" style="display: none;">
                                 <hr class="my-4">
-                                <h5 class="mb-3">Responsável Legal</h5>
+                                <h6 class="text-muted mb-3">Responsável pela empresa</h6>
                                 <div class="mb-3">
                                     <label class="form-label">Nome do Responsável</label>
                                     <input type="text" name="responsavel_nome" class="form-control"
@@ -97,12 +102,15 @@
                                 </div>
                             </div>
 
+                            <hr class="my-4">
+                            <h6 class="text-muted mb-3">Onde você mora</h6>
+
                             <div class="row">
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label">CEP <span class="text-danger">*</span></label>
                                     <input type="text" name="cep" id="cep" class="form-control"
                                            placeholder="00000-000" value="{{ old('cep') }}" required>
-                                    <small class="text-muted">Digite o CEP e saia do campo para buscar o endereço</small>
+                                    <small class="text-muted">Digite o CEP e saia do campo — preenchemos o endereço para você</small>
                                 </div>
                                 <div class="col-md-8 mb-3">
                                     <label class="form-label">Endereço <span class="text-danger">*</span></label>
@@ -126,32 +134,34 @@
                             </div>
 
                             <hr class="my-4">
-                            <h5 class="mb-3">Documentos</h5>
-                            <p class="text-muted small mb-2">Campos com <span class="text-danger">*</span> são obrigatórios para esta operação.</p>
+                            <h6 class="text-muted mb-3">Documentos</h6>
+                            <p class="text-muted small mb-3">Envie uma foto ou PDF. Onde tiver <span class="text-danger">*</span> é obrigatório.</p>
 
                             @php
                                 $docObrig = in_array('documento_cliente', $documentosObrigatorios ?? []);
                                 $selfieObrig = in_array('selfie_documento', $documentosObrigatorios ?? []);
                             @endphp
                             <div class="mb-3">
-                                <label class="form-label">Documento do Cliente (RG/CNH) @if($docObrig)<span class="text-danger">*</span>@endif</label>
+                                <label class="form-label">Documento com foto (RG ou CNH) @if($docObrig)<span class="text-danger">*</span>@endif</label>
                                 <input type="file" name="documento_cliente" class="form-control" accept=".pdf,.jpg,.jpeg,.png"
                                        @if($docObrig) required @endif>
-                                <small class="text-muted">PDF, JPG ou PNG (máx. 5MB)</small>
+                                <small class="text-muted">PDF, JPG ou PNG — até 5MB</small>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Selfie com Documento @if($selfieObrig)<span class="text-danger">*</span>@endif</label>
+                                <label class="form-label">Selfie segurando o documento @if($selfieObrig)<span class="text-danger">*</span>@endif</label>
                                 <input type="file" name="selfie_documento" class="form-control" accept=".jpg,.jpeg,.png"
                                        @if($selfieObrig) required @endif>
-                                <small class="text-muted">Foto segurando o documento. JPG ou PNG (máx. 5MB)</small>
+                                <small class="text-muted">Foto sua segurando o RG ou CNH. JPG ou PNG — até 5MB</small>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Anexos adicionais (opcional)</label>
+                                <label class="form-label">Outros anexos (opcional)</label>
                                 <input type="file" name="anexos[]" class="form-control" accept=".pdf,.jpg,.jpeg,.png" multiple>
                             </div>
 
-                            <div class="d-flex justify-content-end gap-2 mt-4">
-                                <button type="submit" class="btn btn-primary">
+                            <hr class="my-4">
+                            <div class="d-flex flex-column flex-sm-row justify-content-end align-items-sm-center gap-2 mt-3">
+                                <p class="small text-muted mb-0 me-sm-2">Seus dados estão seguros e serão usados só para este cadastro.</p>
+                                <button type="submit" class="btn btn-primary btn-lg">
                                     <i class="bx bx-check"></i> Enviar cadastro
                                 </button>
                             </div>
