@@ -8,6 +8,7 @@ use App\Modules\Core\Models\Operacao;
 use App\Modules\Core\Services\ClienteService;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Parcela;
+use App\Modules\Loans\Models\SolicitacaoEmprestimoRetroativo;
 use App\Modules\Loans\Services\EmprestimoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -200,6 +201,16 @@ class EmprestimoController extends Controller
                     ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
                     : collect([]);
             }
+
+            // Consultores por operação (para empréstimo retroativo - gestor/admin escolhem o consultor)
+            $consultoresPorOperacao = [];
+            foreach ($operacoes as $op) {
+                $consultoresPorOperacao[$op->id] = \App\Models\User::whereHas('operacoes', fn ($q) => $q->where('operacoes.id', $op->id))
+                    ->whereHas('roles', fn ($q) => $q->where('name', 'consultor'))
+                    ->orderBy('name')
+                    ->get(['id', 'name'])
+                    ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name]);
+            }
             
             // Se o usuário tem apenas 1 operação, já vir selecionada
             $operacaoSelecionadaId = $operacoes->count() === 1 ? $operacoes->first()->id : null;
@@ -256,8 +267,9 @@ class EmprestimoController extends Controller
             }
             
             return view('emprestimos.create', compact(
-                'operacoes', 
-                'clientePreSelecionado', 
+                'operacoes',
+                'consultoresPorOperacao',
+                'clientePreSelecionado',
                 'operacaoSelecionadaId',
                 'negociacao',
                 'emprestimoOrigem',
@@ -266,14 +278,16 @@ class EmprestimoController extends Controller
         } catch (\Exception $e) {
             \Log::error('Erro ao carregar formulário de empréstimo: ' . $e->getMessage());
             $operacoes = collect([]);
+            $consultoresPorOperacao = [];
             $clientePreSelecionado = null;
             $operacaoSelecionadaId = null;
             $negociacao = false;
             $emprestimoOrigem = null;
             $saldoDevedor = null;
             return view('emprestimos.create', compact(
-                'operacoes', 
-                'clientePreSelecionado', 
+                'operacoes',
+                'consultoresPorOperacao',
+                'clientePreSelecionado',
                 'operacaoSelecionadaId',
                 'negociacao',
                 'emprestimoOrigem',
@@ -323,13 +337,14 @@ class EmprestimoController extends Controller
         }
         $request->merge(['numero_parcelas' => $numeroParcelasRaw]);
 
-        $validated = $request->validate([
+        $isRetroativo = $request->boolean('is_retroativo');
+        $rules = [
             'operacao_id' => 'required|exists:operacoes,id',
             'cliente_id' => 'required|exists:clientes,id',
             'valor_total' => 'required|numeric|min:0.01',
             'numero_parcelas' => 'required|integer|min:1',
             'frequencia' => 'required|in:diaria,semanal,mensal',
-            'data_inicio' => 'required|date',
+            'data_inicio' => 'required|date' . ($isRetroativo ? '' : '|after_or_equal:today'),
             'tipo' => 'required|in:dinheiro,price,empenho,troca_cheque',
             'taxa_juros' => 'nullable|numeric|min:0|max:100',
             'observacoes' => 'nullable|string',
@@ -344,7 +359,36 @@ class EmprestimoController extends Controller
             'cheques.*.taxa_juros' => 'nullable|numeric|min:0|max:100',
             'cheques.*.portador' => 'nullable|string|max:255',
             'cheques.*.observacoes' => 'nullable|string|max:1000',
-        ]);
+            'is_retroativo' => 'boolean',
+            'consultor_id' => 'nullable|exists:users,id',
+        ];
+        $validated = $request->validate($rules);
+
+        // Empréstimo retroativo: gestor/admin criam direto (escolhem consultor); consultor cria com aceite
+        if ($isRetroativo) {
+            if (!$user->temAcessoOperacao($validated['operacao_id'])) {
+                return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
+            }
+            if ($user->hasAnyRole(['administrador', 'gestor'])) {
+                $consultorId = $request->input('consultor_id');
+                if (empty($consultorId)) {
+                    return back()->withErrors(['consultor_id' => 'Selecione o consultor responsável pelo empréstimo retroativo.'])->withInput();
+                }
+                $consultor = \App\Models\User::find($consultorId);
+                if (!$consultor || !$consultor->temAcessoOperacao($validated['operacao_id'])) {
+                    return back()->withErrors(['consultor_id' => 'O consultor selecionado não pertence a esta operação.'])->withInput();
+                }
+                $validated['consultor_id'] = (int) $consultorId;
+                $validated['is_retroativo'] = true;
+            } else {
+                // Consultor: ele é o responsável; empréstimo fica aguardando aceite de gestor/admin
+                $validated['consultor_id'] = $user->id;
+                $validated['is_retroativo'] = true;
+                $validated['solicitar_aceite_retroativo'] = true;
+            }
+        } else {
+            $validated['consultor_id'] = $user->id;
+        }
 
         // Validação específica para Price: taxa de juros obrigatória
         if ($validated['tipo'] === 'price' && (empty($validated['taxa_juros']) || $validated['taxa_juros'] <= 0)) {
@@ -357,8 +401,6 @@ class EmprestimoController extends Controller
                 return back()->withErrors(['cheques' => 'Troca de cheque precisa ter pelo menos um cheque cadastrado.'])->withInput();
             }
         }
-
-        $validated['consultor_id'] = $user->id;
 
         // Validar se o usuário tem acesso à operação selecionada
         if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($validated['operacao_id'])) {
@@ -375,9 +417,13 @@ class EmprestimoController extends Controller
         try {
             $emprestimo = $this->emprestimoService->criar($validated);
 
-            $mensagem = $emprestimo->status === 'pendente'
-                ? 'Empréstimo criado e aguardando aprovação.'
-                : 'Empréstimo criado e aprovado automaticamente!';
+            if ($emprestimo->status === 'aguardando_aceite_retroativo') {
+                $mensagem = 'Empréstimo retroativo criado e aguardando aceite do gestor ou administrador.';
+            } elseif ($emprestimo->status === 'pendente') {
+                $mensagem = 'Empréstimo criado e aguardando aprovação.';
+            } else {
+                $mensagem = 'Empréstimo criado e aprovado automaticamente!';
+            }
 
             return redirect()->route('emprestimos.show', $emprestimo->id)
                 ->with('success', $mensagem);
@@ -604,5 +650,234 @@ class EmprestimoController extends Controller
             \Log::error('Erro ao executar garantia: ' . $e->getMessage());
             return back()->with('error', 'Erro ao executar garantia: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Registrar parcelas já pagas (empréstimo retroativo) com opção de gerar ou não caixa
+     */
+    public function registrarParcelasPagasRetroativo(Request $request, int $id): RedirectResponse
+    {
+        $user = auth()->user();
+        $emprestimo = Emprestimo::findOrFail($id);
+
+        if (!$emprestimo->is_retroativo) {
+            return back()->with('error', 'Este empréstimo não é retroativo.');
+        }
+        if ($emprestimo->isAguardandoAceiteRetroativo()) {
+            return back()->with('error', 'Este empréstimo retroativo ainda está aguardando aceite do gestor ou administrador.');
+        }
+
+        $podeRegistrar = $user->hasAnyRole(['administrador', 'gestor'])
+            || $emprestimo->consultor_id === $user->id;
+        if (!$podeRegistrar) {
+            abort(403, 'Você não pode registrar parcelas pagas deste empréstimo.');
+        }
+
+        $parcelasInput = $request->input('parcelas');
+        if (is_string($parcelasInput)) {
+            $parcelasInput = json_decode($parcelasInput, true) ?? [];
+        }
+        $request->merge(['parcelas' => is_array($parcelasInput) ? $parcelasInput : []]);
+
+        $request->validate([
+            'parcelas' => 'required|array|min:1',
+            'parcelas.*.parcela_id' => 'required|exists:parcelas,id',
+            'parcelas.*.data_pagamento' => 'required|date',
+            'gerar_caixa_global' => 'required|in:0,1',
+        ]);
+
+        $gerarCaixaGlobal = $request->boolean('gerar_caixa_global');
+        $cashService = app(\App\Modules\Cash\Services\CashService::class);
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($emprestimo, $request, $gerarCaixaGlobal, $cashService) {
+            foreach ($request->input('parcelas') as $item) {
+                $parcela = Parcela::where('emprestimo_id', $emprestimo->id)->find($item['parcela_id']);
+                if (!$parcela || $parcela->status === 'paga') {
+                    continue;
+                }
+                // Só aceita parcelas cujo vencimento já passou (ou é hoje)
+                if ($parcela->data_vencimento && $parcela->data_vencimento->isFuture()) {
+                    continue;
+                }
+
+                $dataPagamento = \Carbon\Carbon::parse($item['data_pagamento']);
+                $gerarCaixa = $gerarCaixaGlobal;
+
+                $parcela->update([
+                    'valor_pago' => $parcela->valor,
+                    'data_pagamento' => $dataPagamento,
+                    'status' => 'paga',
+                    'dias_atraso' => 0,
+                ]);
+
+                if ($gerarCaixa) {
+                    $pagamento = \App\Modules\Loans\Models\Pagamento::create([
+                        'parcela_id' => $parcela->id,
+                        'consultor_id' => $emprestimo->consultor_id,
+                        'valor' => $parcela->valor,
+                        'metodo' => 'dinheiro',
+                        'data_pagamento' => $dataPagamento,
+                        'observacoes' => 'Pagamento retroativo (empréstimo já existente)',
+                        'tipo_juros' => null,
+                        'taxa_juros_aplicada' => null,
+                        'valor_juros' => 0,
+                    ]);
+
+                    $cashService->registrarMovimentacao([
+                        'operacao_id' => $emprestimo->operacao_id,
+                        'consultor_id' => $emprestimo->consultor_id,
+                        'pagamento_id' => $pagamento->id,
+                        'tipo' => 'entrada',
+                        'origem' => 'automatica',
+                        'valor' => $pagamento->valor,
+                        'descricao' => 'Pagamento retroativo - Parcela #' . $parcela->numero . ' - Empréstimo #' . $emprestimo->id,
+                        'data_movimentacao' => $dataPagamento,
+                        'referencia_tipo' => 'pagamento_parcela',
+                        'referencia_id' => $parcela->id,
+                    ]);
+                }
+            }
+
+            app(\App\Modules\Loans\Services\PagamentoService::class)->verificarFinalizacaoEmprestimo($emprestimo);
+        });
+
+        return redirect()->route('emprestimos.show', $id)
+            ->with('success', 'Parcelas registradas como pagas.');
+    }
+
+    /**
+     * Listagem de empréstimos retroativos aguardando aceite (gestor e administrador).
+     */
+    public function indexPendentesRetroativo(): View
+    {
+        $user = auth()->user();
+        if (!$user->hasAnyRole(['gestor', 'administrador'])) {
+            abort(403, 'Apenas gestores e administradores podem ver empréstimos retroativos pendentes de aceite.');
+        }
+
+        $query = SolicitacaoEmprestimoRetroativo::with(['emprestimo.cliente', 'emprestimo.operacao', 'solicitante'])
+            ->where('status', 'aguardando');
+        if (!$user->hasRole('administrador')) {
+            $opsIds = $user->getOperacoesIds();
+            if (!empty($opsIds)) {
+                $query->whereHas('emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+        $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15);
+
+        return view('emprestimos.retroativo-pendentes', compact('solicitacoes'));
+    }
+
+    /**
+     * Aprovar empréstimo retroativo criado por consultor.
+     */
+    public function aprovarRetroativo(int $id): RedirectResponse
+    {
+        $user = auth()->user();
+        if (!$user->hasAnyRole(['gestor', 'administrador'])) {
+            abort(403, 'Apenas gestores e administradores podem aprovar empréstimos retroativos.');
+        }
+
+        $solicitacao = SolicitacaoEmprestimoRetroativo::with('emprestimo')->findOrFail($id);
+        if ($solicitacao->status !== 'aguardando') {
+            return back()->with('error', 'Esta solicitação já foi processada.');
+        }
+
+        if (!$user->hasRole('administrador')) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array($solicitacao->emprestimo->operacao_id, $opsIds)) {
+                abort(403, 'Você não tem acesso à operação deste empréstimo.');
+            }
+        }
+
+        $solicitacao->update([
+            'status' => 'aprovado',
+            'aprovado_por' => $user->id,
+            'aprovado_em' => now(),
+        ]);
+        $solicitacao->emprestimo->update(['status' => 'ativo']);
+
+        return redirect()->route('emprestimos.retroativo.pendentes')
+            ->with('success', 'Empréstimo retroativo aprovado. O empréstimo #' . $solicitacao->emprestimo_id . ' está ativo.');
+    }
+
+    /**
+     * Aprovar em lote várias solicitações de empréstimo retroativo.
+     */
+    public function aprovarRetroativoLote(Request $request): RedirectResponse
+    {
+        $user = auth()->user();
+        if (!$user->hasAnyRole(['gestor', 'administrador'])) {
+            abort(403, 'Apenas gestores e administradores podem aprovar empréstimos retroativos.');
+        }
+
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'integer|exists:solicitacoes_emprestimo_retroativo,id',
+        ]);
+
+        $opsIds = $user->hasRole('administrador') ? null : $user->getOperacoesIds();
+        $aprovados = 0;
+
+        foreach ($request->input('ids') as $id) {
+            $solicitacao = SolicitacaoEmprestimoRetroativo::with('emprestimo')->find($id);
+            if (!$solicitacao || $solicitacao->status !== 'aguardando') {
+                continue;
+            }
+            if (!$user->hasRole('administrador') && (empty($opsIds) || !in_array($solicitacao->emprestimo->operacao_id, $opsIds))) {
+                continue;
+            }
+            $solicitacao->update([
+                'status' => 'aprovado',
+                'aprovado_por' => $user->id,
+                'aprovado_em' => now(),
+            ]);
+            $solicitacao->emprestimo->update(['status' => 'ativo']);
+            $aprovados++;
+        }
+
+        $msg = $aprovados === 0
+            ? 'Nenhuma solicitação elegível para aprovação.'
+            : ($aprovados === 1 ? '1 empréstimo retroativo aprovado.' : $aprovados . ' empréstimos retroativos aprovados.');
+
+        return redirect()->route('emprestimos.retroativo.pendentes')->with('success', $msg);
+    }
+
+    /**
+     * Rejeitar empréstimo retroativo criado por consultor.
+     */
+    public function rejeitarRetroativo(Request $request, int $id): RedirectResponse
+    {
+        $user = auth()->user();
+        if (!$user->hasAnyRole(['gestor', 'administrador'])) {
+            abort(403, 'Apenas gestores e administradores podem rejeitar empréstimos retroativos.');
+        }
+
+        $validated = $request->validate([
+            'motivo_rejeicao' => 'required|string|min:5|max:500',
+        ]);
+
+        $solicitacao = SolicitacaoEmprestimoRetroativo::with('emprestimo')->findOrFail($id);
+        if ($solicitacao->status !== 'aguardando') {
+            return back()->with('error', 'Esta solicitação já foi processada.');
+        }
+
+        if (!$user->hasRole('administrador')) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array($solicitacao->emprestimo->operacao_id, $opsIds)) {
+                abort(403, 'Você não tem acesso à operação deste empréstimo.');
+            }
+        }
+
+        $solicitacao->update([
+            'status' => 'rejeitado',
+            'motivo_rejeicao' => $validated['motivo_rejeicao'],
+        ]);
+        $solicitacao->emprestimo->update(['status' => 'cancelado']);
+
+        return redirect()->route('emprestimos.retroativo.pendentes')
+            ->with('success', 'Empréstimo retroativo rejeitado.');
     }
 }

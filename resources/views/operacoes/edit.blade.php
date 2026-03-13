@@ -133,6 +133,22 @@
                                 @enderror
                             </div>
 
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="permite_emprestimo_retroativo" id="permite_emprestimo_retroativo"
+                                           value="1" {{ old('permite_emprestimo_retroativo', $operacao->permite_emprestimo_retroativo ?? false) ? 'checked' : '' }}>
+                                    <label class="form-check-label" for="permite_emprestimo_retroativo">
+                                        <strong>Permitir empréstimo retroativo</strong>
+                                    </label>
+                                </div>
+                                <small class="text-muted">
+                                    Se marcado, gestores e administradores poderão cadastrar empréstimos já existentes (data no passado) e vincular a um consultor. Útil para migração de contratos para o sistema.
+                                </small>
+                                @error('permite_emprestimo_retroativo')
+                                    <div class="text-danger">{{ $message }}</div>
+                                @enderror
+                            </div>
+
                             <hr>
 
                             <h5 class="mb-3">Configuração de Juros por Atraso</h5>

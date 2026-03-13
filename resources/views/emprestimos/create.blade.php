@@ -69,6 +69,42 @@
                                 @enderror
                             </div>
 
+                            <div id="bloco-retroativo" class="mb-3" style="display: none;">
+                                <div class="alert alert-secondary mb-2">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input" type="checkbox" name="is_retroativo" value="1" 
+                                               id="is_retroativo" {{ old('is_retroativo') ? 'checked' : '' }}>
+                                        <label class="form-check-label fw-medium" for="is_retroativo">
+                                            <i class="bx bx-history me-1"></i> Empréstimo retroativo
+                                        </label>
+                                    </div>
+                                    <small class="text-muted">
+                                        @if(auth()->user()->hasAnyRole(['administrador', 'gestor']))
+                                            Use para cadastrar empréstimos já existentes (data no passado). Você pode vincular a um consultor da operação. Após criar, use "Registrar parcelas já pagas" na tela do empréstimo para marcar parcelas recebidas (com opção de gerar ou não caixa).
+                                        @else
+                                            Use para cadastrar empréstimos já existentes (data no passado). O empréstimo ficará vinculado a você e precisará do aceite de um gestor ou administrador para ser ativado.
+                                        @endif
+                                    </small>
+                                </div>
+                                @if(auth()->user()->hasAnyRole(['administrador', 'gestor']))
+                                <div id="consultor-retroativo-wrap" class="mb-3" style="display: none;">
+                                    <label class="form-label">Consultor responsável <span class="text-danger">*</span></label>
+                                    <select name="consultor_id" id="consultor_id_retroativo" class="form-select">
+                                        <option value="">Selecione o consultor...</option>
+                                    </select>
+                                    <small class="text-muted">Empréstimo ficará vinculado a este consultor</small>
+                                    @error('consultor_id')
+                                        <div class="text-danger">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                                @endif
+                            </div>
+                            <script>
+                                window.permiteRetroativoPorOperacao = @json($operacoes->pluck('permite_emprestimo_retroativo', 'id'));
+                                window.consultoresPorOperacao = @json($consultoresPorOperacao ?? []);
+                                window.ehGestorOuAdmin = @json(auth()->user()->hasAnyRole(['administrador', 'gestor']));
+                            </script>
+
                             <div class="mb-3">
                                 <label class="form-label">Tipo de Empréstimo <span class="text-danger">*</span></label>
                                 <input type="hidden" name="tipo" id="tipo-emprestimo" value="{{ old('tipo', 'dinheiro') }}" required>
@@ -1466,6 +1502,73 @@
                     atualizarCamposPorTipo();
                     previewEmprestimo.style.display = 'none';
                 });
+
+                // Empréstimo retroativo (gestor/admin)
+                const blocoRetroativo = document.getElementById('bloco-retroativo');
+                const isRetroativoCheck = document.getElementById('is_retroativo');
+                const consultorRetroativoWrap = document.getElementById('consultor-retroativo-wrap');
+                const consultorRetroativoSelect = document.getElementById('consultor_id_retroativo');
+                const operacaoSelect = document.querySelector('select[name="operacao_id"]');
+                const dataInicioEl = document.getElementById('data-inicio');
+
+                function atualizarBlocoRetroativo() {
+                    if (!blocoRetroativo || !operacaoSelect) return;
+                    const opId = operacaoSelect.value;
+                    const permite = window.permiteRetroativoPorOperacao && window.permiteRetroativoPorOperacao[opId];
+                    if (permite) {
+                        blocoRetroativo.style.display = 'block';
+                        const consultores = window.consultoresPorOperacao && window.consultoresPorOperacao[opId] ? window.consultoresPorOperacao[opId] : [];
+                        if (consultorRetroativoSelect) {
+                            consultorRetroativoSelect.innerHTML = '<option value="">Selecione o consultor...</option>';
+                            consultores.forEach(function(c) {
+                                const opt = document.createElement('option');
+                                opt.value = c.id;
+                                opt.textContent = c.name;
+                                consultorRetroativoSelect.appendChild(opt);
+                            });
+                        }
+                    } else {
+                        blocoRetroativo.style.display = 'none';
+                        if (isRetroativoCheck) isRetroativoCheck.checked = false;
+                        if (consultorRetroativoWrap) consultorRetroativoWrap.style.display = 'none';
+                        if (dataInicioEl) dataInicioEl.removeAttribute('min');
+                    }
+                    atualizarRetroativoUi();
+                }
+
+                function atualizarRetroativoUi() {
+                    const isRetroativo = isRetroativoCheck && isRetroativoCheck.checked;
+                    if (consultorRetroativoWrap) {
+                        consultorRetroativoWrap.style.display = isRetroativo ? 'block' : 'none';
+                    }
+                    if (consultorRetroativoSelect) {
+                        if (isRetroativo) {
+                            consultorRetroativoSelect.setAttribute('required', 'required');
+                            consultorRetroativoSelect.setAttribute('name', 'consultor_id');
+                        } else {
+                            consultorRetroativoSelect.removeAttribute('required');
+                            consultorRetroativoSelect.removeAttribute('name');
+                            consultorRetroativoSelect.value = '';
+                        }
+                    }
+                    if (dataInicioEl && dataInicioEl.getAttribute('name') === 'data_inicio') {
+                        if (isRetroativo) {
+                            dataInicioEl.removeAttribute('min');
+                        } else {
+                            dataInicioEl.setAttribute('min', new Date().toISOString().split('T')[0]);
+                        }
+                    }
+                }
+
+                if (operacaoSelect) {
+                    operacaoSelect.addEventListener('change', atualizarBlocoRetroativo);
+                }
+                if (isRetroativoCheck) {
+                    isRetroativoCheck.addEventListener('change', atualizarRetroativoUi);
+                }
+                if (blocoRetroativo) {
+                    atualizarBlocoRetroativo();
+                }
 
                 // Inicializar seções
                 atualizarSecaoGarantias();

@@ -148,6 +148,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::post('/{id}/renovar', [App\Modules\Loans\Controllers\EmprestimoController::class, 'renovar'])->name('renovar');
         Route::post('/{id}/cancelar', [App\Modules\Loans\Controllers\EmprestimoController::class, 'cancelar'])->name('cancelar');
         Route::post('/{id}/garantias/{garantiaId}/executar', [App\Modules\Loans\Controllers\EmprestimoController::class, 'executarGarantia'])->name('garantias.executar');
+        Route::post('/{id}/parcelas-retroativo', [App\Modules\Loans\Controllers\EmprestimoController::class, 'registrarParcelasPagasRetroativo'])->name('parcelas-retroativo');
         
         // Garantias (empréstimo empenho)
         Route::post('/{id}/garantias', [App\Modules\Loans\Controllers\GarantiaController::class, 'store'])->name('garantias.store');
@@ -177,6 +178,14 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::get('/pendentes', [App\Modules\Loans\Controllers\QuitacaoController::class, 'indexPendentes'])->name('pendentes');
         Route::post('/pendentes/{id}/aprovar', [App\Modules\Loans\Controllers\QuitacaoController::class, 'aprovar'])->name('aprovar');
         Route::post('/pendentes/{id}/rejeitar', [App\Modules\Loans\Controllers\QuitacaoController::class, 'rejeitar'])->name('rejeitar');
+    });
+
+    // Empréstimos retroativos aguardando aceite (gestor/admin)
+    Route::prefix('emprestimos-retroativo')->name('emprestimos.retroativo.')->group(function () {
+        Route::get('/pendentes', [App\Modules\Loans\Controllers\EmprestimoController::class, 'indexPendentesRetroativo'])->name('pendentes');
+        Route::post('/pendentes/aprovar-lote', [App\Modules\Loans\Controllers\EmprestimoController::class, 'aprovarRetroativoLote'])->name('aprovar-lote');
+        Route::post('/pendentes/{id}/aprovar', [App\Modules\Loans\Controllers\EmprestimoController::class, 'aprovarRetroativo'])->name('aprovar');
+        Route::post('/pendentes/{id}/rejeitar', [App\Modules\Loans\Controllers\EmprestimoController::class, 'rejeitarRetroativo'])->name('rejeitar');
     });
 
     // Garantias (listagem geral)

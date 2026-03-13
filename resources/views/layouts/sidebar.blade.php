@@ -221,6 +221,7 @@
                             $solicitacoesRenovacaoAbate = \App\Modules\Loans\Models\SolicitacaoRenovacaoAbate::where('status', 'aguardando');
                             $solicitacoesQuitacaoDesconto = \App\Modules\Loans\Models\SolicitacaoQuitacao::where('status', 'pendente');
                             $solicitacoesNegociacao = \App\Modules\Loans\Models\SolicitacaoNegociacao::where('status', 'pendente');
+                            $solicitacoesRetroativo = \App\Modules\Loans\Models\SolicitacaoEmprestimoRetroativo::where('status', 'aguardando');
                             if (!auth()->user()->hasRole('administrador')) {
                                 $opsIds = auth()->user()->getOperacoesIds();
                                 if (!empty($opsIds)) {
@@ -230,6 +231,7 @@
                                     $solicitacoesJurosContratoReduzido->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
                                     $solicitacoesRenovacaoAbate->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
                                     $solicitacoesQuitacaoDesconto->whereHas('emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
+                                    $solicitacoesRetroativo->whereHas('emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
                                 } else {
                                     $produtoObjetoPendentes->whereRaw('1 = 0');
                                     $solicitacoesJurosParcial->whereRaw('1 = 0');
@@ -237,6 +239,7 @@
                                     $solicitacoesRenovacaoAbate->whereRaw('1 = 0');
                                     $solicitacoesQuitacaoDesconto->whereRaw('1 = 0');
                                     $solicitacoesNegociacao->whereRaw('1 = 0');
+                                    $solicitacoesRetroativo->whereRaw('1 = 0');
                                 }
                             }
                             $countProdutoObjeto = $produtoObjetoPendentes->count();
@@ -245,6 +248,7 @@
                             $countRenovacaoAbate = $solicitacoesRenovacaoAbate->count();
                             $countQuitacaoDesconto = $solicitacoesQuitacaoDesconto->count();
                             $countNegociacao = $solicitacoesNegociacao->count();
+                            $countRetroativo = $solicitacoesRetroativo->count();
                         @endphp
                         @if($liberacoesPendentes > 0)
                             <span class="badge rounded-pill bg-danger">{{ $liberacoesPendentes }}</span>
