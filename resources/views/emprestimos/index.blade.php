@@ -85,7 +85,7 @@
                         <div class="d-flex align-items-center justify-content-between">
                             <h4 class="card-title mb-0">Lista de Empréstimos</h4>
                             <div class="d-flex gap-2">
-                                <a href="{{ route('emprestimos.export', request()->only(['operacao_id', 'status', 'tipo', 'cliente_id'])) }}" class="btn btn-outline-success">
+                                <a href="{{ route('emprestimos.export', request()->only(['operacao_id', 'status', 'tipo', 'cliente_id', 'apenas_atrasadas'])) }}" class="btn btn-outline-success">
                                     <i class="bx bx-download"></i> Exportar CSV
                                 </a>
                                 @if(!auth()->user()->isSuperAdmin())
@@ -133,10 +133,20 @@
                                         <option value="cancelado" {{ request('status') == 'cancelado' ? 'selected' : '' }}>Cancelado</option>
                                     </select>
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <input type="number" name="cliente_id" class="form-control" 
                                            placeholder="ID do Cliente" 
                                            value="{{ request('cliente_id') }}">
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="form-check mt-2">
+                                        <input type="checkbox" name="apenas_atrasadas" value="1" 
+                                               class="form-check-input" id="apenas_atrasadas"
+                                               {{ request('apenas_atrasadas') ? 'checked' : '' }}>
+                                        <label class="form-check-label text-danger" for="apenas_atrasadas">
+                                            <i class="bx bx-error-circle"></i> Com atrasadas
+                                        </label>
+                                    </div>
                                 </div>
                                 <div class="col-md-2">
                                     <button type="submit" class="btn btn-primary me-2">

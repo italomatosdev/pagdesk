@@ -175,13 +175,32 @@ class User extends Authenticatable
     }
 
     /**
-     * Obter inicial do nome para usar como fallback
+     * Obter iniciais do nome para usar como fallback no avatar
+     * Retorna até 2 iniciais (ex: "IM" para "Ítalo Matos")
      * 
      * @return string
      */
     public function getInitialAttribute(): string
     {
-        return strtoupper(substr($this->name, 0, 1));
+        if (empty($this->name)) {
+            return '?';
+        }
+
+        $names = preg_split('/\s+/', trim($this->name));
+        $names = array_filter($names);
+        
+        if (empty($names)) {
+            return '?';
+        }
+
+        $first = mb_strtoupper(mb_substr($names[0], 0, 1, 'UTF-8'), 'UTF-8');
+        
+        if (count($names) > 1) {
+            $last = mb_strtoupper(mb_substr(end($names), 0, 1, 'UTF-8'), 'UTF-8');
+            return $first . $last;
+        }
+
+        return $first;
     }
 
     /**

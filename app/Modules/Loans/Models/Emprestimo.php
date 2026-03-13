@@ -24,6 +24,7 @@ class Emprestimo extends Model
         'status',
         'tipo',
         'observacoes',
+        'is_retroativo',
         'aprovado_por',
         'aprovado_em',
         'motivo_rejeicao',
@@ -41,6 +42,7 @@ class Emprestimo extends Model
         'data_inicio' => 'date',
         'aprovado_em' => 'datetime',
         'sandbox' => 'boolean',
+        'is_retroativo' => 'boolean',
     ];
 
     /**
@@ -244,6 +246,22 @@ class Emprestimo extends Model
     public function renovacoes()
     {
         return $this->hasMany(self::class, 'emprestimo_origem_id');
+    }
+
+    /**
+     * Solicitação de aceite quando consultor cria empréstimo retroativo (uma por empréstimo, status aguardando/aprovado/rejeitado)
+     */
+    public function solicitacaoRetroativo()
+    {
+        return $this->hasOne(SolicitacaoEmprestimoRetroativo::class, 'emprestimo_id');
+    }
+
+    /**
+     * Verificar se está aguardando aceite de gestor/admin (consultor criou retroativo)
+     */
+    public function isAguardandoAceiteRetroativo(): bool
+    {
+        return $this->status === 'aguardando_aceite_retroativo';
     }
 
     /**

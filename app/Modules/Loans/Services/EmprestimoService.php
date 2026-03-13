@@ -89,6 +89,13 @@ class EmprestimoService
             // Obter empresa_id da operação (já temos $operacao carregado acima)
             $empresaId = $operacao->empresa_id ?? (auth()->check() && !auth()->user()->isSuperAdmin() ? auth()->user()->empresa_id : null);
 
+            // Empréstimo retroativo: gestor/admin → ativo direto; consultor → aguardando aceite
+            $isRetroativo = !empty($dados['is_retroativo']);
+            $solicitarAceiteRetroativo = !empty($dados['solicitar_aceite_retroativo']);
+            if ($isRetroativo) {
+                $status = $solicitarAceiteRetroativo ? 'aguardando_aceite_retroativo' : 'ativo';
+            }
+
             // Criar empréstimo
             $emprestimo = Emprestimo::create([
                 'operacao_id' => $dados['operacao_id'],
@@ -102,6 +109,7 @@ class EmprestimoService
                 'tipo' => $dados['tipo'] ?? 'dinheiro',
                 'status' => $status,
                 'observacoes' => $dados['observacoes'] ?? null,
+                'is_retroativo' => $isRetroativo,
                 'empresa_id' => $empresaId,
             ]);
 
@@ -127,8 +135,31 @@ class EmprestimoService
                 $emprestimo->update(['valor_total' => $valorTotalCheques]);
             }
 
-            // Se aprovado, verificar se precisa criar liberação
-            if ($status === 'aprovado') {
+            // Consultor criou retroativo: criar solicitação de aceite para gestor/admin
+            if ($isRetroativo && $solicitarAceiteRetroativo) {
+                \App\Modules\Loans\Models\SolicitacaoEmprestimoRetroativo::create([
+                    'emprestimo_id' => $emprestimo->id,
+                    'solicitante_id' => $emprestimo->consultor_id,
+                    'status' => 'aguardando',
+                    'empresa_id' => $empresaId,
+                ]);
+                $notificacaoService = app(NotificacaoService::class);
+                $notificacaoService->criarParaRole('gestor', [
+                    'tipo' => 'emprestimo_retroativo_aguardando_aceite',
+                    'titulo' => 'Empréstimo retroativo aguardando aceite',
+                    'mensagem' => 'Empréstimo #' . $emprestimo->id . ' (retroativo) criado por consultor aguardando sua aprovação.',
+                    'url' => route('emprestimos.retroativo.pendentes'),
+                ]);
+                $notificacaoService->criarParaRole('administrador', [
+                    'tipo' => 'emprestimo_retroativo_aguardando_aceite',
+                    'titulo' => 'Empréstimo retroativo aguardando aceite',
+                    'mensagem' => 'Empréstimo #' . $emprestimo->id . ' (retroativo) criado por consultor aguardando sua aprovação.',
+                    'url' => route('emprestimos.retroativo.pendentes'),
+                ]);
+            }
+
+            // Se aprovado, verificar se precisa criar liberação (retroativo não cria liberação)
+            if ($status === 'aprovado' && !$isRetroativo) {
                 $requerLiberacao = $operacao->requerLiberacao();
                 
                 if ($requerLiberacao) {

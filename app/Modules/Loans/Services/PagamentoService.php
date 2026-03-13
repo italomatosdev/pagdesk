@@ -626,7 +626,7 @@ class PagamentoService
      * @param \App\Modules\Loans\Models\Emprestimo $emprestimo
      * @return void
      */
-    private function verificarFinalizacaoEmprestimo($emprestimo): void
+    public function verificarFinalizacaoEmprestimo($emprestimo): void
     {
         // Usar Strategy Pattern para verificar se pode finalizar
         $strategy = \App\Modules\Loans\Services\Strategies\LoanStrategyFactory::create($emprestimo);

@@ -41,6 +41,16 @@
                         </div>
                     </div>
                     <div class="card-body">
+                        @if($emprestimo->isAguardandoAceiteRetroativo())
+                            <div class="alert alert-warning mb-3">
+                                <i class="bx bx-time-five"></i>
+                                <strong>Empréstimo retroativo aguardando aceite.</strong>
+                                Este empréstimo foi criado por um consultor e precisa da aprovação de um gestor ou administrador para ser ativado.
+                                @if(auth()->user()->hasAnyRole(['administrador', 'gestor']))
+                                    <a href="{{ route('emprestimos.retroativo.pendentes') }}" class="alert-link ms-1">Ver pendentes e aprovar</a>
+                                @endif
+                            </div>
+                        @endif
                         @php
                             $solicitacaoQuitacaoDesconto = \App\Modules\Loans\Models\SolicitacaoQuitacao::where('emprestimo_id', $emprestimo->id)->where('status', 'aprovado')->first();
                         @endphp
@@ -182,13 +192,15 @@
                                     $badgeClass = match($emprestimo->status) {
                                         'ativo' => 'success',
                                         'pendente' => 'warning',
+                                        'aguardando_aceite_retroativo' => 'warning',
                                         'finalizado' => 'info',
                                         'cancelado' => 'danger',
                                         default => 'secondary'
                                     };
+                                    $statusLabel = $emprestimo->status === 'aguardando_aceite_retroativo' ? 'Aguardando aceite (retroativo)' : ucfirst($emprestimo->status);
                                 @endphp
                                 <span class="badge bg-{{ $badgeClass }}">
-                                    {{ ucfirst($emprestimo->status) }}
+                                    {{ $statusLabel }}
                                 </span>
                             </div>
                             <div class="col-md-6 mb-3">
@@ -560,6 +572,158 @@
                             </div>
                         </div>
                     </div>
+                @endif
+
+                <!-- Registrar parcelas já pagas (empréstimo retroativo) -->
+                @php
+                    $podeRegistrarParcelasRetroativo = $emprestimo->is_retroativo
+                        && !$emprestimo->isAguardandoAceiteRetroativo()
+                        && (auth()->user()->hasAnyRole(['administrador', 'gestor']) || $emprestimo->consultor_id === auth()->id());
+                    // Apenas parcelas não pagas cujo vencimento já passou (ou é hoje) podem ser marcadas como "já pagas"
+                    $parcelasNaoPagasRetroativo = $podeRegistrarParcelasRetroativo
+                        ? $emprestimo->parcelas->reject(fn($p) => $p->isPaga())
+                            ->filter(fn($p) => $p->data_vencimento && !$p->data_vencimento->isFuture())
+                            ->sortBy('numero')
+                        : collect();
+                @endphp
+                @if($podeRegistrarParcelasRetroativo && $parcelasNaoPagasRetroativo->isNotEmpty())
+                    <div class="card mt-3 border-warning">
+                        <div class="card-header bg-warning text-dark">
+                            <h4 class="card-title mb-0">
+                                <i class="bx bx-calendar-check"></i> Registrar parcelas já pagas
+                            </h4>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-3">
+                                Marque as parcelas que já foram pagas pelo cliente (empréstimo retroativo) e informe a data de cada pagamento. 
+                                Escolha se deseja gerar movimentação de caixa para essas parcelas.
+                            </p>
+                            <form action="{{ route('emprestimos.parcelas-retroativo', $emprestimo->id) }}" method="POST" class="form-parcelas-retroativo">
+                                @csrf
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Gerar caixa para parcelas já pagas?</label>
+                                    <div class="d-flex gap-3">
+                                        <label class="form-check">
+                                            <input type="radio" name="gerar_caixa_global" value="1" class="form-check-input" required>
+                                            <span class="form-check-label">Sim</span>
+                                        </label>
+                                        <label class="form-check">
+                                            <input type="radio" name="gerar_caixa_global" value="0" class="form-check-input" required>
+                                            <span class="form-check-label">Não</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="table-responsive mb-3">
+                                    <table class="table table-sm table-bordered">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Parcela</th>
+                                                <th>Valor</th>
+                                                <th>Vencimento</th>
+                                                <th>Marcar como já paga</th>
+                                                <th>Data do pagamento</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($parcelasNaoPagasRetroativo as $p)
+                                                <tr>
+                                                    <td><strong>{{ $p->numero }}</strong></td>
+                                                    <td>R$ {{ number_format($p->valor, 2, ',', '.') }}</td>
+                                                    <td>{{ $p->data_vencimento?->format('d/m/Y') }}</td>
+                                                    <td>
+                                                        <input type="checkbox" name="marcar_paga[{{ $p->id }}]" value="1" class="form-check-input checkbox-parcela-retroativo" data-parcela-id="{{ $p->id }}">
+                                                    </td>
+                                                    <td>
+                                                        <input type="date" name="data_pagamento_parcela[{{ $p->id }}]" class="form-control form-control-sm data-pagamento-parcela" data-parcela-id="{{ $p->id }}" style="max-width: 160px;" disabled>
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <input type="hidden" name="parcelas" id="parcelas-retroativo-json" value="">
+                                <button type="submit" class="btn btn-warning" id="btn-submit-parcelas-retroativo" disabled>
+                                    <i class="bx bx-check-double"></i> Registrar parcelas selecionadas
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    <script>
+                    (function() {
+                        var form = document.querySelector('.form-parcelas-retroativo');
+                        if (!form) return;
+                        var checkboxes = form.querySelectorAll('.checkbox-parcela-retroativo');
+                        var inputsData = form.querySelectorAll('.data-pagamento-parcela');
+                        var hidden = document.getElementById('parcelas-retroativo-json');
+                        var btn = document.getElementById('btn-submit-parcelas-retroativo');
+                        var radios = form.querySelectorAll('input[name="gerar_caixa_global"]');
+
+                        checkboxes.forEach(function(cb) {
+                            cb.addEventListener('change', function() {
+                                var id = this.dataset.parcelaId;
+                                var dataInput = form.querySelector('.data-pagamento-parcela[data-parcela-id="' + id + '"]');
+                                if (dataInput) {
+                                    dataInput.disabled = !this.checked;
+                                    if (this.checked && !dataInput.value) dataInput.value = new Date().toISOString().slice(0, 10);
+                                }
+                                buildParcelasPayload();
+                            });
+                        });
+                        inputsData.forEach(function(input) {
+                            input.addEventListener('change', buildParcelasPayload);
+                        });
+                        radios.forEach(function(r) { r.addEventListener('change', buildParcelasPayload); });
+
+                        function buildParcelasPayload() {
+                            var gerar = form.querySelector('input[name="gerar_caixa_global"]:checked');
+                            var payload = [];
+                            checkboxes.forEach(function(cb) {
+                                if (!cb.checked) return;
+                                var id = cb.dataset.parcelaId;
+                                var dataInput = form.querySelector('.data-pagamento-parcela[data-parcela-id="' + id + '"]');
+                                var data = dataInput && dataInput.value ? dataInput.value : '';
+                                if (!data) return;
+                                payload.push({ parcela_id: id, data_pagamento: data });
+                            });
+                            if (hidden) hidden.value = JSON.stringify(payload);
+                            if (btn) btn.disabled = !gerar || payload.length === 0;
+                        }
+
+                        form.addEventListener('submit', function(e) {
+                            e.preventDefault();
+                            buildParcelasPayload();
+                            var gerar = form.querySelector('input[name="gerar_caixa_global"]:checked');
+                            var gerarTexto = gerar && gerar.value === '1' ? 'Será gerada movimentação de caixa para as parcelas.' : 'Não será gerada movimentação de caixa.';
+                            var opts = {
+                                title: 'Registrar parcelas como pagas?',
+                                text: 'As parcelas selecionadas serão marcadas como pagas. ' + gerarTexto + ' Deseja continuar?',
+                                icon: 'question',
+                                confirmText: 'Sim, registrar',
+                                cancelText: 'Cancelar'
+                            };
+                            if (window.SweetAlertHelper && window.SweetAlertHelper.confirm) {
+                                window.SweetAlertHelper.confirm(opts).then(function(result) {
+                                    if (result && result.isConfirmed) form.submit();
+                                });
+                            } else if (typeof Swal !== 'undefined') {
+                                Swal.fire({
+                                    title: opts.title,
+                                    text: opts.text,
+                                    icon: opts.icon || 'question',
+                                    showCancelButton: true,
+                                    confirmButtonColor: '#038edc',
+                                    cancelButtonColor: '#6c757d',
+                                    confirmButtonText: opts.confirmText || 'Sim',
+                                    cancelButtonText: opts.cancelText || 'Cancelar'
+                                }).then(function(result) {
+                                    if (result && result.isConfirmed) form.submit();
+                                });
+                            } else {
+                                if (confirm(opts.text)) form.submit();
+                            }
+                        });
+                    })();
+                    </script>
                 @endif
 
                 <!-- Tabela de Amortização (Sistema Price) -->

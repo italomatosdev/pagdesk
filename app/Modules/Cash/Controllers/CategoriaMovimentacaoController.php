@@ -102,4 +102,46 @@ class CategoriaMovimentacaoController extends Controller
         $categoria->delete();
         return redirect()->route('caixa.categorias.index')->with('success', 'Categoria excluída com sucesso.');
     }
+
+    /**
+     * Criar categoria via AJAX (para modal inline)
+     */
+    public function storeAjax(Request $request): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'nome' => 'required|string|max:100',
+                'tipo' => 'required|in:entrada,despesa',
+            ]);
+
+            $categoria = CategoriaMovimentacao::create([
+                'nome' => $validated['nome'],
+                'tipo' => $validated['tipo'],
+                'ativo' => true,
+                'ordem' => 0,
+                'empresa_id' => auth()->user()->empresa_id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Categoria criada com sucesso.',
+                'categoria' => [
+                    'id' => $categoria->id,
+                    'nome' => $categoria->nome,
+                    'tipo' => $categoria->tipo,
+                ]
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro de validação.',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao criar categoria: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

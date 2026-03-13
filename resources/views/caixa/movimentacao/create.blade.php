@@ -52,9 +52,16 @@
 
                             <div class="mb-3">
                                 <label class="form-label">Categoria</label>
-                                <select name="categoria_id" id="categoria_id" class="form-select">
-                                    <option value="">Nenhuma</option>
-                                </select>
+                                <div class="input-group">
+                                    <select name="categoria_id" id="categoria_id" class="form-select">
+                                        <option value="">Nenhuma</option>
+                                    </select>
+                                    <button type="button" class="btn btn-outline-primary" id="btn-add-categoria" 
+                                            data-bs-toggle="modal" data-bs-target="#modalNovaCategoria"
+                                            title="Criar nova categoria">
+                                        <i class="bx bx-plus"></i>
+                                    </button>
+                                </div>
                                 <small class="text-muted">Opções filtradas pelo tipo da movimentação (entrada ou despesa)</small>
                                 @error('categoria_id')
                                     <div class="text-danger">{{ $message }}</div>
@@ -158,6 +165,48 @@
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Nova Categoria -->
+        <div class="modal fade" id="modalNovaCategoria" tabindex="-1" aria-labelledby="modalNovaCategoriaLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalNovaCategoriaLabel">
+                            <i class="bx bx-category me-1"></i> Nova Categoria
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="formNovaCategoria">
+                            <div class="mb-3">
+                                <label class="form-label">Nome da Categoria <span class="text-danger">*</span></label>
+                                <input type="text" name="nome" id="categoria_nome" class="form-control" 
+                                       placeholder="Ex: Aluguel, Energia, Comissão..." required maxlength="100">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Tipo <span class="text-danger">*</span></label>
+                                <select name="tipo" id="categoria_tipo" class="form-select" required>
+                                    <option value="">Selecione...</option>
+                                    <option value="entrada">Entrada</option>
+                                    <option value="despesa">Despesa (Saída)</option>
+                                </select>
+                                <small class="text-muted">
+                                    <strong>Entrada:</strong> Aportes, receitas extras<br>
+                                    <strong>Despesa:</strong> Custos, gastos operacionais
+                                </small>
+                            </div>
+                            <div id="categoria-erro" class="alert alert-danger d-none"></div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" id="btn-salvar-categoria">
+                            <i class="bx bx-check"></i> Criar Categoria
+                        </button>
                     </div>
                 </div>
             </div>
@@ -320,6 +369,123 @@
                 } else {
                     init();
                     attachSubmitHandler();
+                }
+            })();
+
+            // Modal Nova Categoria
+            (function() {
+                function initModalCategoria() {
+                    const modal = document.getElementById('modalNovaCategoria');
+                    const btnSalvar = document.getElementById('btn-salvar-categoria');
+                    const formCategoria = document.getElementById('formNovaCategoria');
+                    const tipoMovimentacao = document.getElementById('tipo');
+                    const tipoCategoria = document.getElementById('categoria_tipo');
+                    const categoriaErro = document.getElementById('categoria-erro');
+
+                    if (!modal || !btnSalvar) return;
+
+                    // Ao abrir o modal, pré-selecionar o tipo baseado no tipo de movimentação
+                    modal.addEventListener('show.bs.modal', function() {
+                        const tipoMov = tipoMovimentacao ? tipoMovimentacao.value : '';
+                        if (tipoMov === 'entrada') {
+                            tipoCategoria.value = 'entrada';
+                        } else if (tipoMov === 'saida') {
+                            tipoCategoria.value = 'despesa';
+                        } else {
+                            tipoCategoria.value = '';
+                        }
+                        // Limpar formulário
+                        document.getElementById('categoria_nome').value = '';
+                        categoriaErro.classList.add('d-none');
+                    });
+
+                    // Salvar categoria via AJAX
+                    btnSalvar.addEventListener('click', function() {
+                        const nome = document.getElementById('categoria_nome').value.trim();
+                        const tipo = tipoCategoria.value;
+
+                        // Validação
+                        if (!nome || !tipo) {
+                            categoriaErro.textContent = 'Preencha todos os campos obrigatórios.';
+                            categoriaErro.classList.remove('d-none');
+                            return;
+                        }
+
+                        btnSalvar.disabled = true;
+                        btnSalvar.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Salvando...';
+                        categoriaErro.classList.add('d-none');
+
+                        fetch('{{ route("caixa.categorias.store.ajax") }}', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify({ nome: nome, tipo: tipo })
+                        })
+                        .then(function(response) {
+                            return response.json().then(function(data) {
+                                return { ok: response.ok, data: data };
+                            });
+                        })
+                        .then(function(result) {
+                            btnSalvar.disabled = false;
+                            btnSalvar.innerHTML = '<i class="bx bx-check"></i> Criar Categoria';
+
+                            if (result.ok && result.data.success) {
+                                // Adicionar categoria no array local
+                                const novaCategoria = result.data.categoria;
+                                if (novaCategoria.tipo === 'entrada') {
+                                    window.categoriasPorTipo.entrada.push(novaCategoria);
+                                } else {
+                                    window.categoriasPorTipo.despesa.push(novaCategoria);
+                                }
+
+                                // Atualizar select se o tipo corresponder
+                                const tipoMov = tipoMovimentacao.value;
+                                const tipoCategoriaMov = tipoMov === 'entrada' ? 'entrada' : 'despesa';
+                                if (novaCategoria.tipo === tipoCategoriaMov) {
+                                    const categoriaSelect = document.getElementById('categoria_id');
+                                    const opt = document.createElement('option');
+                                    opt.value = novaCategoria.id;
+                                    opt.textContent = novaCategoria.nome;
+                                    categoriaSelect.appendChild(opt);
+                                    categoriaSelect.value = novaCategoria.id;
+                                }
+
+                                // Fechar modal
+                                bootstrap.Modal.getInstance(modal).hide();
+
+                                // Notificação de sucesso
+                                if (typeof Swal !== 'undefined') {
+                                    Swal.fire({
+                                        icon: 'success',
+                                        title: 'Categoria criada!',
+                                        text: 'A categoria "' + novaCategoria.nome + '" foi criada e selecionada.',
+                                        timer: 2000,
+                                        showConfirmButton: false
+                                    });
+                                }
+                            } else {
+                                const msg = result.data.message || result.data.errors?.nome?.[0] || 'Erro ao criar categoria.';
+                                categoriaErro.textContent = msg;
+                                categoriaErro.classList.remove('d-none');
+                            }
+                        })
+                        .catch(function(error) {
+                            btnSalvar.disabled = false;
+                            btnSalvar.innerHTML = '<i class="bx bx-check"></i> Criar Categoria';
+                            categoriaErro.textContent = 'Erro de conexão. Tente novamente.';
+                            categoriaErro.classList.remove('d-none');
+                        });
+                    });
+                }
+
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', initModalCategoria);
+                } else {
+                    initModalCategoria();
                 }
             })();
         </script>

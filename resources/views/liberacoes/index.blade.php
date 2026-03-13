@@ -22,6 +22,7 @@
                                 $pendentesRenovacaoAbate = \App\Modules\Loans\Models\SolicitacaoRenovacaoAbate::where('status', 'aguardando');
                                 $pendentesQuitacaoDesconto = \App\Modules\Loans\Models\SolicitacaoQuitacao::where('status', 'pendente');
                                 $pendentesNegociacao = \App\Modules\Loans\Models\SolicitacaoNegociacao::where('status', 'pendente');
+                                $pendentesRetroativo = \App\Modules\Loans\Models\SolicitacaoEmprestimoRetroativo::where('status', 'aguardando');
                                 if (!auth()->user()->hasRole('administrador')) {
                                     $opsIds = auth()->user()->getOperacoesIds();
                                     if (!empty($opsIds)) {
@@ -31,6 +32,7 @@
                                         $pendentesRenovacaoAbate->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
                                         $pendentesQuitacaoDesconto->whereHas('emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
                                         $pendentesNegociacao->whereIn('operacao_id', $opsIds);
+                                        $pendentesRetroativo->whereHas('emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
                                     } else {
                                         $pendentesProdutoObjeto->whereRaw('1 = 0');
                                         $pendentesJurosParcial->whereRaw('1 = 0');
@@ -38,6 +40,7 @@
                                         $pendentesRenovacaoAbate->whereRaw('1 = 0');
                                         $pendentesQuitacaoDesconto->whereRaw('1 = 0');
                                         $pendentesNegociacao->whereRaw('1 = 0');
+                                        $pendentesRetroativo->whereRaw('1 = 0');
                                     }
                                 }
                                 $countProdutoObjeto = $pendentesProdutoObjeto->count();
@@ -46,6 +49,7 @@
                                 $countRenovacaoAbate = $pendentesRenovacaoAbate->count();
                                 $countQuitacaoDesconto = $pendentesQuitacaoDesconto->count();
                                 $countNegociacao = $pendentesNegociacao->count();
+                                $countRetroativo = $pendentesRetroativo->count();
                             @endphp
                             <a href="{{ route('liberacoes.negociacoes') }}" class="btn btn-outline-dark btn-sm">
                                 <i class="bx bx-transfer-alt"></i> Negociações
@@ -81,6 +85,12 @@
                                 <i class="bx bx-check-double"></i> Quitação com desconto
                                 @if($countQuitacaoDesconto > 0)
                                     <span class="badge bg-success">{{ $countQuitacaoDesconto }}</span>
+                                @endif
+                            </a>
+                            <a href="{{ route('emprestimos.retroativo.pendentes') }}" class="btn btn-outline-secondary btn-sm">
+                                <i class="bx bx-history"></i> Empréstimos retroativos
+                                @if($countRetroativo > 0)
+                                    <span class="badge bg-secondary">{{ $countRetroativo }}</span>
                                 @endif
                             </a>
                         </div>
