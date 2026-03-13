@@ -18,6 +18,11 @@ Auth::routes(['register' => false]);
 
 Route::get('/', [App\Http\Controllers\HomeController::class, 'root'])->name('home');
 
+// Cadastro público do cliente via link (sem login)
+Route::get('/cadastro/cliente', [App\Modules\Core\Controllers\CadastroClienteController::class, 'showForm'])->name('cadastro-cliente.form');
+Route::post('/cadastro/cliente', [App\Modules\Core\Controllers\CadastroClienteController::class, 'store'])->name('cadastro-cliente.store');
+Route::get('/cadastro/cliente/concluido', [App\Modules\Core\Controllers\CadastroClienteController::class, 'concluido'])->name('cadastro-cliente.concluido');
+
 // Health check para monitoramento e load balancers
 Route::get('/health', App\Http\Controllers\HealthController::class)->name('health');
 Route::get('/health/live', [App\Http\Controllers\HealthController::class, 'live'])->name('health.live');
@@ -108,6 +113,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
     Route::prefix('clientes')->name('clientes.')->group(function () {
         Route::get('/', [App\Modules\Core\Controllers\ClienteController::class, 'index'])->name('index');
         Route::get('/export', [App\Modules\Core\Controllers\ClienteController::class, 'export'])->name('export');
+        Route::get('/link-cadastro', [App\Modules\Core\Controllers\ClienteController::class, 'linkCadastro'])->name('link-cadastro');
         Route::get('/create', [App\Modules\Core\Controllers\ClienteController::class, 'create'])->name('create');
         Route::post('/', [App\Modules\Core\Controllers\ClienteController::class, 'store'])->name('store');
         Route::get('/{id}/vincular', [App\Modules\Core\Controllers\ClienteController::class, 'vincular'])->name('vincular');

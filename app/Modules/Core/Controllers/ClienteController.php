@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\Controllers;
 
+use App\Helpers\RefEncoder;
 use App\Http\Controllers\Controller;
 use App\Modules\Core\Models\Cliente;
 use App\Modules\Core\Models\Operacao;
@@ -43,6 +44,18 @@ class ClienteController extends Controller
         // Mas vamos carregar o relacionamento empresa para exibir na view
         if ($isSuperAdmin) {
             $query->with('empresa');
+        }
+
+        // Consultor vê clientes das operações que ele atende (cliente é da operação, não do consultor)
+        if (!$isSuperAdmin && $user->hasRole('consultor') && !$user->hasRole('administrador')) {
+            $operacoesIds = $user->getOperacoesIds();
+            if (!empty($operacoesIds)) {
+                $query->whereHas('operationClients', function ($q) use ($operacoesIds) {
+                    $q->whereIn('operacao_id', $operacoesIds);
+                });
+            } else {
+                $query->whereRaw('1 = 0');
+            }
         }
 
         // Filtro por CPF
@@ -124,6 +137,17 @@ class ClienteController extends Controller
             $query->with('empresa');
         }
 
+        if (!$isSuperAdmin && $user->hasRole('consultor') && !$user->hasRole('administrador')) {
+            $operacoesIds = $user->getOperacoesIds();
+            if (!empty($operacoesIds)) {
+                $query->whereHas('operationClients', function ($q) use ($operacoesIds) {
+                    $q->whereIn('operacao_id', $operacoesIds);
+                });
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+
         if ($request->filled('documento')) {
             $documento = preg_replace('/[^0-9]/', '', $request->documento);
             $query->where('documento', 'like', "%{$documento}%");
@@ -171,6 +195,39 @@ class ClienteController extends Controller
             fclose($out);
         }, $filename, [
             'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    /**
+     * Gerar link para o cliente preencher o cadastro (página pública).
+     * Exibe seletor de operação e o link com ref codificado.
+     */
+    public function linkCadastro(Request $request): View
+    {
+        $user = auth()->user();
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)
+                ->where('ativo', true)->orderBy('nome')->get();
+        } elseif ($user->hasRole('administrador')) {
+            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
+        } else {
+            $operacoesIds = $user->getOperacoesIds();
+            $operacoes = !empty($operacoesIds)
+                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+                : collect([]);
+        }
+
+        $operacaoId = $request->query('operacao_id');
+        $linkCadastro = null;
+        if ($operacaoId && $user->temAcessoOperacao((int) $operacaoId)) {
+            $ref = RefEncoder::encode((int) $operacaoId, $user->id);
+            $linkCadastro = route('cadastro-cliente.form', ['ref' => $ref]);
+        }
+
+        return view('clientes.link-cadastro', [
+            'operacoes' => $operacoes,
+            'operacaoSelecionadaId' => $operacaoId ? (int) $operacaoId : null,
+            'linkCadastro' => $linkCadastro,
         ]);
     }
 
@@ -312,7 +369,7 @@ class ClienteController extends Controller
                 $cliente->id,
                 (int) $request->operacao_id,
                 0,
-                null,
+                auth()->id(),
                 null
             );
 
