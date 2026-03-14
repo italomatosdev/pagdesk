@@ -132,7 +132,13 @@
                             @else
                                 <div class="col-md-6 mb-3">
                                     <strong>Comprovante de Liberação:</strong><br>
-                                    <span class="text-muted">Não disponível</span>
+                                    @if(($liberacao->isLiberado() || $liberacao->isPagoAoCliente()) && auth()->user()->hasAnyRole(['gestor', 'administrador']))
+                                        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalAnexarComprovanteLiberacao" title="Subir comprovante depois">
+                                            <i class="bx bx-upload"></i> Subir comprovante
+                                        </button>
+                                    @else
+                                        <span class="text-muted">Não disponível</span>
+                                    @endif
                                 </div>
                             @endif
 
@@ -165,7 +171,13 @@
                             @else
                                 <div class="col-md-6 mb-3">
                                     <strong>Comprovante de Pagamento ao Cliente:</strong><br>
-                                    <span class="text-muted">Não disponível</span>
+                                    @if($liberacao->isPagoAoCliente() && auth()->user()->hasRole('consultor') && $liberacao->consultor_id == auth()->id())
+                                        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalAnexarComprovantePagamentoCliente" title="Subir comprovante depois">
+                                            <i class="bx bx-upload"></i> Subir comprovante
+                                        </button>
+                                    @else
+                                        <span class="text-muted">Não disponível</span>
+                                    @endif
                                 </div>
                             @endif
                         </div>
@@ -379,6 +391,62 @@
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                             <button type="submit" class="btn btn-primary">Confirmar Pagamento</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        @endif
+
+        <!-- Modal Anexar Comprovante de Liberação (depois) -->
+        @if(!$liberacao->hasComprovanteLiberacao() && ($liberacao->isLiberado() || $liberacao->isPagoAoCliente()) && auth()->user()->hasAnyRole(['gestor', 'administrador']))
+        <div class="modal fade" id="modalAnexarComprovanteLiberacao" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <form action="{{ route('liberacoes.anexar-comprovante-liberacao', $liberacao->id) }}" method="POST" enctype="multipart/form-data">
+                        @csrf
+                        <div class="modal-header">
+                            <h5 class="modal-title">Subir comprovante de liberação</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="text-muted small">Apenas para liberações que ainda não possuem comprovante. PDF, JPG ou PNG (máx. 2MB).</p>
+                            <div class="mb-3">
+                                <label class="form-label">Comprovante <span class="text-danger">*</span></label>
+                                <input type="file" name="comprovante" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-primary"><i class="bx bx-upload"></i> Enviar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        @endif
+
+        <!-- Modal Anexar Comprovante de Pagamento ao Cliente (depois) -->
+        @if(!$liberacao->hasComprovantePagamentoCliente() && $liberacao->isPagoAoCliente() && auth()->user()->hasRole('consultor') && $liberacao->consultor_id == auth()->id())
+        <div class="modal fade" id="modalAnexarComprovantePagamentoCliente" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <form action="{{ route('liberacoes.anexar-comprovante-pagamento-cliente', $liberacao->id) }}" method="POST" enctype="multipart/form-data">
+                        @csrf
+                        <div class="modal-header">
+                            <h5 class="modal-title">Subir comprovante de pagamento ao cliente</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="text-muted small">Apenas para liberações que ainda não possuem comprovante de pagamento. PDF, JPG ou PNG (máx. 2MB).</p>
+                            <div class="mb-3">
+                                <label class="form-label">Comprovante <span class="text-danger">*</span></label>
+                                <input type="file" name="comprovante" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-primary"><i class="bx bx-upload"></i> Enviar</button>
                         </div>
                     </form>
                 </div>
