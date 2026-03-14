@@ -144,11 +144,15 @@
                                     @forelse($operacao->operationClients as $vinculo)
                                         <tr>
                                             <td>
-                                                <a href="{{ route('clientes.show', $vinculo->cliente_id) }}">
-                                                    {{ $vinculo->cliente->nome }}
-                                                </a>
+                                                @if($vinculo->cliente)
+                                                    <a href="{{ route('clientes.show', $vinculo->cliente_id) }}">
+                                                        {{ $vinculo->cliente->nome }}
+                                                    </a>
+                                                @else
+                                                    <span class="text-muted">Cliente #{{ $vinculo->cliente_id }} (removido ou inacessível)</span>
+                                                @endif
                                             </td>
-                                            <td>{{ $vinculo->cliente->documento_formatado }}</td>
+                                            <td>{{ $vinculo->cliente?->documento_formatado ?? '-' }}</td>
                                             <td>R$ {{ number_format($vinculo->limite_credito, 2, ',', '.') }}</td>
                                             <td>
                                                 <span class="badge bg-{{ $vinculo->status === 'ativo' ? 'success' : 'danger' }}">
@@ -157,17 +161,21 @@
                                             </td>
                                             <td>
                                                 <div class="d-flex gap-1">
-                                                    <a href="{{ route('clientes.show', $vinculo->cliente_id) }}" 
-                                                       class="btn btn-sm btn-info" title="Ver Detalhes">
-                                                        <i class="bx bx-show"></i>
-                                                    </a>
-                                                    @if($vinculo->cliente->temWhatsapp())
-                                                        <a href="{{ $vinculo->cliente->whatsapp_link }}" 
-                                                           target="_blank" 
-                                                           class="btn btn-sm btn-success" 
-                                                           title="Falar no WhatsApp">
-                                                            <i class="bx bxl-whatsapp"></i>
+                                                    @if($vinculo->cliente)
+                                                        <a href="{{ route('clientes.show', $vinculo->cliente_id) }}" 
+                                                           class="btn btn-sm btn-info" title="Ver Detalhes">
+                                                            <i class="bx bx-show"></i>
                                                         </a>
+                                                        @if($vinculo->cliente->temWhatsapp())
+                                                            <a href="{{ $vinculo->cliente->whatsapp_link }}" 
+                                                               target="_blank" 
+                                                               class="btn btn-sm btn-success" 
+                                                               title="Falar no WhatsApp">
+                                                                <i class="bx bxl-whatsapp"></i>
+                                                            </a>
+                                                        @endif
+                                                    @else
+                                                        <span class="text-muted">-</span>
                                                     @endif
                                                 </div>
                                             </td>
