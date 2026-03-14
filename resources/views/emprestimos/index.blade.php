@@ -169,6 +169,7 @@
                                         <th>Parcelas</th>
                                         <th>Status</th>
                                         <th>Consultor</th>
+                                        <th>Próx. venc.</th>
                                         <th>Data</th>
                                         <th>Ações</th>
                                     </tr>
@@ -211,7 +212,8 @@
                                                 </span>
                                             </td>
                                             <td>{{ $emprestimo->consultor?->name ?? '—' }}</td>
-                                            <td>{{ $emprestimo->created_at->format('d/m/Y') }}</td>
+                                            <td>{{ $emprestimo->getProximoVencimento()?->format('d/m/Y') ?? '—' }}</td>
+                                            <td>{{ $emprestimo->created_at?->format('d/m/Y') ?? '—' }}</td>
                                             <td>
                                                 <div class="d-flex gap-1">
                                                     <a href="{{ route('emprestimos.show', $emprestimo->id) }}" 
@@ -231,7 +233,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="9" class="text-center">Nenhum empréstimo encontrado.</td>
+                                            <td colspan="10" class="text-center">Nenhum empréstimo encontrado.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>

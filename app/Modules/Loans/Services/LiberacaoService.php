@@ -448,6 +448,7 @@ class LiberacaoService
         $query = LiberacaoEmprestimo::with([
             'emprestimo.cliente',
             'emprestimo.operacao',
+            'emprestimo.parcelas',
             'consultor'
         ])
         ->where('status', 'aguardando')
@@ -487,6 +488,7 @@ class LiberacaoService
         $query = LiberacaoEmprestimo::with([
             'emprestimo.cliente',
             'emprestimo.operacao',
+            'emprestimo.parcelas',
             'gestor'
         ])
         ->where('consultor_id', $consultorId)

@@ -140,6 +140,7 @@
                                         <th>Operação</th>
                                         <th>Consultor</th>
                                         <th>Valor</th>
+                                        <th>Próx. venc.</th>
                                         <th>Criado em</th>
                                         <th>Comprovante</th>
                                         <th>Ações</th>
@@ -190,6 +191,7 @@
                                             <td class="h6 text-primary">
                                                 R$ {{ number_format($liberacao->valor_liberado, 2, ',', '.') }}
                                             </td>
+                                            <td>{{ $liberacao->emprestimo->getProximoVencimento()?->format('d/m/Y') ?? '—' }}</td>
                                             <td>{{ $liberacao->created_at->format('d/m/Y H:i') }}</td>
                                             <td>
                                                 @if($liberacao->hasComprovanteLiberacao())
@@ -219,7 +221,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="12" class="text-center">Nenhuma liberação aguardando.</td>
+                                            <td colspan="13" class="text-center">Nenhuma liberação aguardando.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>

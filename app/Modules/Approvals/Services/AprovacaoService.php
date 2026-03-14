@@ -22,7 +22,7 @@ class AprovacaoService
      */
     public function listarPendentes(?int $operacaoId = null, ?\App\Models\User $user = null): Collection
     {
-        $query = Emprestimo::with(['cliente', 'operacao', 'consultor'])
+        $query = Emprestimo::with(['cliente', 'operacao', 'consultor', 'parcelas'])
             ->where('status', 'pendente');
 
         // Aplicar filtro de operações do usuário (exceto administradores)

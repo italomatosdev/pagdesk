@@ -37,7 +37,7 @@ class EmprestimoController extends Controller
     public function index(Request $request): View
     {
         $user = auth()->user();
-        $query = Emprestimo::with(['cliente', 'operacao', 'consultor']);
+        $query = Emprestimo::with(['cliente', 'operacao', 'consultor', 'parcelas']);
 
         // Aplicar filtro de operações (Super Admin vê tudo; admin/gestor/consultor só suas operações)
         if (!$user->isSuperAdmin()) {
@@ -819,7 +819,7 @@ class EmprestimoController extends Controller
             abort(403, 'Apenas gestores e administradores podem ver empréstimos retroativos pendentes de aceite.');
         }
 
-        $query = SolicitacaoEmprestimoRetroativo::with(['emprestimo.cliente', 'emprestimo.operacao', 'solicitante'])
+        $query = SolicitacaoEmprestimoRetroativo::with(['emprestimo.cliente', 'emprestimo.operacao', 'emprestimo.parcelas', 'solicitante'])
             ->where('status', 'aguardando');
         if (!$user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
