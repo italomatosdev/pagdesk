@@ -83,6 +83,37 @@ class EmprestimoController extends Controller
             $query->where('cliente_id', $request->cliente_id);
         }
 
+        if ($request->filled('cliente_nome')) {
+            $termo = trim((string) $request->cliente_nome);
+            if ($termo !== '') {
+                $digits = preg_replace('/[^0-9]/', '', $termo);
+                $query->whereHas('cliente', function ($q) use ($termo, $digits) {
+                    $q->where('nome', 'like', '%' . $termo . '%');
+                    if ($digits !== '') {
+                        $q->orWhere('documento', 'like', '%' . $digits . '%');
+                    }
+                });
+            }
+        }
+
+        // Filtro: próximo vencimento (data de/até = primeira parcela não paga)
+        $quitados = ['paga', 'quitada_garantia'];
+        $proxVencDe = $request->filled('proximo_vencimento_de') ? $request->proximo_vencimento_de : null;
+        $proxVencAte = $request->filled('proximo_vencimento_ate') ? $request->proximo_vencimento_ate : null;
+        if ($proxVencDe !== null || $proxVencAte !== null) {
+            $sub = Parcela::selectRaw('emprestimo_id')
+                ->whereNotIn('status', $quitados)
+                ->groupBy('emprestimo_id');
+            if ($proxVencDe !== null && $proxVencAte !== null) {
+                $sub->havingRaw('MIN(data_vencimento) BETWEEN ? AND ?', [$proxVencDe, $proxVencAte]);
+            } elseif ($proxVencDe !== null) {
+                $sub->havingRaw('MIN(data_vencimento) >= ?', [$proxVencDe]);
+            } else {
+                $sub->havingRaw('MIN(data_vencimento) <= ?', [$proxVencAte]);
+            }
+            $query->whereIn('id', $sub);
+        }
+
         // Filtro: apenas com parcelas atrasadas
         if ($request->boolean('apenas_atrasadas')) {
             $query->whereHas('parcelas', fn ($q) => $q->where('status', 'atrasada'));
@@ -163,7 +194,33 @@ class EmprestimoController extends Controller
         if ($request->filled('cliente_id')) {
             $query->where('cliente_id', $request->cliente_id);
         }
-
+        if ($request->filled('cliente_nome')) {
+            $termo = trim((string) $request->cliente_nome);
+            if ($termo !== '') {
+                $digits = preg_replace('/[^0-9]/', '', $termo);
+                $query->whereHas('cliente', function ($q) use ($termo, $digits) {
+                    $q->where('nome', 'like', '%' . $termo . '%');
+                    if ($digits !== '') {
+                        $q->orWhere('documento', 'like', '%' . $digits . '%');
+                    }
+                });
+            }
+        }
+        $proxVencDeExport = $request->filled('proximo_vencimento_de') ? $request->proximo_vencimento_de : null;
+        $proxVencAteExport = $request->filled('proximo_vencimento_ate') ? $request->proximo_vencimento_ate : null;
+        if ($proxVencDeExport !== null || $proxVencAteExport !== null) {
+            $subExport = Parcela::selectRaw('emprestimo_id')
+                ->whereNotIn('status', ['paga', 'quitada_garantia'])
+                ->groupBy('emprestimo_id');
+            if ($proxVencDeExport !== null && $proxVencAteExport !== null) {
+                $subExport->havingRaw('MIN(data_vencimento) BETWEEN ? AND ?', [$proxVencDeExport, $proxVencAteExport]);
+            } elseif ($proxVencDeExport !== null) {
+                $subExport->havingRaw('MIN(data_vencimento) >= ?', [$proxVencDeExport]);
+            } else {
+                $subExport->havingRaw('MIN(data_vencimento) <= ?', [$proxVencAteExport]);
+            }
+            $query->whereIn('id', $subExport);
+        }
         // Filtro: apenas com parcelas atrasadas
         if ($request->boolean('apenas_atrasadas')) {
             $query->whereHas('parcelas', fn ($q) => $q->where('status', 'atrasada'));

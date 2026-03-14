@@ -85,7 +85,7 @@
                         <div class="d-flex align-items-center justify-content-between">
                             <h4 class="card-title mb-0">Lista de Empréstimos</h4>
                             <div class="d-flex gap-2">
-                                <a href="{{ route('emprestimos.export', request()->only(['operacao_id', 'status', 'tipo', 'cliente_id', 'apenas_atrasadas'])) }}" class="btn btn-outline-success">
+                                <a href="{{ route('emprestimos.export', request()->only(['operacao_id', 'status', 'tipo', 'cliente_nome', 'proximo_vencimento_de', 'proximo_vencimento_ate', 'apenas_atrasadas'])) }}" class="btn btn-outline-success">
                                     <i class="bx bx-download"></i> Exportar CSV
                                 </a>
                                 @if(!auth()->user()->isSuperAdmin())
@@ -98,7 +98,7 @@
                     </div>
                     <div class="card-body">
                         <!-- Filtros -->
-                        <form method="GET" action="{{ route('emprestimos.index') }}" class="mb-3">
+                        <form method="GET" action="{{ route('emprestimos.index') }}" class="mb-4">
                             @php
                                 $statusesFiltro = (array) request('status', []);
                                 $opcoesStatus = [
@@ -110,52 +110,62 @@
                                     'cancelado' => 'Cancelado',
                                 ];
                             @endphp
-                            <div class="row g-3 align-items-end mb-2">
-                                <div class="col-md-2">
-                                    <label class="form-label small text-muted mb-0">Operação</label>
-                                    <select name="operacao_id" class="form-select form-select-sm">
-                                        <option value="">Todas</option>
-                                        @foreach($operacoes as $operacao)
-                                            <option value="{{ $operacao->id }}" {{ request('operacao_id') == $operacao->id ? 'selected' : '' }}>{{ $operacao->nome }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                                <div class="col-md-2">
-                                    <label class="form-label small text-muted mb-0">Tipo</label>
-                                    <select name="tipo" class="form-select form-select-sm">
-                                        <option value="">Todos</option>
-                                        <option value="dinheiro" {{ request('tipo') == 'dinheiro' ? 'selected' : '' }}>Dinheiro</option>
-                                        <option value="price" {{ request('tipo') == 'price' ? 'selected' : '' }}>Price</option>
-                                        <option value="empenho" {{ request('tipo') == 'empenho' ? 'selected' : '' }}>Empenho</option>
-                                        <option value="troca_cheque" {{ request('tipo') == 'troca_cheque' ? 'selected' : '' }}>Troca de Cheque</option>
-                                        <option value="crediario" {{ request('tipo') == 'crediario' ? 'selected' : '' }}>Crediário</option>
-                                        <option value="outros" {{ request('tipo') == 'outros' ? 'selected' : '' }}>Outros</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-2">
-                                    <label class="form-label small text-muted mb-0">ID Cliente</label>
-                                    <input type="number" name="cliente_id" class="form-control form-control-sm" placeholder="—" value="{{ request('cliente_id') }}">
-                                </div>
-                                <div class="col-auto pb-1">
-                                    <div class="form-check">
-                                        <input type="checkbox" name="apenas_atrasadas" value="1" class="form-check-input" id="apenas_atrasadas" {{ request('apenas_atrasadas') ? 'checked' : '' }}>
-                                        <label class="form-check-label text-danger small" for="apenas_atrasadas"><i class="bx bx-error-circle"></i> Com atrasadas</label>
+                            <div class="bg-light rounded p-3 mb-3">
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-md-2">
+                                        <label class="form-label mb-1">Operação</label>
+                                        <select name="operacao_id" class="form-select">
+                                            <option value="">Todas</option>
+                                            @foreach($operacoes as $operacao)
+                                                <option value="{{ $operacao->id }}" {{ request('operacao_id') == $operacao->id ? 'selected' : '' }}>{{ $operacao->nome }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label mb-1">Tipo</label>
+                                        <select name="tipo" class="form-select">
+                                            <option value="">Todos</option>
+                                            <option value="dinheiro" {{ request('tipo') == 'dinheiro' ? 'selected' : '' }}>Dinheiro</option>
+                                            <option value="price" {{ request('tipo') == 'price' ? 'selected' : '' }}>Price</option>
+                                            <option value="empenho" {{ request('tipo') == 'empenho' ? 'selected' : '' }}>Empenho</option>
+                                            <option value="troca_cheque" {{ request('tipo') == 'troca_cheque' ? 'selected' : '' }}>Troca de Cheque</option>
+                                            <option value="crediario" {{ request('tipo') == 'crediario' ? 'selected' : '' }}>Crediário</option>
+                                            <option value="outros" {{ request('tipo') == 'outros' ? 'selected' : '' }}>Outros</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label mb-1">Cliente (nome ou CPF)</label>
+                                        <input type="text" name="cliente_nome" class="form-control" placeholder="Digite nome ou CPF" value="{{ request('cliente_nome') }}">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label mb-1">Próx. venc. de</label>
+                                        <input type="date" name="proximo_vencimento_de" class="form-control" value="{{ request('proximo_vencimento_de') }}">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label mb-1">Próx. venc. até</label>
+                                        <input type="date" name="proximo_vencimento_ate" class="form-control" value="{{ request('proximo_vencimento_ate') }}">
+                                    </div>
+                                    <div class="col-auto d-flex align-items-end">
+                                        <div class="form-check">
+                                            <input type="checkbox" name="apenas_atrasadas" value="1" class="form-check-input" id="apenas_atrasadas" {{ request('apenas_atrasadas') ? 'checked' : '' }}>
+                                            <label class="form-check-label text-danger" for="apenas_atrasadas"><i class="bx bx-error-circle"></i> Atrasadas</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-auto d-flex align-items-end">
+                                        <button type="submit" class="btn btn-primary"><i class="bx bx-search"></i> Buscar</button>
                                     </div>
                                 </div>
-                                <div class="col-auto">
-                                    <button type="submit" class="btn btn-primary btn-sm"><i class="bx bx-search"></i> Buscar</button>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-12">
-                                    <span class="text-muted small me-2">Status (vários):</span>
-                                    @foreach($opcoesStatus as $valor => $label)
-                                        <div class="form-check form-check-inline d-inline-block me-3 mb-0">
-                                            <input type="checkbox" name="status[]" value="{{ $valor }}" id="status_{{ $valor }}" class="form-check-input" {{ in_array($valor, $statusesFiltro) ? 'checked' : '' }}>
-                                            <label class="form-check-label small" for="status_{{ $valor }}">{{ $label }}</label>
-                                        </div>
-                                    @endforeach
-                                    <span class="text-muted small">— nenhum = todos</span>
+                                <div class="row mt-3 pt-3 border-top border-secondary border-opacity-25">
+                                    <div class="col-12">
+                                        <span class="form-label d-inline-block me-2 mb-0">Status (pode marcar vários):</span>
+                                        @foreach($opcoesStatus as $valor => $label)
+                                            <div class="form-check form-check-inline">
+                                                <input type="checkbox" name="status[]" value="{{ $valor }}" id="status_{{ $valor }}" class="form-check-input" {{ in_array($valor, $statusesFiltro) ? 'checked' : '' }}>
+                                                <label class="form-check-label" for="status_{{ $valor }}">{{ $label }}</label>
+                                            </div>
+                                        @endforeach
+                                        <span class="text-muted ms-2">(nenhum marcado = todos)</span>
+                                    </div>
                                 </div>
                             </div>
                         </form>
