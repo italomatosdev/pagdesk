@@ -39,13 +39,12 @@ class EmprestimoController extends Controller
         $user = auth()->user();
         $query = Emprestimo::with(['cliente', 'operacao', 'consultor']);
 
-        // Aplicar filtro de operações do usuário (exceto administradores)
-        if (!$user->hasRole('administrador')) {
+        // Aplicar filtro de operações (Super Admin vê tudo; admin/gestor/consultor só suas operações)
+        if (!$user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
             if (!empty($operacoesIds)) {
                 $query->whereIn('operacao_id', $operacoesIds);
             } else {
-                // Se não tem operações vinculadas, retorna vazio
                 $query->whereRaw('1 = 0');
             }
         }
@@ -107,12 +106,12 @@ class EmprestimoController extends Controller
 
         $emprestimos = $query->orderBy('created_at', 'desc')->paginate(15);
         
-        // Filtrar operações disponíveis para o usuário
-        if ($user->hasRole('administrador')) {
+        // Operações disponíveis no filtro (Super Admin: todas; demais: apenas as do usuário)
+        if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->get();
         } else {
             $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds) 
+            $operacoes = !empty($operacoesIds)
                 ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
                 : collect([]);
         }
@@ -129,16 +128,16 @@ class EmprestimoController extends Controller
         $user = auth()->user();
         $query = Emprestimo::with(['cliente', 'operacao', 'consultor']);
 
-        if (! $user->hasRole('administrador')) {
+        if (!$user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
-            if (! empty($operacoesIds)) {
+            if (!empty($operacoesIds)) {
                 $query->whereIn('operacao_id', $operacoesIds);
             } else {
                 $query->whereRaw('1 = 0');
             }
         }
 
-        $ehApenasConsultor = $user->hasRole('consultor') && ! $user->hasAnyRole(['gestor', 'administrador']);
+        $ehApenasConsultor = $user->hasRole('consultor') && !$user->hasAnyRole(['gestor', 'administrador']);
         if ($ehApenasConsultor) {
             $query->where(function ($q) use ($user) {
                 $q->where('consultor_id', $user->id)
@@ -210,12 +209,12 @@ class EmprestimoController extends Controller
         
         try {
             
-            // Filtrar operações disponíveis para o usuário
-            if ($user->hasRole('administrador')) {
+            // Operações disponíveis (Super Admin: todas; admin/gestor: apenas as suas)
+            if ($user->isSuperAdmin()) {
                 $operacoes = Operacao::where('ativo', true)->get();
             } else {
                 $operacoesIds = $user->getOperacoesIds();
-                $operacoes = !empty($operacoesIds) 
+                $operacoes = !empty($operacoesIds)
                     ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
                     : collect([]);
             }
@@ -454,9 +453,12 @@ class EmprestimoController extends Controller
             }
         }
 
-        // Validar se o usuário tem acesso à operação selecionada
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($validated['operacao_id'])) {
-            return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
+        // Validar se o usuário tem acesso à operação (Super Admin: qualquer; demais: apenas as suas)
+        if (!$user->isSuperAdmin()) {
+            $operacoesIds = $user->getOperacoesIds();
+            if (empty($operacoesIds) || !in_array($validated['operacao_id'], $operacoesIds)) {
+                return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
+            }
         }
 
         // Verificar se é uma negociação
@@ -656,6 +658,15 @@ class EmprestimoController extends Controller
             'motivo_cancelamento.max' => 'O motivo não pode ter mais de 1000 caracteres.',
         ]);
 
+        // Administrador (não Super Admin) só pode cancelar empréstimos das suas operações
+        if (!$user->isSuperAdmin()) {
+            $emprestimo = Emprestimo::findOrFail($id);
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array($emprestimo->operacao_id, $opsIds)) {
+                abort(403, 'Você não tem acesso à operação deste empréstimo.');
+            }
+        }
+
         try {
             $this->emprestimoService->cancelar($id, $user->id, $request->motivo_cancelamento);
 
@@ -810,7 +821,7 @@ class EmprestimoController extends Controller
 
         $query = SolicitacaoEmprestimoRetroativo::with(['emprestimo.cliente', 'emprestimo.operacao', 'solicitante'])
             ->where('status', 'aguardando');
-        if (!$user->hasRole('administrador')) {
+        if (!$user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
             if (!empty($opsIds)) {
                 $query->whereHas('emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
@@ -838,7 +849,7 @@ class EmprestimoController extends Controller
             return back()->with('error', 'Esta solicitação já foi processada.');
         }
 
-        if (!$user->hasRole('administrador')) {
+        if (!$user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
             if (empty($opsIds) || !in_array($solicitacao->emprestimo->operacao_id, $opsIds)) {
                 abort(403, 'Você não tem acesso à operação deste empréstimo.');
@@ -877,7 +888,7 @@ class EmprestimoController extends Controller
             'ids.*' => 'integer|exists:solicitacoes_emprestimo_retroativo,id',
         ]);
 
-        $opsIds = $user->hasRole('administrador') ? null : $user->getOperacoesIds();
+        $opsIds = $user->isSuperAdmin() ? null : $user->getOperacoesIds();
         $aprovados = 0;
 
         foreach ($request->input('ids') as $id) {
@@ -885,7 +896,7 @@ class EmprestimoController extends Controller
             if (!$solicitacao || $solicitacao->status !== 'aguardando') {
                 continue;
             }
-            if (!$user->hasRole('administrador') && (empty($opsIds) || !in_array($solicitacao->emprestimo->operacao_id, $opsIds))) {
+            if (!$user->isSuperAdmin() && (empty($opsIds) || !in_array($solicitacao->emprestimo->operacao_id, $opsIds))) {
                 continue;
             }
             $solicitacao->update([
@@ -926,7 +937,7 @@ class EmprestimoController extends Controller
             return back()->with('error', 'Esta solicitação já foi processada.');
         }
 
-        if (!$user->hasRole('administrador')) {
+        if (!$user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
             if (empty($opsIds) || !in_array($solicitacao->emprestimo->operacao_id, $opsIds)) {
                 abort(403, 'Você não tem acesso à operação deste empréstimo.');
