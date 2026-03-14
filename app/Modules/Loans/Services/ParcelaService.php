@@ -3,6 +3,7 @@
 namespace App\Modules\Loans\Services;
 
 use App\Modules\Core\Traits\Auditable;
+use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Parcela;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -113,6 +114,35 @@ class ParcelaService
                 'dias_atraso' => $diasAtraso,
             ]);
             
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
+     * Marcar como atrasadas as parcelas vencidas de um empréstimo (ex.: retroativo ativado).
+     * Evita esperar o cron para ver parcelas já vencidas como atrasadas.
+     *
+     * @param Emprestimo $emprestimo
+     * @return int Número de parcelas marcadas como atrasada
+     */
+    public function marcarAtrasadasDoEmprestimo(Emprestimo $emprestimo): int
+    {
+        $hoje = Carbon::today();
+
+        $parcelas = Parcela::where('emprestimo_id', $emprestimo->id)
+            ->where('status', 'pendente')
+            ->where('data_vencimento', '<', $hoje)
+            ->get();
+
+        $count = 0;
+        foreach ($parcelas as $parcela) {
+            $diasAtraso = $parcela->calcularDiasAtraso();
+            $parcela->update([
+                'status' => 'atrasada',
+                'dias_atraso' => $diasAtraso,
+            ]);
             $count++;
         }
 
