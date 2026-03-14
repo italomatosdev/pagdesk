@@ -10,6 +10,40 @@
     <body>
     @endsection
     @section('content')
+        <!-- Totalizadores do cliente -->
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <div class="card border-primary h-100">
+                    <div class="card-body text-center">
+                        <i class="bx bx-money font-size-24 text-primary"></i>
+                        <h5 class="mt-2 mb-0">Total Emprestado</h5>
+                        <h4 class="mt-1 mb-0 text-primary">R$ {{ number_format($statsCliente['total_emprestado'] ?? 0, 2, ',', '.') }}</h4>
+                        <small class="text-muted">Empréstimos ativos</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-warning h-100">
+                    <div class="card-body text-center">
+                        <i class="bx bx-wallet font-size-24 text-warning"></i>
+                        <h5 class="mt-2 mb-0">Total a Receber</h5>
+                        <h4 class="mt-1 mb-0 text-warning">R$ {{ number_format($statsCliente['total_a_receber'] ?? 0, 2, ',', '.') }}</h4>
+                        <small class="text-muted">Parcelas em aberto</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-success h-100">
+                    <div class="card-body text-center">
+                        <i class="bx bx-check-circle font-size-24 text-success"></i>
+                        <h5 class="mt-2 mb-0">Total Pago</h5>
+                        <h4 class="mt-1 mb-0 text-success">R$ {{ number_format($statsCliente['total_pago'] ?? 0, 2, ',', '.') }}</h4>
+                        <small class="text-muted">Valor já recebido</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="row">
             <div class="col-lg-8">
                 <div class="card">
@@ -318,7 +352,8 @@
                                             <th>Empresa</th>
                                         @endif
                                         <th>Operação</th>
-                                        <th>Valor</th>
+                                        <th>Valor (emprestado)</th>
+                                        <th>Valor total (c/ juros)</th>
                                         <th>Status</th>
                                         <th>Data</th>
                                         <th>Ações</th>
@@ -339,6 +374,7 @@
                                             @endif
                                             <td>{{ $emprestimo->operacao->nome ?? '-' }}</td>
                                             <td>R$ {{ number_format($emprestimo->valor_total, 2, ',', '.') }}</td>
+                                            <td>R$ {{ number_format($emprestimo->calcularValorTotalComJuros(), 2, ',', '.') }}</td>
                                             <td>
                                                 <span class="badge bg-{{ $emprestimo->status === 'ativo' ? 'success' : ($emprestimo->status === 'pendente' ? 'warning' : 'secondary') }}">
                                                     {{ ucfirst($emprestimo->status) }}
@@ -354,7 +390,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="{{ ($isSuperAdmin ?? false) ? 7 : 6 }}" class="text-center">Nenhum empréstimo encontrado.</td>
+                                            <td colspan="{{ ($isSuperAdmin ?? false) ? 8 : 7 }}" class="text-center">Nenhum empréstimo encontrado.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>
