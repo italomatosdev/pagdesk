@@ -7,6 +7,7 @@ use App\Modules\Cash\Models\CashLedgerEntry;
 use App\Modules\Cash\Models\CategoriaMovimentacao;
 use App\Modules\Cash\Services\CashService;
 use App\Modules\Core\Models\Operacao;
+use App\Modules\Loans\Models\LiberacaoEmprestimo;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -181,11 +182,30 @@ class CashController extends Controller
             $consultorSelecionado = User::with('roles')->find($consultorId);
         }
 
+        // Carregar liberações referenciadas para exibir comprovante na coluna (movimentações automáticas sem comprovante próprio)
+        $liberacoesById = collect();
+        $liberacoesPorEmprestimoId = collect();
+        if ($movimentacoes->isNotEmpty()) {
+            $liberacaoIds = $movimentacoes->where('referencia_tipo', 'liberacao_emprestimo')->pluck('referencia_id')->unique()->filter()->values();
+            if ($liberacaoIds->isNotEmpty()) {
+                $liberacoesById = LiberacaoEmprestimo::whereIn('id', $liberacaoIds)->get()->keyBy('id');
+            }
+            $emprestimoIds = $movimentacoes->where('referencia_tipo', 'pagamento_cliente')->pluck('referencia_id')->unique()->filter()->values();
+            if ($emprestimoIds->isNotEmpty()) {
+                $liberacoesPorEmprestimoId = LiberacaoEmprestimo::whereIn('emprestimo_id', $emprestimoIds)
+                    ->where('status', 'pago_ao_cliente')
+                    ->get()
+                    ->keyBy('emprestimo_id');
+            }
+        }
+
         return view('caixa.index', compact(
-            'movimentacoes', 
-            'saldo', 
-            'operacoes', 
-            'operacaoId', 
+            'movimentacoes',
+            'liberacoesById',
+            'liberacoesPorEmprestimoId',
+            'saldo',
+            'operacoes',
+            'operacaoId',
             'consultorId',
             'consultorSelecionado',
             'totalEntradas',
@@ -410,6 +430,27 @@ class CashController extends Controller
             }
         }
 
-        return view('caixa.movimentacao.show', compact('movimentacao'));
+        // Comprovante da referência (liberação) quando a movimentação não tem comprovante próprio
+        $comprovanteReferenciaUrl = null;
+        $comprovanteReferenciaLabel = null;
+        if (!$movimentacao->comprovante_path && $movimentacao->referencia_tipo && $movimentacao->referencia_id) {
+            if ($movimentacao->referencia_tipo === 'liberacao_emprestimo') {
+                $lib = LiberacaoEmprestimo::find($movimentacao->referencia_id);
+                if ($lib && $lib->comprovante_liberacao) {
+                    $comprovanteReferenciaUrl = asset('storage/' . $lib->comprovante_liberacao);
+                    $comprovanteReferenciaLabel = 'Comprovante da liberação';
+                }
+            } elseif ($movimentacao->referencia_tipo === 'pagamento_cliente') {
+                $lib = LiberacaoEmprestimo::where('emprestimo_id', $movimentacao->referencia_id)
+                    ->where('status', 'pago_ao_cliente')
+                    ->first();
+                if ($lib && $lib->comprovante_pagamento_cliente) {
+                    $comprovanteReferenciaUrl = asset('storage/' . $lib->comprovante_pagamento_cliente);
+                    $comprovanteReferenciaLabel = 'Comprovante pagamento ao cliente';
+                }
+            }
+        }
+
+        return view('caixa.movimentacao.show', compact('movimentacao', 'comprovanteReferenciaUrl', 'comprovanteReferenciaLabel'));
     }
 }

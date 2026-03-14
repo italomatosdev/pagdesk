@@ -107,6 +107,10 @@
                                 <a href="{{ asset('storage/' . $movimentacao->comprovante_path) }}" target="_blank" class="btn btn-sm btn-info">
                                     <i class="bx bx-file"></i> Ver comprovante
                                 </a>
+                            @elseif(!empty($comprovanteReferenciaUrl))
+                                <a href="{{ $comprovanteReferenciaUrl }}" target="_blank" class="btn btn-sm btn-outline-info" title="{{ $comprovanteReferenciaLabel ?? 'Comprovante da referência' }}">
+                                    <i class="bx bx-file"></i> {{ $comprovanteReferenciaLabel ?? 'Ver comprovante' }}
+                                </a>
                             @else
                                 <span class="text-muted">Não anexado</span>
                             @endif
