@@ -69,6 +69,26 @@
                                 @enderror
                             </div>
 
+                            @php
+                                $ehApenasGestor = auth()->user()->hasRole('gestor') && !auth()->user()->hasRole('administrador');
+                            @endphp
+                            <div id="consultor-responsavel-wrap" class="mb-3" style="display: {{ $ehApenasGestor ? 'block' : 'none' }};">
+                                <label class="form-label">Consultor responsável <span class="text-danger">*</span></label>
+                                <select name="consultor_id" id="consultor_id_select" class="form-select" {{ $ehApenasGestor ? 'required' : '' }}>
+                                    <option value="">Selecione o consultor...</option>
+                                </select>
+                                <small class="text-muted">
+                                    @if($ehApenasGestor)
+                                        O empréstimo ficará vinculado a este consultor (você está criando em nome dele).
+                                    @else
+                                        Empréstimo ficará vinculado a este consultor.
+                                    @endif
+                                </small>
+                                @error('consultor_id')
+                                    <div class="text-danger">{{ $message }}</div>
+                                @enderror
+                            </div>
+
                             <div id="bloco-retroativo" class="mb-3" style="display: none;">
                                 <div class="alert alert-secondary mb-2">
                                     <div class="form-check form-switch mb-2">
@@ -86,23 +106,12 @@
                                         @endif
                                     </small>
                                 </div>
-                                @if(auth()->user()->hasAnyRole(['administrador', 'gestor']))
-                                <div id="consultor-retroativo-wrap" class="mb-3" style="display: none;">
-                                    <label class="form-label">Consultor responsável <span class="text-danger">*</span></label>
-                                    <select name="consultor_id" id="consultor_id_retroativo" class="form-select">
-                                        <option value="">Selecione o consultor...</option>
-                                    </select>
-                                    <small class="text-muted">Empréstimo ficará vinculado a este consultor</small>
-                                    @error('consultor_id')
-                                        <div class="text-danger">{{ $message }}</div>
-                                    @enderror
-                                </div>
-                                @endif
                             </div>
                             <script>
                                 window.permiteRetroativoPorOperacao = @json($operacoes->pluck('permite_emprestimo_retroativo', 'id'));
                                 window.consultoresPorOperacao = @json($consultoresPorOperacao ?? []);
                                 window.ehGestorOuAdmin = @json(auth()->user()->hasAnyRole(['administrador', 'gestor']));
+                                window.ehApenasGestor = @json($ehApenasGestor ?? false);
                             </script>
 
                             <div class="mb-3">
@@ -277,11 +286,19 @@
                                 </div>
 
                                 <div class="row">
+                                    @php
+                                        $hojeBrasil = \Carbon\Carbon::today('America/Sao_Paulo')->format('Y-m-d');
+                                    @endphp
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Data de Início <span class="text-danger">*</span></label>
                                         <input type="date" name="data_inicio" id="data-inicio" class="form-control" 
-                                               value="{{ old('data_inicio', date('Y-m-d')) }}" required>
+                                               value="{{ old('data_inicio', $hojeBrasil) }}"
+                                               data-min-brasil="{{ $hojeBrasil }}"
+                                               required>
                                         <small class="text-muted">1ª parcela vence 1 período após esta data</small>
+                                        <div class="mt-1 small text-secondary">
+                                            <strong>Horário atual (servidor/app):</strong> {{ \Carbon\Carbon::now('America/Sao_Paulo')->format('d/m/Y H:i:s') }} (America/Sao_Paulo)
+                                        </div>
                                         @error('data_inicio')
                                             <div class="text-danger">{{ $message }}</div>
                                         @enderror
@@ -1503,59 +1520,64 @@
                     previewEmprestimo.style.display = 'none';
                 });
 
-                // Empréstimo retroativo (gestor/admin)
+                // Consultor responsável (gestor sempre; admin só em retroativo) e bloco retroativo
                 const blocoRetroativo = document.getElementById('bloco-retroativo');
                 const isRetroativoCheck = document.getElementById('is_retroativo');
-                const consultorRetroativoWrap = document.getElementById('consultor-retroativo-wrap');
-                const consultorRetroativoSelect = document.getElementById('consultor_id_retroativo');
+                const consultorResponsavelWrap = document.getElementById('consultor-responsavel-wrap');
+                const consultorSelect = document.getElementById('consultor_id_select');
                 const operacaoSelect = document.querySelector('select[name="operacao_id"]');
                 const dataInicioEl = document.getElementById('data-inicio');
+                const ehApenasGestor = window.ehApenasGestor === true;
 
                 function atualizarBlocoRetroativo() {
-                    if (!blocoRetroativo || !operacaoSelect) return;
+                    if (!operacaoSelect) return;
                     const opId = operacaoSelect.value;
                     const permite = window.permiteRetroativoPorOperacao && window.permiteRetroativoPorOperacao[opId];
-                    if (permite) {
-                        blocoRetroativo.style.display = 'block';
-                        const consultores = window.consultoresPorOperacao && window.consultoresPorOperacao[opId] ? window.consultoresPorOperacao[opId] : [];
-                        if (consultorRetroativoSelect) {
-                            consultorRetroativoSelect.innerHTML = '<option value="">Selecione o consultor...</option>';
-                            consultores.forEach(function(c) {
-                                const opt = document.createElement('option');
-                                opt.value = c.id;
-                                opt.textContent = c.name;
-                                consultorRetroativoSelect.appendChild(opt);
-                            });
+                    const consultores = opId && window.consultoresPorOperacao && window.consultoresPorOperacao[opId] ? window.consultoresPorOperacao[opId] : [];
+                    if (consultorSelect) {
+                        consultorSelect.innerHTML = '<option value="">Selecione o consultor...</option>';
+                        consultores.forEach(function(c) {
+                            const opt = document.createElement('option');
+                            opt.value = c.id;
+                            opt.textContent = c.name;
+                            consultorSelect.appendChild(opt);
+                        });
+                    }
+                    if (blocoRetroativo) {
+                        if (permite) {
+                            blocoRetroativo.style.display = 'block';
+                        } else {
+                            blocoRetroativo.style.display = 'none';
+                            if (isRetroativoCheck) isRetroativoCheck.checked = false;
+                            if (dataInicioEl) dataInicioEl.removeAttribute('min');
                         }
-                    } else {
-                        blocoRetroativo.style.display = 'none';
-                        if (isRetroativoCheck) isRetroativoCheck.checked = false;
-                        if (consultorRetroativoWrap) consultorRetroativoWrap.style.display = 'none';
-                        if (dataInicioEl) dataInicioEl.removeAttribute('min');
                     }
                     atualizarRetroativoUi();
                 }
 
                 function atualizarRetroativoUi() {
                     const isRetroativo = isRetroativoCheck && isRetroativoCheck.checked;
-                    if (consultorRetroativoWrap) {
-                        consultorRetroativoWrap.style.display = isRetroativo ? 'block' : 'none';
+                    const mostrarConsultor = ehApenasGestor || (isRetroativo && window.ehGestorOuAdmin);
+                    if (consultorResponsavelWrap) {
+                        consultorResponsavelWrap.style.display = mostrarConsultor ? 'block' : 'none';
                     }
-                    if (consultorRetroativoSelect) {
-                        if (isRetroativo) {
-                            consultorRetroativoSelect.setAttribute('required', 'required');
-                            consultorRetroativoSelect.setAttribute('name', 'consultor_id');
+                    if (consultorSelect) {
+                        if (mostrarConsultor) {
+                            consultorSelect.setAttribute('required', 'required');
+                            consultorSelect.setAttribute('name', 'consultor_id');
                         } else {
-                            consultorRetroativoSelect.removeAttribute('required');
-                            consultorRetroativoSelect.removeAttribute('name');
-                            consultorRetroativoSelect.value = '';
+                            consultorSelect.removeAttribute('required');
+                            consultorSelect.removeAttribute('name');
+                            consultorSelect.value = '';
                         }
                     }
                     if (dataInicioEl && dataInicioEl.getAttribute('name') === 'data_inicio') {
                         if (isRetroativo) {
                             dataInicioEl.removeAttribute('min');
                         } else {
-                            dataInicioEl.setAttribute('min', new Date().toISOString().split('T')[0]);
+                            // Usar "hoje" no fuso Brasil (vindo do servidor) para não bloquear 13/03 quando no Brasil ainda é 13
+                            var minBrasil = dataInicioEl.getAttribute('data-min-brasil');
+                            dataInicioEl.setAttribute('min', minBrasil || new Date().toISOString().split('T')[0]);
                         }
                     }
                 }
@@ -1566,7 +1588,7 @@
                 if (isRetroativoCheck) {
                     isRetroativoCheck.addEventListener('change', atualizarRetroativoUi);
                 }
-                if (blocoRetroativo) {
+                if (operacaoSelect) {
                     atualizarBlocoRetroativo();
                 }
 

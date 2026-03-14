@@ -96,11 +96,12 @@ class EmprestimoService
                 $status = $solicitarAceiteRetroativo ? 'aguardando_aceite_retroativo' : 'ativo';
             }
 
-            // Criar empréstimo
+            // Criar empréstimo (criado_por = quem estava logado ao criar)
             $emprestimo = Emprestimo::create([
                 'operacao_id' => $dados['operacao_id'],
                 'cliente_id' => $dados['cliente_id'],
                 'consultor_id' => $dados['consultor_id'],
+                'criado_por_user_id' => $dados['criado_por_user_id'] ?? (auth()->check() ? auth()->id() : null),
                 'valor_total' => $dados['valor_total'],
                 'numero_parcelas' => $dados['numero_parcelas'],
                 'frequencia' => $dados['frequencia'],
