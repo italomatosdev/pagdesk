@@ -29,27 +29,46 @@ class OperacaoController extends Controller
 
     /**
      * Listar operações
+     * Super Admin: todas. Admin/gestor: apenas as operações às quais está vinculado.
      */
     public function index(): View
     {
-        $operacoes = Operacao::orderBy('nome')->paginate(15);
+        $user = auth()->user();
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)
+                ->orderBy('nome')
+                ->paginate(15);
+        } else {
+            $operacoesIds = $user->getOperacoesIds();
+            if (empty($operacoesIds)) {
+                $operacoes = Operacao::whereRaw('1 = 0')->orderBy('nome')->paginate(15);
+            } else {
+                $operacoes = Operacao::whereIn('id', $operacoesIds)->orderBy('nome')->paginate(15);
+            }
+        }
         return view('operacoes.index', compact('operacoes'));
     }
 
     /**
-     * Mostrar formulário de criação
+     * Mostrar formulário de criação (apenas Super Admin)
      */
     public function create(): View
     {
+        if (!auth()->user()->isSuperAdmin()) {
+            abort(403, 'Apenas o Super Admin pode criar operações. Criação desabilitada momentaneamente para administradores e gestores.');
+        }
         $tiposDocumento = OperacaoDocumentoObrigatorio::tiposDisponiveis();
         return view('operacoes.create', compact('tiposDocumento'));
     }
 
     /**
-     * Criar operação
+     * Criar operação (apenas Super Admin)
      */
     public function store(Request $request): RedirectResponse
     {
+        if (!auth()->user()->isSuperAdmin()) {
+            abort(403, 'Apenas o Super Admin pode criar operações.');
+        }
         $validated = $request->validate([
             'nome' => 'required|string|max:255',
             'codigo' => 'nullable|string|max:50|unique:operacoes,codigo',
@@ -86,31 +105,52 @@ class OperacaoController extends Controller
     }
 
     /**
-     * Mostrar detalhes
+     * Mostrar detalhes (apenas operações do usuário, exceto Super Admin)
      */
     public function show(int $id): View
     {
+        $user = auth()->user();
         $operacao = Operacao::withCount(['operationClients', 'emprestimos'])
             ->with(['usuarios.roles'])
             ->findOrFail($id);
+        if (!$user->isSuperAdmin()) {
+            $ids = $user->getOperacoesIds();
+            if (empty($ids) || !in_array((int) $id, $ids, true)) {
+                abort(403, 'Você não tem acesso a esta operação.');
+            }
+        }
         return view('operacoes.show', compact('operacao'));
     }
 
     /**
-     * Mostrar formulário de edição
+     * Mostrar formulário de edição (apenas operações do usuário, exceto Super Admin)
      */
     public function edit(int $id): View
     {
+        $user = auth()->user();
         $operacao = Operacao::with('documentosObrigatorios')->findOrFail($id);
+        if (!$user->isSuperAdmin()) {
+            $ids = $user->getOperacoesIds();
+            if (empty($ids) || !in_array((int) $id, $ids, true)) {
+                abort(403, 'Você não tem acesso a esta operação.');
+            }
+        }
         $tiposDocumento = OperacaoDocumentoObrigatorio::tiposDisponiveis();
         return view('operacoes.edit', compact('operacao', 'tiposDocumento'));
     }
 
     /**
-     * Atualizar operação
+     * Atualizar operação (apenas operações do usuário, exceto Super Admin)
      */
     public function update(Request $request, int $id): RedirectResponse
     {
+        $user = auth()->user();
+        if (!$user->isSuperAdmin()) {
+            $ids = $user->getOperacoesIds();
+            if (empty($ids) || !in_array((int) $id, $ids, true)) {
+                abort(403, 'Você não tem acesso a esta operação.');
+            }
+        }
         $validated = $request->validate([
             'nome' => 'required|string|max:255',
             'codigo' => 'nullable|string|max:50|unique:operacoes,codigo,' . $id,
