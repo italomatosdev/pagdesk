@@ -39,6 +39,7 @@
                                     <i class="bx bx-check-double"></i> Aprovar selecionados
                                 </button>
                             </div>
+                        </form>
                         <div class="table-responsive">
                             <table class="table table-hover mb-0">
                                 <thead class="table-light">
@@ -70,16 +71,15 @@
                                             <td>{{ $s->created_at->format('d/m/Y H:i') }}</td>
                                             <td class="text-end">
                                                 <div class="btn-group btn-group-sm">
-                                                    <a href="{{ route('emprestimos.show', $s->emprestimo_id) }}" class="btn btn-outline-primary" title="Ver empréstimo">
-                                                        <i class="bx bx-show"></i>
+                                                    <a href="{{ route('emprestimos.show', $s->emprestimo_id) }}" class="btn btn-outline-primary btn-sm rounded-end-0" title="Ver empréstimo">
+                                                        <i class="bx bx-show"></i> Ver
                                                     </a>
-                                                    <form action="{{ route('emprestimos.retroativo.aprovar', $s->id) }}" method="POST" class="d-inline">
+                                                    <form action="{{ route('emprestimos.retroativo.aprovar', $s->id) }}" method="POST" class="d-inline-block m-0 p-0 border-0 align-middle" style="margin: 0 !important; padding: 0 !important;">
                                                         @csrf
-                                                        <button type="submit" class="btn btn-success" onclick="return confirm('Aprovar este empréstimo retroativo? O empréstimo ficará ativo.');">
+                                                        <button type="submit" class="btn btn-success btn-sm rounded-0" onclick="return confirm('Aprovar este empréstimo retroativo? O empréstimo ficará ativo.');">
                                                             <i class="bx bx-check"></i> Aprovar
                                                         </button>
-                                                    </form>
-                                                    <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#rejeitarModal{{ $s->id }}">
+                                                    </form><button type="button" class="btn btn-outline-danger btn-sm rounded-start-0" data-bs-toggle="modal" data-bs-target="#rejeitarModal{{ $s->id }}">
                                                         <i class="bx bx-x"></i> Rejeitar
                                                     </button>
                                                 </div>
@@ -113,13 +113,12 @@
                                 </tbody>
                             </table>
                         </div>
-                        </form>
                         <script>
                         (function() {
                             var form = document.getElementById('form-aprovar-lote-retroativo');
                             var btn = document.getElementById('btn-aprovar-lote-retroativo');
                             var checkTodos = document.getElementById('check-todos-retroativo');
-                            var checks = form ? form.querySelectorAll('.check-retroativo') : [];
+                            var checks = document.querySelectorAll('.check-retroativo');
                             function atualizarBtn() {
                                 var n = 0;
                                 checks.forEach(function(c) { if (c.checked) n++; });
@@ -134,12 +133,21 @@
                             checks.forEach(function(c) {
                                 c.addEventListener('change', atualizarBtn);
                             });
-                            form.addEventListener('submit', function(e) {
-                                var n = 0;
-                                checks.forEach(function(c) { if (c.checked) n++; });
-                                if (n === 0) { e.preventDefault(); return; }
-                                if (!confirm('Aprovar ' + n + ' empréstimo(s) retroativo(s) selecionado(s)? Os empréstimos ficarão ativos.')) e.preventDefault();
-                            });
+                            if (form) {
+                                form.addEventListener('submit', function(e) {
+                                    var ids = [];
+                                    checks.forEach(function(c) { if (c.checked) ids.push(c.value); });
+                                    if (ids.length === 0) { e.preventDefault(); return; }
+                                    if (!confirm('Aprovar ' + ids.length + ' empréstimo(s) retroativo(s) selecionado(s)? Os empréstimos ficarão ativos.')) { e.preventDefault(); return; }
+                                    ids.forEach(function(id) {
+                                        var input = document.createElement('input');
+                                        input.type = 'hidden';
+                                        input.name = 'ids[]';
+                                        input.value = id;
+                                        form.appendChild(input);
+                                    });
+                                });
+                            }
                         })();
                         </script>
                         <div class="d-flex justify-content-center mt-3">

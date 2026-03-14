@@ -285,9 +285,27 @@
                                             </td>
                                             <td>
                                                 @if($movimentacao->comprovante_path)
-                                                    <a href="{{ asset('storage/' . $movimentacao->comprovante_path) }}" target="_blank" class="btn btn-sm btn-info">
+                                                    <a href="{{ asset('storage/' . $movimentacao->comprovante_path) }}" target="_blank" class="btn btn-sm btn-info" title="Comprovante da movimentação">
                                                         <i class="bx bx-file"></i> Ver
                                                     </a>
+                                                @elseif($movimentacao->referencia_tipo === 'liberacao_emprestimo' && isset($liberacoesById[$movimentacao->referencia_id]))
+                                                    @php $lib = $liberacoesById[$movimentacao->referencia_id]; @endphp
+                                                    @if($lib->comprovante_liberacao ?? null)
+                                                        <a href="{{ asset('storage/' . $lib->comprovante_liberacao) }}" target="_blank" class="btn btn-sm btn-outline-info" title="Comprovante da liberação">
+                                                            <i class="bx bx-file"></i> Ver
+                                                        </a>
+                                                    @else
+                                                        -
+                                                    @endif
+                                                @elseif($movimentacao->referencia_tipo === 'pagamento_cliente' && isset($liberacoesPorEmprestimoId[$movimentacao->referencia_id]))
+                                                    @php $lib = $liberacoesPorEmprestimoId[$movimentacao->referencia_id]; @endphp
+                                                    @if($lib->comprovante_pagamento_cliente ?? null)
+                                                        <a href="{{ asset('storage/' . $lib->comprovante_pagamento_cliente) }}" target="_blank" class="btn btn-sm btn-outline-info" title="Comprovante pagamento ao cliente">
+                                                            <i class="bx bx-file"></i> Ver
+                                                        </a>
+                                                    @else
+                                                        -
+                                                    @endif
                                                 @else
                                                     -
                                                 @endif

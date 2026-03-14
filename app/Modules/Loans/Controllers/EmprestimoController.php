@@ -834,6 +834,10 @@ class EmprestimoController extends Controller
         ]);
         $solicitacao->emprestimo->update(['status' => 'ativo']);
 
+        // Criar liberação retroativa (pago_ao_cliente) para permitir pagamento de parcelas
+        app(\App\Modules\Loans\Services\LiberacaoService::class)
+            ->criarParaRetroativo($solicitacao->emprestimo, $user->id);
+
         return redirect()->route('emprestimos.retroativo.pendentes')
             ->with('success', 'Empréstimo retroativo aprovado. O empréstimo #' . $solicitacao->emprestimo_id . ' está ativo.');
     }
@@ -870,6 +874,8 @@ class EmprestimoController extends Controller
                 'aprovado_em' => now(),
             ]);
             $solicitacao->emprestimo->update(['status' => 'ativo']);
+            app(\App\Modules\Loans\Services\LiberacaoService::class)
+                ->criarParaRetroativo($solicitacao->emprestimo, $user->id);
             $aprovados++;
         }
 

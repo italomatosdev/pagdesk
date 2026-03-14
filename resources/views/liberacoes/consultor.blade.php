@@ -110,8 +110,14 @@
                                                        class="btn btn-sm btn-outline-success mb-1">
                                                         <i class="bx bx-file"></i> Pagamento
                                                     </a>
+                                                @elseif($liberacao->status === 'pago_ao_cliente')
+                                                    <a href="{{ route('liberacoes.show', $liberacao->id) }}" 
+                                                       class="btn btn-sm btn-outline-secondary mb-1" 
+                                                       title="Subir comprovante depois">
+                                                        <i class="bx bx-upload"></i> Subir comprovante
+                                                    </a>
                                                 @endif
-                                                @if(!$liberacao->hasComprovanteLiberacao() && !$liberacao->hasComprovantePagamentoCliente())
+                                                @if(!$liberacao->hasComprovanteLiberacao() && !$liberacao->hasComprovantePagamentoCliente() && $liberacao->status !== 'pago_ao_cliente')
                                                     <span class="text-muted">-</span>
                                                 @endif
                                             </td>

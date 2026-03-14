@@ -183,6 +183,13 @@ class EmprestimoService
                 }
             }
 
+            // Retroativo criado pelo gestor (status já 'ativo'): criar liberação como pago_ao_cliente
+            // para permitir registro de pagamento de parcelas (sem movimentação de caixa).
+            if ($status === 'ativo' && $isRetroativo) {
+                $liberacaoService = app(\App\Modules\Loans\Services\LiberacaoService::class);
+                $liberacaoService->criarParaRetroativo($emprestimo, auth()->id() ?? $emprestimo->consultor_id);
+            }
+
             // Auditoria
             $mensagemAuditoria = null;
             if ($aprovacaoAutomatica) {

@@ -272,6 +272,8 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::post('/liberar-lote', [App\Modules\Loans\Controllers\LiberacaoController::class, 'liberarLote'])->name('liberar-lote');
         Route::get('/{id}', [App\Modules\Loans\Controllers\LiberacaoController::class, 'show'])->name('show');
         Route::post('/{id}/liberar', [App\Modules\Loans\Controllers\LiberacaoController::class, 'liberar'])->name('liberar');
+        Route::post('/{id}/anexar-comprovante-liberacao', [App\Modules\Loans\Controllers\LiberacaoController::class, 'anexarComprovanteLiberacao'])->name('anexar-comprovante-liberacao');
+        Route::post('/{id}/anexar-comprovante-pagamento-cliente', [App\Modules\Loans\Controllers\LiberacaoController::class, 'anexarComprovantePagamentoCliente'])->name('anexar-comprovante-pagamento-cliente');
     });
 
     // Minhas Liberações (Consultor)

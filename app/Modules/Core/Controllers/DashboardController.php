@@ -245,6 +245,13 @@ class DashboardController extends Controller
         $valorTotalAReceber = Parcela::where('status', '!=', 'paga')
             ->when(true, $aplicarFiltroOperacaoParcela)
             ->sum(DB::raw('valor - valor_pago'));
+        // Divisão total a receber: principal (emprestado) e juros
+        $valorTotalEmprestadoAReceber = (float) (Parcela::where('status', '!=', 'paga')
+            ->when(true, $aplicarFiltroOperacaoParcela)
+            ->selectRaw("COALESCE(SUM(CASE WHEN valor > 0 THEN (COALESCE(valor_amortizacao, valor) / valor) * (valor - COALESCE(valor_pago, 0)) ELSE 0 END), 0) as tot")->value('tot') ?? 0);
+        $valorTotalJurosAReceber = (float) (Parcela::where('status', '!=', 'paga')
+            ->when(true, $aplicarFiltroOperacaoParcela)
+            ->selectRaw("COALESCE(SUM(CASE WHEN valor > 0 THEN (COALESCE(valor_juros, 0) / valor) * (valor - COALESCE(valor_pago, 0)) ELSE 0 END), 0) as tot")->value('tot') ?? 0);
         $valorLiberadoHoje = LiberacaoEmprestimo::where('status', 'liberado')
             ->whereBetween('liberado_em', [$dateFrom, $dateTo])
             ->when(true, $aplicarFiltroOperacaoLiberacao)
@@ -357,6 +364,8 @@ class DashboardController extends Controller
                 ->when(!$user->hasRole('administrador'), $aplicarFiltroOperacaoParcela)
                 ->sum(DB::raw('valor - valor_pago')),
             'valor_total_a_receber' => $valorTotalAReceber,
+            'valor_total_emprestado_a_receber' => $valorTotalEmprestadoAReceber,
+            'valor_total_juros_a_receber' => $valorTotalJurosAReceber,
             'valor_liberado_hoje' => $valorLiberadoHoje,
             'valor_liberado_semana' => $valorLiberadoSemana,
             'valor_liberado_mes' => $valorLiberadoMes,
@@ -770,6 +779,13 @@ class DashboardController extends Controller
         $valorTotalAReceber = Parcela::where('status', '!=', 'paga')
             ->when(true, $aplicarFiltroOperacaoParcela)
             ->sum(DB::raw('valor - valor_pago'));
+        // Divisão total a receber: principal (emprestado) e juros
+        $valorTotalEmprestadoAReceber = (float) (Parcela::where('status', '!=', 'paga')
+            ->when(true, $aplicarFiltroOperacaoParcela)
+            ->selectRaw("COALESCE(SUM(CASE WHEN valor > 0 THEN (COALESCE(valor_amortizacao, valor) / valor) * (valor - COALESCE(valor_pago, 0)) ELSE 0 END), 0) as tot")->value('tot') ?? 0);
+        $valorTotalJurosAReceber = (float) (Parcela::where('status', '!=', 'paga')
+            ->when(true, $aplicarFiltroOperacaoParcela)
+            ->selectRaw("COALESCE(SUM(CASE WHEN valor > 0 THEN (COALESCE(valor_juros, 0) / valor) * (valor - COALESCE(valor_pago, 0)) ELSE 0 END), 0) as tot")->value('tot') ?? 0);
         $valorLiberadoHoje = LiberacaoEmprestimo::where('status', 'liberado')
             ->whereBetween('liberado_em', [$dateFrom, $dateTo])
             ->when(true, $aplicarFiltroOperacaoLiberacao)
@@ -866,6 +882,8 @@ class DashboardController extends Controller
                 ->sum(DB::raw('valor - valor_pago')),
             // Métricas existentes
             'valor_total_a_receber' => $valorTotalAReceber,
+            'valor_total_emprestado_a_receber' => $valorTotalEmprestadoAReceber,
+            'valor_total_juros_a_receber' => $valorTotalJurosAReceber,
             'valor_liberado_hoje' => $valorLiberadoHoje,
             'valor_liberado_semana' => $valorLiberadoSemana,
             'taxa_recuperacao' => $valorTotalEmprestado > 0 
@@ -1188,6 +1206,19 @@ class DashboardController extends Controller
             ->where('status', '!=', 'paga')
             ->when(true, $aplicarFiltroOperacaoParcela)
             ->sum(DB::raw('valor - valor_pago'));
+        // Divisão total a receber: principal (emprestado) e juros
+        $valorTotalEmprestadoAReceber = (float) (Parcela::whereHas('emprestimo', function ($query) use ($user) {
+                $query->where('consultor_id', $user->id);
+            })
+            ->where('status', '!=', 'paga')
+            ->when(true, $aplicarFiltroOperacaoParcela)
+            ->selectRaw("COALESCE(SUM(CASE WHEN valor > 0 THEN (COALESCE(valor_amortizacao, valor) / valor) * (valor - COALESCE(valor_pago, 0)) ELSE 0 END), 0) as tot")->value('tot') ?? 0);
+        $valorTotalJurosAReceber = (float) (Parcela::whereHas('emprestimo', function ($query) use ($user) {
+                $query->where('consultor_id', $user->id);
+            })
+            ->where('status', '!=', 'paga')
+            ->when(true, $aplicarFiltroOperacaoParcela)
+            ->selectRaw("COALESCE(SUM(CASE WHEN valor > 0 THEN (COALESCE(valor_juros, 0) / valor) * (valor - COALESCE(valor_pago, 0)) ELSE 0 END), 0) as tot")->value('tot') ?? 0);
         
         // Saldo em caixa (entradas - saídas)
         $entradas = CashLedgerEntry::where('consultor_id', $user->id)
@@ -1256,6 +1287,8 @@ class DashboardController extends Controller
             'valor_recebido_semana' => $valorRecebidoSemana,
             'valor_recebido_mes' => $valorRecebidoMes,
             'valor_total_a_receber' => $valorTotalAReceber,
+            'valor_total_emprestado_a_receber' => $valorTotalEmprestadoAReceber,
+            'valor_total_juros_a_receber' => $valorTotalJurosAReceber,
             'saldo_caixa' => $saldoCaixa,
             'valor_medio_emprestimo' => $quantidadeEmprestimos > 0 
                 ? round($valorTotalEmprestado / $quantidadeEmprestimos, 2) 
