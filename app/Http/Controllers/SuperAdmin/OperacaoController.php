@@ -121,6 +121,7 @@ class OperacaoController extends Controller
             'requer_aprovacao' => 'nullable|boolean',
             'requer_liberacao' => 'nullable|boolean',
             'requer_autorizacao_pagamento_produto' => 'nullable|boolean',
+            'permite_emprestimo_retroativo' => 'nullable|boolean',
             'taxa_juros_atraso' => 'nullable|numeric|min:0|max:100',
             'tipo_calculo_juros' => 'nullable|in:por_dia,por_mes',
             'documentos_obrigatorios' => 'nullable|array',
@@ -132,6 +133,7 @@ class OperacaoController extends Controller
             $validated['requer_aprovacao'] = $request->has('requer_aprovacao') ? (bool) $request->input('requer_aprovacao') : false;
             $validated['requer_liberacao'] = $request->has('requer_liberacao') ? (bool) $request->input('requer_liberacao') : false;
             $validated['requer_autorizacao_pagamento_produto'] = $request->has('requer_autorizacao_pagamento_produto') ? (bool) $request->input('requer_autorizacao_pagamento_produto') : false;
+            $validated['permite_emprestimo_retroativo'] = $request->has('permite_emprestimo_retroativo') && $request->permite_emprestimo_retroativo == '1';
             $validated['ativo'] = $request->has('ativo') && $request->ativo == '1';
 
             unset($validated['documentos_obrigatorios']);
