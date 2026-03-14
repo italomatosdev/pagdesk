@@ -1897,6 +1897,11 @@
                                         <div class="col-12">
                                             <strong>Comprovante:</strong><br>
                                             <span class="text-muted">Não disponível</span>
+                                            <div class="mt-2">
+                                                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalAnexarComprovantePagamento{{ $pagamento->id }}" title="Subir comprovante depois">
+                                                    <i class="bx bx-upload"></i> Subir comprovante
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 @endif
@@ -1907,6 +1912,32 @@
                         </div>
                     </div>
                 </div>
+                @if(!$pagamento->hasComprovante())
+                <div class="modal fade" id="modalAnexarComprovantePagamento{{ $pagamento->id }}" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <form action="{{ route('pagamentos.anexar-comprovante', $pagamento->id) }}" method="POST" enctype="multipart/form-data">
+                                @csrf
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Subir comprovante do pagamento</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <p class="text-muted small">Parcela #{{ $parcela->numero }} – Pagamento de R$ {{ number_format($pagamento->valor, 2, ',', '.') }} em {{ $pagamento->data_pagamento->format('d/m/Y') }}. PDF, JPG ou PNG (máx. 2MB).</p>
+                                    <div class="mb-0">
+                                        <label class="form-label">Comprovante <span class="text-danger">*</span></label>
+                                        <input type="file" name="comprovante" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                    <button type="submit" class="btn btn-primary"><i class="bx bx-upload"></i> Enviar</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                @endif
             @endforeach
         @endforeach
                 @endif

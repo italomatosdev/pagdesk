@@ -607,6 +607,30 @@ class PagamentoService
     }
 
     /**
+     * Anexar comprovante a um pagamento já registrado (apenas se ainda não tiver).
+     * Não permite editar/substituir comprovante existente.
+     *
+     * @param int $pagamentoId
+     * @param string $comprovantePath
+     * @return Pagamento
+     */
+    public function anexarComprovante(int $pagamentoId, string $comprovantePath): Pagamento
+    {
+        $pagamento = Pagamento::findOrFail($pagamentoId);
+
+        if ($pagamento->hasComprovante()) {
+            throw ValidationException::withMessages([
+                'comprovante' => 'Este pagamento já possui comprovante. Não é possível substituir.',
+            ]);
+        }
+
+        $pagamento->update(['comprovante_path' => $comprovantePath]);
+        self::auditar('anexar_comprovante_pagamento', $pagamento, null, ['comprovante_path' => $comprovantePath]);
+
+        return $pagamento->fresh();
+    }
+
+    /**
      * Verificar se o empréstimo está totalmente quitado e finalizá-lo (uso externo, ex: QuitacaoService).
      *
      * @param \App\Modules\Loans\Models\Emprestimo $emprestimo

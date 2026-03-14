@@ -3,6 +3,7 @@
 namespace App\Modules\Loans\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\Parcela;
 use App\Modules\Loans\Services\PagamentoService;
 use Illuminate\Http\Request;
@@ -665,6 +666,35 @@ class PagamentoController extends Controller
     /**
      * Converte valor em formato BR (1.234,56) para float.
      */
+    /**
+     * Anexar comprovante a um pagamento já registrado (somente se ainda não tiver).
+     * Não permite editar/substituir comprovante existente.
+     */
+    public function anexarComprovante(Request $request, int $id): RedirectResponse
+    {
+        $pagamento = Pagamento::with('parcela')->findOrFail($id);
+
+        if ($pagamento->hasComprovante()) {
+            return back()->with('error', 'Este pagamento já possui comprovante. Não é possível substituir.');
+        }
+
+        $request->validate([
+            'comprovante' => 'required|file|mimes:pdf,jpg,jpeg,png|max:2048',
+        ]);
+
+        try {
+            $comprovantePath = $request->file('comprovante')->store('comprovantes', 'public');
+            $this->pagamentoService->anexarComprovante($id, $comprovantePath);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $mensagem = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+            return back()->with('error', $mensagem)->withInput();
+        }
+
+        $emprestimoId = $pagamento->parcela->emprestimo_id;
+        return redirect()->route('emprestimos.show', $emprestimoId)
+            ->with('success', 'Comprovante anexado ao pagamento com sucesso.');
+    }
+
     private function parseBrDecimal($value): float
     {
         if (is_numeric($value)) {
