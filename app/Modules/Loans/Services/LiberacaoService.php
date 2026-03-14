@@ -58,6 +58,41 @@ class LiberacaoService
     }
 
     /**
+     * Criar liberação para empréstimo retroativo (gestor criou direto ou aprovou retroativo do consultor).
+     * O valor já foi dado no passado, então não gera movimentação de caixa; apenas o registro
+     * com status pago_ao_cliente para permitir o registro de pagamento de parcelas.
+     *
+     * @param Emprestimo $emprestimo
+     * @param int $gestorId
+     * @return LiberacaoEmprestimo
+     */
+    public function criarParaRetroativo(Emprestimo $emprestimo, int $gestorId): LiberacaoEmprestimo
+    {
+        $liberacaoExistente = LiberacaoEmprestimo::where('emprestimo_id', $emprestimo->id)->first();
+        if ($liberacaoExistente) {
+            return $liberacaoExistente;
+        }
+
+        $strategy = \App\Modules\Loans\Services\Strategies\LoanStrategyFactory::create($emprestimo);
+        $valorLiberado = $strategy->calcularValorLiquido($emprestimo);
+
+        $liberacao = LiberacaoEmprestimo::create([
+            'emprestimo_id' => $emprestimo->id,
+            'consultor_id' => $emprestimo->consultor_id,
+            'gestor_id' => $gestorId,
+            'valor_liberado' => $valorLiberado,
+            'status' => 'pago_ao_cliente',
+            'liberado_em' => now(),
+            'pago_ao_cliente_em' => now(),
+            'empresa_id' => $emprestimo->empresa_id,
+        ]);
+
+        self::auditar('criar_liberacao_retroativa', $liberacao, null, $liberacao->toArray());
+
+        return $liberacao;
+    }
+
+    /**
      * Liberar dinheiro para o consultor (Gestor)
      *
      * @param int $liberacaoId
