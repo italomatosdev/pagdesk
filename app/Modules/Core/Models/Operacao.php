@@ -22,6 +22,7 @@ class Operacao extends Model
         'requer_liberacao',
         'requer_autorizacao_pagamento_produto',
         'permite_emprestimo_retroativo',
+        'consultores_veem_apenas_proprios_emprestimos',
         'taxa_juros_atraso',
         'tipo_calculo_juros',
         'empresa_id', // Empresa da operação
@@ -33,6 +34,7 @@ class Operacao extends Model
         'requer_liberacao' => 'boolean',
         'requer_autorizacao_pagamento_produto' => 'boolean',
         'permite_emprestimo_retroativo' => 'boolean',
+        'consultores_veem_apenas_proprios_emprestimos' => 'boolean',
         'valor_aprovacao_automatica' => 'decimal:2',
         'taxa_juros_atraso' => 'decimal:2',
     ];

@@ -146,6 +146,20 @@
                                 @enderror
                             </div>
 
+                            <div class="mb-3">
+                                <label class="form-label">Visibilidade dos empréstimos para consultores</label>
+                                <select name="consultores_veem_apenas_proprios_emprestimos" class="form-select" id="visibilidade_emprestimos_consultores">
+                                    <option value="0" selected>Todos da operação</option>
+                                    <option value="1">Apenas os empréstimos dele</option>
+                                </select>
+                                <small class="text-muted">
+                                    <strong>Todos da operação:</strong> consultores veem todos os empréstimos da operação. <strong>Apenas os empréstimos dele:</strong> cada consultor vê somente os empréstimos em que ele é o responsável.
+                                </small>
+                                @error('consultores_veem_apenas_proprios_emprestimos')
+                                    <div class="text-danger">{{ $message }}</div>
+                                @enderror
+                            </div>
+
                             <hr>
 
                             <h5 class="mb-3">Configuração de Juros por Atraso</h5>

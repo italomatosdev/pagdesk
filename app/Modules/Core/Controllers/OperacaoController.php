@@ -60,6 +60,7 @@ class OperacaoController extends Controller
             'requer_liberacao' => 'boolean',
             'requer_autorizacao_pagamento_produto' => 'boolean',
             'permite_emprestimo_retroativo' => 'boolean',
+            'consultores_veem_apenas_proprios_emprestimos' => 'boolean',
             'taxa_juros_atraso' => 'nullable|numeric|min:0|max:100',
             'tipo_calculo_juros' => 'nullable|in:por_dia,por_mes',
             'documentos_obrigatorios' => 'nullable|array',
@@ -72,6 +73,7 @@ class OperacaoController extends Controller
             $validated['requer_liberacao'] = $request->has('requer_liberacao') ? (bool) $request->input('requer_liberacao') : false;
             $validated['requer_autorizacao_pagamento_produto'] = $request->has('requer_autorizacao_pagamento_produto') ? (bool) $request->input('requer_autorizacao_pagamento_produto') : false;
             $validated['permite_emprestimo_retroativo'] = $request->has('permite_emprestimo_retroativo');
+            $validated['consultores_veem_apenas_proprios_emprestimos'] = $request->boolean('consultores_veem_apenas_proprios_emprestimos');
 
             unset($validated['documentos_obrigatorios']);
             $operacao = $this->operacaoService->criar($validated);
@@ -119,6 +121,7 @@ class OperacaoController extends Controller
             'requer_liberacao' => 'boolean',
             'requer_autorizacao_pagamento_produto' => 'boolean',
             'permite_emprestimo_retroativo' => 'boolean',
+            'consultores_veem_apenas_proprios_emprestimos' => 'boolean',
             'taxa_juros_atraso' => 'nullable|numeric|min:0|max:100',
             'tipo_calculo_juros' => 'nullable|in:por_dia,por_mes',
             'documentos_obrigatorios' => 'nullable|array',
@@ -131,6 +134,7 @@ class OperacaoController extends Controller
             $validated['requer_liberacao'] = $request->has('requer_liberacao') ? (bool) $request->input('requer_liberacao') : false;
             $validated['requer_autorizacao_pagamento_produto'] = $request->has('requer_autorizacao_pagamento_produto') ? (bool) $request->input('requer_autorizacao_pagamento_produto') : false;
             $validated['permite_emprestimo_retroativo'] = $request->has('permite_emprestimo_retroativo');
+            $validated['consultores_veem_apenas_proprios_emprestimos'] = $request->boolean('consultores_veem_apenas_proprios_emprestimos');
 
             unset($validated['documentos_obrigatorios']);
             $operacao = $this->operacaoService->atualizar($id, $validated);
