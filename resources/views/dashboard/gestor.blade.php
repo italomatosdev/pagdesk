@@ -155,6 +155,10 @@
                             <div>
                                 <h6 class="mb-0 font-size-15">Valor Total a Receber</h6>
                                 <h4 class="mt-3 mb-0 font-size-22">R$ {{ number_format($stats['valor_total_a_receber'], 2, ',', '.') }}</h4>
+                                <div class="mt-2 pt-2 border-top border-light small text-muted">
+                                    <div>Total emprestado: R$ {{ number_format($stats['valor_total_emprestado_a_receber'] ?? 0, 2, ',', '.') }}</div>
+                                    <div>Total a receber de juros: R$ {{ number_format($stats['valor_total_juros_a_receber'] ?? 0, 2, ',', '.') }}</div>
+                                </div>
                             </div>
                             <div class="">
                                 <div class="avatar">
