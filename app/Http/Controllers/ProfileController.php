@@ -35,7 +35,6 @@ class ProfileController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255|unique:users,email,' . $user->id,
             'password' => 'nullable|string|min:8|confirmed',
-            'avatar' => 'nullable|image|mimes:jpeg,jpg,png|max:2048', // 2MB
         ]);
 
         // Atualizar nome e email
@@ -47,25 +46,37 @@ class ProfileController extends Controller
             $user->password = Hash::make($validated['password']);
         }
 
-        // Upload de avatar
-        if ($request->hasFile('avatar')) {
-            // Deletar avatar antigo se existir
-            if ($user->avatar && Storage::disk('public')->exists('avatars/' . $user->avatar)) {
-                Storage::disk('public')->delete('avatars/' . $user->avatar);
-            }
-
-            // Fazer upload do novo avatar
-            $file = $request->file('avatar');
-            $filename = 'user_' . $user->id . '_' . time() . '.' . $file->getClientOriginalExtension();
-            $path = $file->storeAs('avatars', $filename, 'public');
-            
-            $user->avatar = $filename;
-        }
-
         $user->save();
 
         return redirect()->route('profile.show')
             ->with('success', 'Perfil atualizado com sucesso!');
+    }
+
+    /**
+     * Atualizar apenas o avatar do usuário (formulário separado)
+     */
+    public function updateAvatar(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'avatar' => 'required|image|mimes:jpeg,jpg,png|max:5120', // 5MB
+        ]);
+
+        $user = auth()->user();
+
+        // Deletar avatar antigo se existir
+        if ($user->avatar && Storage::disk('public')->exists('avatars/' . $user->avatar)) {
+            Storage::disk('public')->delete('avatars/' . $user->avatar);
+        }
+
+        $file = $request->file('avatar');
+        $filename = 'user_' . $user->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+        $file->storeAs('avatars', $filename, 'public');
+
+        $user->avatar = $filename;
+        $user->save();
+
+        return redirect()->route('profile.show')
+            ->with('success', 'Foto de perfil atualizada com sucesso!');
     }
 
     /**
