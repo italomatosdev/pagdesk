@@ -50,6 +50,15 @@ class EmprestimoController extends Controller
             }
         }
 
+        // Consultor (sem ser gestor/admin): respeitar visibilidade por operação
+        $ehApenasConsultor = $user->hasRole('consultor') && !$user->hasAnyRole(['gestor', 'administrador']);
+        if ($ehApenasConsultor) {
+            $query->where(function ($q) use ($user) {
+                $q->where('consultor_id', $user->id)
+                    ->orWhereHas('operacao', fn ($op) => $op->where('consultores_veem_apenas_proprios_emprestimos', false));
+            });
+        }
+
         // Filtros
         if ($request->filled('operacao_id')) {
             // Validar se o usuário tem acesso a essa operação
@@ -127,6 +136,14 @@ class EmprestimoController extends Controller
             } else {
                 $query->whereRaw('1 = 0');
             }
+        }
+
+        $ehApenasConsultor = $user->hasRole('consultor') && ! $user->hasAnyRole(['gestor', 'administrador']);
+        if ($ehApenasConsultor) {
+            $query->where(function ($q) use ($user) {
+                $q->where('consultor_id', $user->id)
+                    ->orWhereHas('operacao', fn ($op) => $op->where('consultores_veem_apenas_proprios_emprestimos', false));
+            });
         }
 
         if ($request->filled('operacao_id') && $user->temAcessoOperacao($request->operacao_id)) {
