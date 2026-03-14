@@ -19,7 +19,7 @@ class UsuarioController extends Controller
     public function __construct(PermissionService $permissionService)
     {
         $this->middleware('auth');
-        // Apenas administradores (exceto método buscar que é usado por gestores também)
+        // Administradores e gestores (exceto método buscar que é usado por gestores também)
         $this->middleware(function ($request, $next) {
             // Método buscar() pode ser acessado por gestores e administradores
             if ($request->route()->getActionMethod() === 'buscar') {
@@ -27,9 +27,9 @@ class UsuarioController extends Controller
                     abort(403, 'Acesso negado.');
                 }
             } else {
-                // Outros métodos apenas para administradores
-                if (!auth()->user()->hasRole('administrador')) {
-                    abort(403, 'Acesso negado. Apenas administradores podem gerenciar usuários.');
+                // Outros métodos: administradores e gestores
+                if (!auth()->user()->hasAnyRole(['administrador', 'gestor'])) {
+                    abort(403, 'Acesso negado. Apenas administradores e gestores podem gerenciar usuários.');
                 }
             }
             return $next($request);
@@ -79,6 +79,10 @@ class UsuarioController extends Controller
         }
 
         $roles = Role::orderBy('name')->get();
+        // Gestor não pode atribuir papel de administrador
+        if ($user->hasRole('gestor') && !$user->hasRole('administrador')) {
+            $roles = $roles->filter(fn ($r) => $r->name !== 'administrador');
+        }
         $operacoes = Operacao::where('empresa_id', $empresa->id)
             ->where('ativo', true)
             ->orderBy('nome')
@@ -107,6 +111,11 @@ class UsuarioController extends Controller
             'operacoes' => 'nullable|array',
             'operacoes.*' => 'integer|exists:operacoes,id',
         ]);
+
+        // Gestor não pode criar usuário com papel de administrador
+        if ($user->hasRole('gestor') && !$user->hasRole('administrador') && in_array('administrador', $validated['roles'], true)) {
+            return back()->with('error', 'Gestores não podem atribuir o papel de administrador.')->withInput();
+        }
 
         try {
             // Validar que as operações pertencem à empresa do administrador
@@ -158,6 +167,10 @@ class UsuarioController extends Controller
 
         $usuario = $query->findOrFail($id);
         $roles = Role::all();
+        // Gestor não pode atribuir papel de administrador
+        if ($user->hasRole('gestor') && !$user->hasRole('administrador')) {
+            $roles = $roles->filter(fn ($r) => $r->name !== 'administrador');
+        }
 
         $operacoesQuery = Operacao::where('ativo', true);
         if (!$user->isSuperAdmin()) {
@@ -182,8 +195,13 @@ class UsuarioController extends Controller
             'role_name' => 'required|string|exists:roles,name',
         ]);
 
+        // Gestor não pode atribuir papel de administrador
+        $user = auth()->user();
+        if ($user->hasRole('gestor') && !$user->hasRole('administrador') && $validated['role_name'] === 'administrador') {
+            return back()->with('error', 'Gestores não podem atribuir o papel de administrador.');
+        }
+
         try {
-            $user = auth()->user();
             if (!$user->isSuperAdmin()) {
                 $empresaId = $user->empresa_id ?? $user->operacoes()->first()?->empresa_id;
                 $query = $empresaId !== null ? User::where('empresa_id', $empresaId) : User::whereRaw('1 = 0');

@@ -315,7 +315,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
     Route::get('/prestacoes', fn() => redirect()->route('fechamento-caixa.index'))->name('prestacoes.index');
     Route::get('/prestacoes/{id}', fn($id) => redirect()->route('fechamento-caixa.show', $id))->name('prestacoes.show');
 
-    // Operações (apenas administradores)
+    // Operações (administradores e gestores)
     Route::prefix('operacoes')->name('operacoes.')->group(function () {
         Route::get('/', [App\Modules\Core\Controllers\OperacaoController::class, 'index'])->name('index');
         Route::get('/create', [App\Modules\Core\Controllers\OperacaoController::class, 'create'])->name('create');
@@ -325,7 +325,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::put('/{id}', [App\Modules\Core\Controllers\OperacaoController::class, 'update'])->name('update');
     });
 
-    // Usuários (apenas administradores)
+    // Usuários (administradores e gestores)
     Route::prefix('usuarios')->name('usuarios.')->group(function () {
         Route::get('/', [App\Modules\Core\Controllers\UsuarioController::class, 'index'])->name('index');
         Route::get('/create', [App\Modules\Core\Controllers\UsuarioController::class, 'create'])->name('create');
