@@ -123,108 +123,49 @@
                     </div>
                 </div>
 
-                <!-- Clientes Vinculados -->
-                <div class="card mt-3">
-                    <div class="card-header">
-                        <h4 class="card-title mb-0">Clientes Vinculados ({{ $operacao->operationClients->count() }})</h4>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-bordered mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>Cliente</th>
-                                        <th>CPF</th>
-                                        <th>Limite de Crédito</th>
-                                        <th>Status</th>
-                                        <th>Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @forelse($operacao->operationClients as $vinculo)
-                                        <tr>
-                                            <td>
-                                                <a href="{{ route('clientes.show', $vinculo->cliente_id) }}">
-                                                    {{ $vinculo->cliente->nome }}
-                                                </a>
-                                            </td>
-                                            <td>{{ $vinculo->cliente->documento_formatado }}</td>
-                                            <td>R$ {{ number_format($vinculo->limite_credito, 2, ',', '.') }}</td>
-                                            <td>
-                                                <span class="badge bg-{{ $vinculo->status === 'ativo' ? 'success' : 'danger' }}">
-                                                    {{ ucfirst($vinculo->status) }}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <div class="d-flex gap-1">
-                                                    <a href="{{ route('clientes.show', $vinculo->cliente_id) }}" 
-                                                       class="btn btn-sm btn-info" title="Ver Detalhes">
-                                                        <i class="bx bx-show"></i>
-                                                    </a>
-                                                    @if($vinculo->cliente->temWhatsapp())
-                                                        <a href="{{ $vinculo->cliente->whatsapp_link }}" 
-                                                           target="_blank" 
-                                                           class="btn btn-sm btn-success" 
-                                                           title="Falar no WhatsApp">
-                                                            <i class="bx bxl-whatsapp"></i>
-                                                        </a>
-                                                    @endif
+                <!-- Totalizadores: Clientes e Empréstimos (estilo dashboard) -->
+                <div class="row mt-3">
+                    <div class="col-12 col-md-6 mb-3">
+                        <a href="{{ route('clientes.index', ['operacao_id' => $operacao->id]) }}" class="text-decoration-none">
+                            <div class="card h-100">
+                                <div class="card-body d-flex flex-column">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <h6 class="mb-0 font-size-15">Clientes vinculados</h6>
+                                            <h4 class="mt-3 mb-0 font-size-22">{{ number_format($operacao->operation_clients_count, 0, ',', '.') }}</h4>
+                                        </div>
+                                        <div class="">
+                                            <div class="avatar">
+                                                <div class="avatar-title rounded bg-primary-subtle">
+                                                    <i class="bx bx-group font-size-24 mb-0 text-primary"></i>
                                                 </div>
-                                            </td>
-                                        </tr>
-                                    @empty
-                                        <tr>
-                                            <td colspan="5" class="text-center">Nenhum cliente vinculado.</td>
-                                        </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
                     </div>
-                </div>
-
-                <!-- Empréstimos -->
-                <div class="card mt-3">
-                    <div class="card-header">
-                        <h4 class="card-title mb-0">Empréstimos ({{ $operacao->emprestimos->count() }})</h4>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-bordered mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Cliente</th>
-                                        <th>Valor</th>
-                                        <th>Status</th>
-                                        <th>Data</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @forelse($operacao->emprestimos->take(10) as $emprestimo)
-                                        <tr>
-                                            <td>
-                                                <a href="{{ route('emprestimos.show', $emprestimo->id) }}">
-                                                    #{{ $emprestimo->id }}
-                                                </a>
-                                            </td>
-                                            <td>{{ $emprestimo->cliente->nome }}</td>
-                                            <td>R$ {{ number_format($emprestimo->valor_total, 2, ',', '.') }}</td>
-                                            <td>
-                                                <span class="badge bg-{{ $emprestimo->status === 'ativo' ? 'success' : 'warning' }}">
-                                                    {{ ucfirst($emprestimo->status) }}
-                                                </span>
-                                            </td>
-                                            <td>{{ $emprestimo->created_at->format('d/m/Y') }}</td>
-                                        </tr>
-                                    @empty
-                                        <tr>
-                                            <td colspan="5" class="text-center">Nenhum empréstimo encontrado.</td>
-                                        </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>
+                    <div class="col-12 col-md-6 mb-3">
+                        <a href="{{ route('emprestimos.index', ['operacao_id' => $operacao->id]) }}" class="text-decoration-none">
+                            <div class="card h-100">
+                                <div class="card-body d-flex flex-column">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <h6 class="mb-0 font-size-15">Empréstimos</h6>
+                                            <h4 class="mt-3 mb-0 font-size-22">{{ number_format($operacao->emprestimos_count, 0, ',', '.') }}</h4>
+                                        </div>
+                                        <div class="">
+                                            <div class="avatar">
+                                                <div class="avatar-title rounded bg-success-subtle">
+                                                    <i class="bx bx-money font-size-24 mb-0 text-success"></i>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
                     </div>
                 </div>
             </div>

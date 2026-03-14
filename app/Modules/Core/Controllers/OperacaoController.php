@@ -17,10 +17,10 @@ class OperacaoController extends Controller
     public function __construct(OperacaoService $operacaoService)
     {
         $this->middleware('auth');
-        // Apenas administradores
+        // Administradores e gestores
         $this->middleware(function ($request, $next) {
-            if (!auth()->user()->hasRole('administrador')) {
-                abort(403, 'Acesso negado. Apenas administradores podem gerenciar operações.');
+            if (!auth()->user()->hasAnyRole(['administrador', 'gestor'])) {
+                abort(403, 'Acesso negado. Apenas administradores e gestores podem gerenciar operações.');
             }
             return $next($request);
         });
@@ -88,11 +88,9 @@ class OperacaoController extends Controller
      */
     public function show(int $id): View
     {
-        $operacao = Operacao::with([
-            'operationClients.cliente',
-            'emprestimos',
-            'usuarios.roles'
-        ])->findOrFail($id);
+        $operacao = Operacao::withCount(['operationClients', 'emprestimos'])
+            ->with(['usuarios.roles'])
+            ->findOrFail($id);
         return view('operacoes.show', compact('operacao'));
     }
 

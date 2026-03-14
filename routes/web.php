@@ -235,6 +235,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
     Route::prefix('pagamentos')->name('pagamentos.')->group(function () {
         Route::get('/create', [App\Modules\Loans\Controllers\PagamentoController::class, 'create'])->name('create');
         Route::post('/', [App\Modules\Loans\Controllers\PagamentoController::class, 'store'])->name('store');
+        Route::post('/{id}/anexar-comprovante', [App\Modules\Loans\Controllers\PagamentoController::class, 'anexarComprovante'])->name('anexar-comprovante');
         Route::get('/quitar-diarias/{emprestimo}', [App\Modules\Loans\Controllers\PagamentoController::class, 'quitarDiariasCreate'])->name('quitar-diarias.create');
         Route::post('/quitar-diarias/{emprestimo}', [App\Modules\Loans\Controllers\PagamentoController::class, 'quitarDiariasStore'])->name('quitar-diarias.store');
         Route::get('/multi-parcelas/{emprestimo}', [App\Modules\Loans\Controllers\PagamentoController::class, 'multiParcelasCreate'])->name('multi-parcelas.create');
@@ -314,7 +315,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
     Route::get('/prestacoes', fn() => redirect()->route('fechamento-caixa.index'))->name('prestacoes.index');
     Route::get('/prestacoes/{id}', fn($id) => redirect()->route('fechamento-caixa.show', $id))->name('prestacoes.show');
 
-    // Operações (apenas administradores)
+    // Operações (administradores e gestores)
     Route::prefix('operacoes')->name('operacoes.')->group(function () {
         Route::get('/', [App\Modules\Core\Controllers\OperacaoController::class, 'index'])->name('index');
         Route::get('/create', [App\Modules\Core\Controllers\OperacaoController::class, 'create'])->name('create');
@@ -324,7 +325,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::put('/{id}', [App\Modules\Core\Controllers\OperacaoController::class, 'update'])->name('update');
     });
 
-    // Usuários (apenas administradores)
+    // Usuários (administradores e gestores)
     Route::prefix('usuarios')->name('usuarios.')->group(function () {
         Route::get('/', [App\Modules\Core\Controllers\UsuarioController::class, 'index'])->name('index');
         Route::get('/create', [App\Modules\Core\Controllers\UsuarioController::class, 'create'])->name('create');
@@ -354,6 +355,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
     Route::prefix('perfil')->name('profile.')->group(function () {
         Route::get('/', [App\Http\Controllers\ProfileController::class, 'show'])->name('show');
         Route::put('/', [App\Http\Controllers\ProfileController::class, 'update'])->name('update');
+        Route::post('/avatar', [App\Http\Controllers\ProfileController::class, 'updateAvatar'])->name('update-avatar');
         Route::delete('/avatar', [App\Http\Controllers\ProfileController::class, 'removeAvatar'])->name('remove-avatar');
     });
 

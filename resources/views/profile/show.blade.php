@@ -32,7 +32,23 @@
                                     </label>
                                 </div>
                             </div>
-                            <h5 class="mb-1">{{ $user->name }}</h5>
+                            <form action="{{ route('profile.update-avatar') }}" method="POST" enctype="multipart/form-data" id="formAvatar" class="mt-3">
+                                @csrf
+                                <input type="file" class="d-none" id="avatar-input" name="avatar" accept="image/jpeg,image/jpg,image/png" onchange="previewAvatar(this); this.form.submit();">
+                                <label for="avatar-input" class="btn btn-sm btn-outline-primary w-100 mb-2">
+                                    <i class="bx bx-upload"></i> Alterar foto
+                                </label>
+                                @error('avatar')
+                                    <div class="small text-danger">{{ $message }}</div>
+                                @enderror
+                                <small class="text-muted d-block">JPG ou PNG, máx. 5MB</small>
+                            </form>
+                            @if($user->avatar)
+                                <button type="button" class="btn btn-sm btn-danger btn-remover-avatar w-100" data-url="{{ route('profile.remove-avatar') }}">
+                                    <i class="bx bx-trash"></i> Remover Avatar
+                                </button>
+                            @endif
+                            <h5 class="mb-1 mt-3">{{ $user->name }}</h5>
                             <p class="text-muted mb-0">{{ $user->email }}</p>
                             
                             @if($user->roles->count() > 0)
@@ -81,24 +97,9 @@
                         <h4 class="card-title mb-0">Editar Perfil</h4>
                     </div>
                     <div class="card-body">
-                        <form action="{{ route('profile.update') }}" method="POST" enctype="multipart/form-data" id="formUpdateProfile">
+                        <form action="{{ route('profile.update') }}" method="POST" id="formUpdateProfile">
                             @csrf
                             @method('PUT')
-
-                            <div class="mb-3">
-                                <label for="avatar-input" class="form-label">Foto de Perfil</label>
-                                <input type="file" class="form-control" id="avatar-input" name="avatar" 
-                                       accept="image/jpeg,image/jpg,image/png" onchange="previewAvatar(this)">
-                                <small class="text-muted">Formatos aceitos: JPG, PNG. Tamanho máximo: 2MB</small>
-                                @if($user->avatar)
-                                    <div class="mt-2">
-                                        <button type="button" class="btn btn-sm btn-danger btn-remover-avatar"
-                                                data-url="{{ route('profile.remove-avatar') }}">
-                                            <i class="bx bx-trash"></i> Remover Avatar
-                                        </button>
-                                    </div>
-                                @endif
-                            </div>
 
                             <div class="mb-3">
                                 <label for="name" class="form-label">Nome</label>

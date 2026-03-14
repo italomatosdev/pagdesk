@@ -327,7 +327,9 @@
                         @endif
                     </a>
                 </li>
+                @endif
 
+                @if(auth()->user()->hasAnyRole(['administrador', 'gestor']))
                 <li>
                     <a href="javascript: void(0);" class="has-arrow">
                         <i class="bx bx-cog icon nav-icon"></i>

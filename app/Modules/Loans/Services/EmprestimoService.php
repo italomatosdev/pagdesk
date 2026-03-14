@@ -188,6 +188,8 @@ class EmprestimoService
             if ($status === 'ativo' && $isRetroativo) {
                 $liberacaoService = app(\App\Modules\Loans\Services\LiberacaoService::class);
                 $liberacaoService->criarParaRetroativo($emprestimo, auth()->id() ?? $emprestimo->consultor_id);
+                // Marcar como atrasadas as parcelas já vencidas (não depender do cron)
+                app(\App\Modules\Loans\Services\ParcelaService::class)->marcarAtrasadasDoEmprestimo($emprestimo);
             }
 
             // Auditoria
