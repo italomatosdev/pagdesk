@@ -447,12 +447,13 @@ class ClienteController extends Controller
         if ($isSuperAdmin) {
             $cliente->load([
                 'operationClients.operacao.empresa',
-                'emprestimos.operacao.empresa'
+                'emprestimos.operacao.empresa',
+                'emprestimos.parcelas'
             ]);
         } else {
             $cliente->load([
                 'operationClients' => fn ($q) => $q->whereIn('operacao_id', $operacoesIds)->with(['operacao', 'consultor']),
-                'emprestimos' => fn ($q) => $q->whereIn('operacao_id', $operacoesIds)->with('operacao')
+                'emprestimos' => fn ($q) => $q->whereIn('operacao_id', $operacoesIds)->with(['operacao', 'parcelas'])
             ]);
         }
 

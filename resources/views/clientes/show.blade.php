@@ -354,6 +354,7 @@
                                         <th>Operação</th>
                                         <th>Valor (emprestado)</th>
                                         <th>Valor total (c/ juros)</th>
+                                        <th>Próx. venc.</th>
                                         <th>Status</th>
                                         <th>Data</th>
                                         <th>Ações</th>
@@ -375,6 +376,7 @@
                                             <td>{{ $emprestimo->operacao->nome ?? '-' }}</td>
                                             <td>R$ {{ number_format($emprestimo->valor_total, 2, ',', '.') }}</td>
                                             <td>R$ {{ number_format($emprestimo->calcularValorTotalComJuros(), 2, ',', '.') }}</td>
+                                            <td>{{ $emprestimo->getProximoVencimento()?->format('d/m/Y') ?? '—' }}</td>
                                             <td>
                                                 <span class="badge bg-{{ $emprestimo->status === 'ativo' ? 'success' : ($emprestimo->status === 'pendente' ? 'warning' : 'secondary') }}">
                                                     {{ ucfirst($emprestimo->status) }}
@@ -390,7 +392,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="{{ ($isSuperAdmin ?? false) ? 8 : 7 }}" class="text-center">Nenhum empréstimo encontrado.</td>
+                                            <td colspan="{{ ($isSuperAdmin ?? false) ? 9 : 8 }}" class="text-center">Nenhum empréstimo encontrado.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>
