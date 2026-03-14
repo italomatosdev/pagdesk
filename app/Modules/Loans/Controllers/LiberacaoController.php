@@ -239,6 +239,75 @@ class LiberacaoController extends Controller
     }
 
     /**
+     * Anexar comprovante de liberação depois (somente se ainda não tiver).
+     * Apenas gestor/administrador. Não permite editar/substituir comprovante existente.
+     */
+    public function anexarComprovanteLiberacao(Request $request, int $id): RedirectResponse
+    {
+        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
+            abort(403, 'Acesso negado.');
+        }
+
+        $request->validate([
+            'comprovante' => 'required|file|mimes:pdf,jpg,jpeg,png|max:2048',
+        ]);
+
+        $comprovantePath = $request->file('comprovante')->store('comprovantes/liberacoes', 'public');
+
+        try {
+            $this->liberacaoService->anexarComprovanteLiberacao($id, $comprovantePath);
+            $liberacao = \App\Modules\Loans\Models\LiberacaoEmprestimo::find($id);
+            $redirectTo = $request->input('redirect_to', 'liberacoes.show');
+            if ($redirectTo === 'emprestimos.show' && $liberacao) {
+                return redirect()->route('emprestimos.show', $liberacao->emprestimo_id)
+                    ->with('success', 'Comprovante de liberação anexado com sucesso.');
+            }
+            return redirect()->route('liberacoes.show', $id)
+                ->with('success', 'Comprovante de liberação anexado com sucesso.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $mensagem = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+            return back()->with('error', $mensagem)->withInput();
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage())->withInput();
+        }
+    }
+
+    /**
+     * Anexar comprovante de pagamento ao cliente depois (somente se ainda não tiver).
+     * Apenas o consultor dono da liberação. Não permite editar/substituir comprovante existente.
+     */
+    public function anexarComprovantePagamentoCliente(Request $request, int $id): RedirectResponse
+    {
+        $user = auth()->user();
+        $liberacao = \App\Modules\Loans\Models\LiberacaoEmprestimo::findOrFail($id);
+        if ($liberacao->consultor_id !== $user->id) {
+            abort(403, 'Você só pode anexar comprovante nas suas próprias liberações.');
+        }
+
+        $request->validate([
+            'comprovante' => 'required|file|mimes:pdf,jpg,jpeg,png|max:2048',
+        ]);
+
+        $comprovantePath = $request->file('comprovante')->store('comprovantes/pagamentos-cliente', 'public');
+
+        try {
+            $this->liberacaoService->anexarComprovantePagamentoCliente($id, $user->id, $comprovantePath);
+            $redirectTo = $request->input('redirect_to', 'liberacoes.show');
+            if ($redirectTo === 'emprestimos.show') {
+                return redirect()->route('emprestimos.show', $liberacao->emprestimo_id)
+                    ->with('success', 'Comprovante de pagamento anexado com sucesso.');
+            }
+            return redirect()->route('liberacoes.show', $id)
+                ->with('success', 'Comprovante de pagamento anexado com sucesso.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $mensagem = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+            return back()->with('error', $mensagem)->withInput();
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage())->withInput();
+        }
+    }
+
+    /**
      * Listar itens de produto/objeto recebidos (estoque) — gestor/adm
      */
     public function produtosObjetoRecebidos(Request $request): View

@@ -342,6 +342,66 @@ class LiberacaoService
     }
 
     /**
+     * Anexar comprovante de liberação depois (apenas se ainda não tiver).
+     * Apenas para liberações já liberadas/pagas. Não permite editar se já existir comprovante.
+     */
+    public function anexarComprovanteLiberacao(int $liberacaoId, string $comprovantePath): LiberacaoEmprestimo
+    {
+        return DB::transaction(function () use ($liberacaoId, $comprovantePath) {
+            $liberacao = LiberacaoEmprestimo::findOrFail($liberacaoId);
+
+            if (!empty($liberacao->comprovante_liberacao)) {
+                throw ValidationException::withMessages([
+                    'comprovante' => 'Esta liberação já possui comprovante. Não é possível substituir.',
+                ]);
+            }
+
+            if ($liberacao->status !== 'liberado' && $liberacao->status !== 'pago_ao_cliente') {
+                throw ValidationException::withMessages([
+                    'liberacao' => 'Só é possível anexar comprovante em liberações já liberadas.',
+                ]);
+            }
+
+            $liberacao->update(['comprovante_liberacao' => $comprovantePath]);
+            self::auditar('anexar_comprovante_liberacao', $liberacao, null, ['comprovante_liberacao' => $comprovantePath]);
+            return $liberacao->fresh();
+        });
+    }
+
+    /**
+     * Anexar comprovante de pagamento ao cliente depois (apenas se ainda não tiver).
+     * Apenas para liberações já com status pago_ao_cliente. Não permite editar se já existir comprovante.
+     */
+    public function anexarComprovantePagamentoCliente(int $liberacaoId, int $consultorId, string $comprovantePath): LiberacaoEmprestimo
+    {
+        return DB::transaction(function () use ($liberacaoId, $consultorId, $comprovantePath) {
+            $liberacao = LiberacaoEmprestimo::findOrFail($liberacaoId);
+
+            if ($liberacao->consultor_id !== $consultorId) {
+                throw ValidationException::withMessages([
+                    'liberacao' => 'Você não tem permissão para anexar comprovante nesta liberação.',
+                ]);
+            }
+
+            if (!empty($liberacao->comprovante_pagamento_cliente)) {
+                throw ValidationException::withMessages([
+                    'comprovante' => 'Esta liberação já possui comprovante de pagamento. Não é possível substituir.',
+                ]);
+            }
+
+            if ($liberacao->status !== 'pago_ao_cliente') {
+                throw ValidationException::withMessages([
+                    'liberacao' => 'Só é possível anexar comprovante de pagamento após confirmar o pagamento ao cliente.',
+                ]);
+            }
+
+            $liberacao->update(['comprovante_pagamento_cliente' => $comprovantePath]);
+            self::auditar('anexar_comprovante_pagamento_cliente', $liberacao, null, ['comprovante_pagamento_cliente' => $comprovantePath]);
+            return $liberacao->fresh();
+        });
+    }
+
+    /**
      * Listar liberações aguardando (para gestor)
      *
      * @param int|null $operacaoId
