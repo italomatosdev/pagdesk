@@ -88,11 +88,9 @@ class OperacaoController extends Controller
      */
     public function show(int $id): View
     {
-        $operacao = Operacao::with([
-            'operationClients.cliente',
-            'emprestimos',
-            'usuarios.roles'
-        ])->findOrFail($id);
+        $operacao = Operacao::withCount(['operationClients', 'emprestimos'])
+            ->with(['usuarios.roles'])
+            ->findOrFail($id);
         return view('operacoes.show', compact('operacao'));
     }
 

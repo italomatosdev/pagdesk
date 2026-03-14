@@ -58,6 +58,11 @@ class ClienteController extends Controller
             }
         }
 
+        // Filtro por operação (ex.: link "Ver" na tela de detalhe da operação)
+        if ($request->filled('operacao_id') && $user->temAcessoOperacao((int) $request->operacao_id)) {
+            $query->whereHas('operationClients', fn ($q) => $q->where('operacao_id', (int) $request->operacao_id));
+        }
+
         // Filtro por CPF
         if ($request->filled('documento')) {
             $documento = preg_replace('/[^0-9]/', '', $request->documento);
