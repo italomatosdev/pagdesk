@@ -85,16 +85,14 @@ class DashboardController extends Controller
     protected function dashboardAdmin(Request $request): View
     {
         $user = auth()->user();
+        $operacoesIds = $user->getOperacoesIds();
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
         [$dateFrom, $dateTo] = $this->getDateRangeFromRequest($request);
-        
-        // Validar se o usuário tem acesso à operação selecionada
-        if ($operacaoId && !$user->hasRole('administrador') && !$user->temAcessoOperacao($operacaoId)) {
-            $operacaoId = null; // Resetar se não tiver acesso
+
+        if ($operacaoId && !$user->isSuperAdmin() && (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds))) {
+            $operacaoId = null;
         }
-        
-        // Filtrar operações disponíveis para o usuário (sempre apenas as vinculadas)
-        $operacoesIds = $user->getOperacoesIds();
+
         $operacoes = !empty($operacoesIds) 
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
             : collect([]);
@@ -659,17 +657,16 @@ class DashboardController extends Controller
     protected function dashboardGestor(Request $request): View
     {
         $user = auth()->user();
+        $operacoesIds = $user->getOperacoesIds();
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
         [$dateFrom, $dateTo] = $this->getDateRangeFromRequest($request);
-        
-        // Validar se o usuário tem acesso à operação selecionada
-        if ($operacaoId && !$user->hasRole('administrador') && !$user->temAcessoOperacao($operacaoId)) {
-            $operacaoId = null; // Resetar se não tiver acesso
+
+        // Validar operação selecionada (gestor só acessa suas operações)
+        if ($operacaoId && (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds))) {
+            $operacaoId = null;
         }
-        
-        // Filtrar operações disponíveis para o usuário (sempre apenas as vinculadas)
-        $operacoesIds = $user->getOperacoesIds();
-        $operacoes = !empty($operacoesIds) 
+
+        $operacoes = !empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
             : collect([]);
 

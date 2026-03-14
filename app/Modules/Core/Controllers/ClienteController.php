@@ -30,37 +30,35 @@ class ClienteController extends Controller
 
     /**
      * Listar clientes
+     * Super Admin: todos. Demais: apenas clientes vinculados às operações do usuário.
      */
     public function index(Request $request): View
     {
         $user = auth()->user();
         $isSuperAdmin = $user->isSuperAdmin();
+        $operacoesIds = $isSuperAdmin ? [] : $user->getOperacoesIds();
         $empresaId = $user->empresa_id ?? null;
-        
-        // O EmpresaScope já filtra automaticamente incluindo clientes vinculados
+
         $query = Cliente::query();
 
-        // Super Admin vê todos os clientes (o EmpresaScope já não aplica filtro para Super Admin)
-        // Mas vamos carregar o relacionamento empresa para exibir na view
         if ($isSuperAdmin) {
             $query->with('empresa');
-        }
-
-        // Consultor vê clientes das operações que ele atende (cliente é da operação, não do consultor)
-        if (!$isSuperAdmin && $user->hasRole('consultor') && !$user->hasRole('administrador')) {
-            $operacoesIds = $user->getOperacoesIds();
-            if (!empty($operacoesIds)) {
-                $query->whereHas('operationClients', function ($q) use ($operacoesIds) {
-                    $q->whereIn('operacao_id', $operacoesIds);
-                });
-            } else {
+        } else {
+            // Admin, gestor e consultor: apenas clientes das minhas operações
+            if (empty($operacoesIds)) {
                 $query->whereRaw('1 = 0');
+            } else {
+                $query->withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)
+                    ->whereHas('operationClients', function ($q) use ($operacoesIds) {
+                        $q->whereIn('operacao_id', $operacoesIds);
+                    });
             }
         }
 
         // Filtro por operação (ex.: link "Ver" na tela de detalhe da operação)
-        if ($request->filled('operacao_id') && $user->temAcessoOperacao((int) $request->operacao_id)) {
-            $query->whereHas('operationClients', fn ($q) => $q->where('operacao_id', (int) $request->operacao_id));
+        $operacaoIdFiltro = $request->filled('operacao_id') ? (int) $request->operacao_id : null;
+        if ($operacaoIdFiltro && ($isSuperAdmin || in_array($operacaoIdFiltro, $operacoesIds, true))) {
+            $query->whereHas('operationClients', fn ($q) => $q->where('operacao_id', $operacaoIdFiltro));
         }
 
         // Filtro por CPF
@@ -105,12 +103,9 @@ class ClienteController extends Controller
         }
 
         $clientes = $query->with([
-                'operationClients' => function ($q) use ($empresaId, $isSuperAdmin) {
-                    // Filtrar apenas operações da empresa atual (a menos que seja Super Admin)
-                    if (!$isSuperAdmin && $empresaId) {
-                        $q->whereHas('operacao', function ($subQ) use ($empresaId) {
-                            $subQ->where('empresa_id', $empresaId);
-                        });
+                'operationClients' => function ($q) use ($operacoesIds, $isSuperAdmin) {
+                    if (!$isSuperAdmin && !empty($operacoesIds)) {
+                        $q->whereIn('operacao_id', $operacoesIds);
                     }
                     $q->with('operacao');
                 },
@@ -128,28 +123,26 @@ class ClienteController extends Controller
 
     /**
      * Exportar listagem de clientes em CSV (abre no Excel).
-     * Respeita os mesmos filtros da listagem (documento, nome).
+     * Mesmo critério da listagem: Super Admin todos; demais apenas operações do usuário.
      */
     public function export(Request $request): StreamedResponse
     {
         $user = auth()->user();
         $isSuperAdmin = $user->isSuperAdmin();
-        $empresaId = $user->empresa_id ?? null;
+        $operacoesIds = $isSuperAdmin ? [] : $user->getOperacoesIds();
 
         $query = Cliente::query();
 
         if ($isSuperAdmin) {
             $query->with('empresa');
-        }
-
-        if (!$isSuperAdmin && $user->hasRole('consultor') && !$user->hasRole('administrador')) {
-            $operacoesIds = $user->getOperacoesIds();
-            if (!empty($operacoesIds)) {
-                $query->whereHas('operationClients', function ($q) use ($operacoesIds) {
-                    $q->whereIn('operacao_id', $operacoesIds);
-                });
-            } else {
+        } else {
+            if (empty($operacoesIds)) {
                 $query->whereRaw('1 = 0');
+            } else {
+                $query->withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)
+                    ->whereHas('operationClients', function ($q) use ($operacoesIds) {
+                        $q->whereIn('operacao_id', $operacoesIds);
+                    });
             }
         }
 
@@ -210,13 +203,11 @@ class ClienteController extends Controller
     public function linkCadastro(Request $request): View
     {
         $user = auth()->user();
+        $operacoesIds = $user->getOperacoesIds();
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)
                 ->where('ativo', true)->orderBy('nome')->get();
-        } elseif ($user->hasRole('administrador')) {
-            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
         } else {
-            $operacoesIds = $user->getOperacoesIds();
             $operacoes = !empty($operacoesIds)
                 ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
                 : collect([]);
@@ -224,7 +215,7 @@ class ClienteController extends Controller
 
         $operacaoId = $request->query('operacao_id');
         $linkCadastro = null;
-        if ($operacaoId && $user->temAcessoOperacao((int) $operacaoId)) {
+        if ($operacaoId && ($user->isSuperAdmin() || in_array((int) $operacaoId, $operacoesIds, true))) {
             $ref = RefEncoder::encode((int) $operacaoId, $user->id);
             $linkCadastro = route('cadastro-cliente.form', ['ref' => $ref]);
         }
@@ -242,13 +233,11 @@ class ClienteController extends Controller
     public function create(): View
     {
         $user = auth()->user();
+        $operacoesIds = $user->getOperacoesIds();
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)
                 ->where('ativo', true)->with('documentosObrigatorios')->get();
-        } elseif ($user->hasRole('administrador')) {
-            $operacoes = Operacao::where('ativo', true)->with('documentosObrigatorios')->get();
         } else {
-            $operacoesIds = $user->getOperacoesIds();
             $operacoes = !empty($operacoesIds)
                 ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->with('documentosObrigatorios')->get()
                 : collect([]);
@@ -266,12 +255,20 @@ class ClienteController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        $user = auth()->user();
         $request->validate([
             'operacao_id' => [
                 'required',
                 'exists:operacoes,id',
-                function ($attr, $value, $fail) {
-                    if ($value && !auth()->user()->temAcessoOperacao($value)) {
+                function ($attr, $value, $fail) use ($user) {
+                    if (!$value) {
+                        return;
+                    }
+                    if ($user->isSuperAdmin()) {
+                        return;
+                    }
+                    $ids = $user->getOperacoesIds();
+                    if (empty($ids) || !in_array((int) $value, $ids, true)) {
                         $fail('Operação inválida ou sem permissão.');
                     }
                 },
@@ -403,122 +400,74 @@ class ClienteController extends Controller
 
     /**
      * Mostrar detalhes do cliente
+     * Super Admin: qualquer cliente. Demais: apenas se o cliente tiver vínculo com alguma das minhas operações.
      */
     public function show(int $id): View
     {
         $user = auth()->user();
         $isSuperAdmin = $user->isSuperAdmin();
-        
-        // Para Super Admin ou quando o cliente não pertence à empresa atual (consulta cruzada),
-        // precisamos buscar sem o escopo de empresa
+        $operacoesIds = $isSuperAdmin ? [] : $user->getOperacoesIds();
         $empresaId = $user->empresa_id ?? null;
-        $query = Cliente::with([
-            'documentos' => function ($q) use ($empresaId, $isSuperAdmin) {
-                // Se não for Super Admin e houver empresa, filtrar documentos
-                if (!$isSuperAdmin && $empresaId) {
-                    $q->where(function ($query) use ($empresaId) {
-                        $query->whereNull('empresa_id')
-                              ->orWhere('empresa_id', $empresaId);
-                    })
-                    ->orderByRaw('CASE WHEN empresa_id IS NULL THEN 1 ELSE 0 END'); // Específicos primeiro
-                }
-            },
-            'empresa'
-        ]);
-        
-        // Se não for Super Admin, primeiro tenta buscar normalmente (com escopo)
-        // Se não encontrar, busca sem escopo (cliente de outra empresa)
+
+        $query = Cliente::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)->with('empresa', 'documentos');
+
+        $cliente = $query->findOrFail($id);
+
+        // Acesso: Super Admin ou cliente vinculado a pelo menos uma das minhas operações
         if (!$isSuperAdmin) {
-            $cliente = $query->find($id);
-            if (!$cliente) {
-                // Cliente não encontrado na empresa atual, busca globalmente (apenas dados básicos)
-                $cliente = Cliente::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)
-                    ->with([
-                        'documentos' => function ($q) use ($empresaId) {
-                            // Filtrar documentos: originais + específicos da empresa atual
-                            if ($empresaId) {
-                                $q->where(function ($query) use ($empresaId) {
-                                    $query->whereNull('empresa_id')
-                                          ->orWhere('empresa_id', $empresaId);
-                                })
-                                ->orderByRaw('CASE WHEN empresa_id IS NULL THEN 1 ELSE 0 END'); // Específicos primeiro
-                            }
-                        },
-                        'empresa'
-                    ])
-                    ->findOrFail($id);
+            if (empty($operacoesIds)) {
+                abort(403, 'Você não tem acesso a este cliente.');
             }
-        } else {
-            // Super Admin pode ver qualquer cliente
-            $cliente = $query->findOrFail($id);
+            $temAcesso = $cliente->operationClients()->whereIn('operacao_id', $operacoesIds)->exists();
+            if (!$temAcesso) {
+                abort(403, 'Você não tem acesso a este cliente.');
+            }
         }
 
-        // Verificar se o cliente pertence à empresa atual
-        $empresaId = $user->empresa_id ?? null;
+        // Filtrar documentos por empresa (quando houver)
+        if (!$isSuperAdmin && $empresaId) {
+            $cliente->load(['documentos' => function ($q) use ($empresaId) {
+                $q->where(function ($query) use ($empresaId) {
+                    $query->whereNull('empresa_id')->orWhere('empresa_id', $empresaId);
+                })->orderByRaw('CASE WHEN empresa_id IS NULL THEN 1 ELSE 0 END');
+            }]);
+        }
+
         $clientePertenceEmpresaAtual = $empresaId && $cliente->empresa_id == $empresaId;
-        
-        // Se o cliente não pertence à empresa atual e não é Super Admin, criar vínculo automaticamente
+
         if (!$clientePertenceEmpresaAtual && !$isSuperAdmin && $empresaId) {
-            // Verificar se já está vinculado
             if (!$cliente->isVinculadoEmpresa($empresaId)) {
-                // Criar vínculo automaticamente
                 $this->clienteService->vincularClienteEmpresa($cliente->id, $empresaId, $user->id);
             }
-            
-            // Carregar dados específicos da empresa
-            $cliente->load(['dadosEmpresa' => function ($query) use ($empresaId) {
-                $query->where('empresa_id', $empresaId);
-            }]);
-            // Limpar cache para forçar recarregamento
+            $cliente->load(['dadosEmpresa' => fn ($q) => $q->where('empresa_id', $empresaId)]);
             $cliente->cachedDadosEmpresa = null;
         }
-        
-        // Carregar vínculos com operações e empréstimos APENAS da empresa atual
-        // (não carregar histórico de outras empresas)
-        if ($clientePertenceEmpresaAtual || $isSuperAdmin) {
-            // Cliente da empresa atual ou Super Admin: carregar todos os relacionamentos
+
+        // Carregar vínculos: Super Admin vê todos; demais apenas das minhas operações
+        if ($isSuperAdmin) {
             $cliente->load([
-                'operationClients.operacao',
-                'operationClients.consultor',
-                'emprestimos.operacao'
+                'operationClients.operacao.empresa',
+                'emprestimos.operacao.empresa'
             ]);
-            
-            if ($isSuperAdmin) {
-                $cliente->load([
-                    'operationClients.operacao.empresa',
-                    'emprestimos.operacao.empresa'
-                ]);
-            }
         } else {
-            // Cliente de outra empresa: carregar apenas vínculos e empréstimos da empresa atual
             $cliente->load([
-                'operationClients' => function ($query) use ($empresaId) {
-                    $query->whereHas('operacao', function ($q) use ($empresaId) {
-                        $q->where('empresa_id', $empresaId);
-                    })
-                    ->with(['operacao', 'consultor']);
-                },
-                'emprestimos' => function ($query) use ($empresaId) {
-                    $query->where('empresa_id', $empresaId)
-                          ->with('operacao');
-                }
+                'operationClients' => fn ($q) => $q->whereIn('operacao_id', $operacoesIds)->with(['operacao', 'consultor']),
+                'emprestimos' => fn ($q) => $q->whereIn('operacao_id', $operacoesIds)->with('operacao')
             ]);
         }
 
         $hoje = Carbon::today();
 
-        // Empréstimos ativos - APENAS da empresa atual (não mostrar histórico de outras empresas)
         $emprestimosQuery = Emprestimo::query()
             ->where('cliente_id', $cliente->id)
             ->where('status', 'ativo');
-        
-        // Para Super Admin, carregar empresa das operações
+
         if ($isSuperAdmin) {
             $emprestimosQuery->with('operacao.empresa');
         } else {
-            $emprestimosQuery->with('operacao');
+            $emprestimosQuery->whereIn('operacao_id', $operacoesIds)->with('operacao');
         }
-        
+
         $emprestimosAtivos = $emprestimosQuery->orderByDesc('data_inicio')->get();
 
         // Agrupar por operação
@@ -531,13 +480,14 @@ class ClienteController extends Controller
             ];
         })->values();
 
-        // Parcelas atrasadas (status 'atrasada' ou 'pendente' com vencimento passado)
-        // APENAS da empresa atual (não mostrar histórico de outras empresas)
+        // Parcelas atrasadas (apenas empréstimos das minhas operações quando não for Super Admin)
         $parcelasQuery = Parcela::query()
             ->select('parcelas.*')
-            ->whereHas('emprestimo', function ($q) use ($cliente) {
-                $q->where('cliente_id', $cliente->id)
-                  ->where('status', 'ativo'); // Apenas empréstimos ativos
+            ->whereHas('emprestimo', function ($q) use ($cliente, $operacoesIds, $isSuperAdmin) {
+                $q->where('cliente_id', $cliente->id)->where('status', 'ativo');
+                if (!$isSuperAdmin && !empty($operacoesIds)) {
+                    $q->whereIn('operacao_id', $operacoesIds);
+                }
             })
             ->where(function ($q) use ($hoje) {
                 $q->where('parcelas.status', 'atrasada')
@@ -546,15 +496,14 @@ class ClienteController extends Controller
                            ->whereDate('parcelas.data_vencimento', '<', $hoje);
                   });
             })
-            ->whereRaw('(parcelas.valor - COALESCE(parcelas.valor_pago, 0)) > 0'); // Apenas se ainda tem valor em aberto
-        
-        // Para Super Admin, carregar empresa das operações
+            ->whereRaw('(parcelas.valor - COALESCE(parcelas.valor_pago, 0)) > 0');
+
         if ($isSuperAdmin) {
             $parcelasQuery->with(['emprestimo.operacao.empresa']);
         } else {
             $parcelasQuery->with(['emprestimo.operacao']);
         }
-        
+
         $parcelasAtrasadas = $parcelasQuery->orderBy('parcelas.data_vencimento')->get();
 
         // Agrupar parcelas atrasadas por operação
@@ -620,27 +569,34 @@ class ClienteController extends Controller
 
     /**
      * Mostrar formulário de edição
+     * Acesso: Super Admin ou cliente vinculado a alguma das minhas operações.
      */
     public function edit(int $id): View
     {
         $user = auth()->user();
         $isSuperAdmin = $user->isSuperAdmin();
+        $operacoesIds = $isSuperAdmin ? [] : $user->getOperacoesIds();
         $empresaId = $user->empresa_id ?? null;
-        
-        // Buscar cliente (pode ser de outra empresa)
+
         $cliente = Cliente::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)
             ->with('documentos', 'empresa')
             ->findOrFail($id);
-        
-        // Verificar se a empresa atual é a criadora
+
+        if (!$isSuperAdmin) {
+            if (empty($operacoesIds)) {
+                abort(403, 'Você não tem acesso a este cliente.');
+            }
+            if (!$cliente->operationClients()->whereIn('operacao_id', $operacoesIds)->exists()) {
+                abort(403, 'Você não tem acesso a este cliente.');
+            }
+        }
+
         $isEmpresaCriadora = $empresaId && $cliente->empresa_id == $empresaId;
-        
-        // Carregar dados específicos da empresa se existirem
         $dadosEmpresa = null;
         if (!$isEmpresaCriadora && !$isSuperAdmin && $empresaId) {
             $dadosEmpresa = $cliente->dadosPorEmpresa($empresaId);
         }
-        
+
         return view('clientes.edit', compact('cliente', 'isSuperAdmin', 'isEmpresaCriadora', 'dadosEmpresa'));
     }
 
@@ -673,13 +629,22 @@ class ClienteController extends Controller
         try {
             $user = auth()->user();
             $empresaId = $user->empresa_id ?? null;
-            
-            // Buscar cliente (pode ser de outra empresa)
+            $isSuperAdmin = $user->isSuperAdmin();
+            $operacoesIds = $isSuperAdmin ? [] : $user->getOperacoesIds();
+
             $cliente = Cliente::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)->findOrFail($id);
-            
-            // Verificar se a empresa atual é a criadora do cliente
+
+            if (!$isSuperAdmin) {
+                if (empty($operacoesIds)) {
+                    abort(403, 'Você não tem acesso a este cliente.');
+                }
+                if (!$cliente->operationClients()->whereIn('operacao_id', $operacoesIds)->exists()) {
+                    abort(403, 'Você não tem acesso a este cliente.');
+                }
+            }
+
             $isEmpresaCriadora = $empresaId && $cliente->empresa_id == $empresaId;
-            
+
             // Separar dados do cliente dos documentos
             $dadosCliente = $validated;
             $documentos = [
