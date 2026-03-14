@@ -137,6 +137,9 @@
                                 <a href="{{ route('super-admin.empresas.show', $operacao->empresa_id) }}" class="btn btn-info">
                                     <i class="bx bx-building"></i> Ver Empresa
                                 </a>
+                                <a href="{{ route('super-admin.empresas.usuarios.create', $operacao->empresa_id) }}" class="btn btn-primary">
+                                    <i class="bx bx-user-plus"></i> Criar usuário
+                                </a>
                             @endif
                         </div>
                     </div>
