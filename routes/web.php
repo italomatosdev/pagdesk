@@ -16,6 +16,11 @@ use Illuminate\Support\Facades\Route;
 
 Auth::routes(['register' => false]);
 
+// GET /logout: redireciona para login (logout real é via POST pelo botão Sair)
+Route::get('/logout', function () {
+    return redirect()->route('login');
+})->name('logout.get');
+
 Route::get('/', [App\Http\Controllers\HomeController::class, 'root'])->name('home');
 
 // Cadastro público do cliente via link (sem login)

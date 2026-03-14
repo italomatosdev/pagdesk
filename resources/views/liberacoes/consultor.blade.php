@@ -133,54 +133,6 @@
                                                    class="btn btn-sm btn-info">
                                                     <i class="bx bx-show"></i>
                                                 </a>
-
-                                                <!-- Modal Confirmar Pagamento -->
-                                                @if($liberacao->status === 'liberado')
-                                                <div class="modal fade" id="confirmarModal{{ $liberacao->id }}" tabindex="-1">
-                                                    <div class="modal-dialog">
-                                                        <div class="modal-content">
-                                                            <form action="{{ route('liberacoes.confirmar-pagamento', $liberacao->id) }}" 
-                                                                  method="POST" enctype="multipart/form-data"
-                                                                  class="form-confirmar-pagamento-cliente"
-                                                                  data-valor="{{ number_format($liberacao->valor_liberado, 2, ',', '.') }}"
-                                                                  data-cliente="{{ $liberacao->emprestimo->cliente->nome }}"
-                                                                  data-emprestimo-id="{{ $liberacao->emprestimo_id }}">
-                                                                @csrf
-                                                                <div class="modal-header">
-                                                                    <h5 class="modal-title">Confirmar Pagamento ao Cliente</h5>
-                                                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                                                </div>
-                                                                <div class="modal-body">
-                                                                    <div class="alert alert-info">
-                                                                        <strong>Valor:</strong> R$ {{ number_format($liberacao->valor_liberado, 2, ',', '.') }}<br>
-                                                                        <strong>Cliente:</strong> {{ $liberacao->emprestimo->cliente->nome }}<br>
-                                                                        <strong>Empréstimo:</strong> #{{ $liberacao->emprestimo_id }}
-                                                                    </div>
-                                                                    <div class="mb-3">
-                                                                        <label class="form-label">Comprovante (opcional)</label>
-                                                                        <input type="file" name="comprovante" class="form-control" 
-                                                                               accept=".pdf,.jpg,.jpeg,.png">
-                                                                        <small class="text-muted">Formatos aceitos: PDF, JPG, PNG (máx. 2MB)</small>
-                                                                    </div>
-                                                                    <div class="mb-3">
-                                                                        <label class="form-label">Observações (opcional)</label>
-                                                                        <textarea name="observacoes" class="form-control" rows="3" 
-                                                                                  placeholder="Ex: Pagamento realizado em dinheiro, comprovante anexado, etc."></textarea>
-                                                                    </div>
-                                                                    <div class="alert alert-warning">
-                                                                        <i class="bx bx-info-circle"></i> 
-                                                                        Confirme apenas após ter efetivamente pago o dinheiro ao cliente.
-                                                                    </div>
-                                                                </div>
-                                                                <div class="modal-footer">
-                                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                                                                    <button type="submit" class="btn btn-success">Confirmar Pagamento</button>
-                                                                </div>
-                                                            </form>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                @endif
                                             </td>
                                         </tr>
                                     @empty
@@ -191,6 +143,56 @@
                                 </tbody>
                             </table>
                         </div>
+
+                        {{-- Modais fora da tabela para evitar erro de abertura no mobile (estrutura table não deve conter modal) --}}
+                        @foreach($liberacoes as $liberacao)
+                            @if($liberacao->status === 'liberado')
+                                <div class="modal fade" id="confirmarModal{{ $liberacao->id }}" tabindex="-1" aria-labelledby="confirmarModalLabel{{ $liberacao->id }}" aria-hidden="true">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <form action="{{ route('liberacoes.confirmar-pagamento', $liberacao->id) }}" 
+                                                  method="POST" enctype="multipart/form-data"
+                                                  class="form-confirmar-pagamento-cliente"
+                                                  data-valor="{{ number_format($liberacao->valor_liberado, 2, ',', '.') }}"
+                                                  data-cliente="{{ $liberacao->emprestimo->cliente->nome }}"
+                                                  data-emprestimo-id="{{ $liberacao->emprestimo_id }}">
+                                                @csrf
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title" id="confirmarModalLabel{{ $liberacao->id }}">Confirmar Pagamento ao Cliente</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <div class="alert alert-info">
+                                                        <strong>Valor:</strong> R$ {{ number_format($liberacao->valor_liberado, 2, ',', '.') }}<br>
+                                                        <strong>Cliente:</strong> {{ $liberacao->emprestimo->cliente->nome }}<br>
+                                                        <strong>Empréstimo:</strong> #{{ $liberacao->emprestimo_id }}
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Comprovante (opcional)</label>
+                                                        <input type="file" name="comprovante" class="form-control" 
+                                                               accept=".pdf,.jpg,.jpeg,.png">
+                                                        <small class="text-muted">Formatos aceitos: PDF, JPG, PNG (máx. 2MB)</small>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Observações (opcional)</label>
+                                                        <textarea name="observacoes" class="form-control" rows="3" 
+                                                                  placeholder="Ex: Pagamento realizado em dinheiro, comprovante anexado, etc."></textarea>
+                                                    </div>
+                                                    <div class="alert alert-warning">
+                                                        <i class="bx bx-info-circle"></i> 
+                                                        Confirme apenas após ter efetivamente pago o dinheiro ao cliente.
+                                                    </div>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                                    <button type="submit" class="btn btn-success">Confirmar Pagamento</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            @endif
+                        @endforeach
                     </div>
                 </div>
             </div>

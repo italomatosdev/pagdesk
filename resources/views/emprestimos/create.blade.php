@@ -71,15 +71,16 @@
 
                             @php
                                 $ehApenasGestor = auth()->user()->hasRole('gestor') && !auth()->user()->hasRole('administrador');
+                                $ehGestorOuAdmin = auth()->user()->hasAnyRole(['administrador', 'gestor']);
                             @endphp
-                            <div id="consultor-responsavel-wrap" class="mb-3" style="display: {{ $ehApenasGestor ? 'block' : 'none' }};">
+                            <div id="consultor-responsavel-wrap" class="mb-3" style="display: {{ $ehGestorOuAdmin ? 'block' : 'none' }};">
                                 <label class="form-label">Consultor responsável <span class="text-danger">*</span></label>
-                                <select name="consultor_id" id="consultor_id_select" class="form-select" {{ $ehApenasGestor ? 'required' : '' }}>
+                                <select name="consultor_id" id="consultor_id_select" class="form-select" {{ $ehGestorOuAdmin ? 'required' : '' }}>
                                     <option value="">Selecione o consultor...</option>
                                 </select>
                                 <small class="text-muted">
-                                    @if($ehApenasGestor)
-                                        O empréstimo ficará vinculado a este consultor (você está criando em nome dele).
+                                    @if($ehGestorOuAdmin)
+                                        O empréstimo ficará vinculado ao consultor escolhido (pode ser você — opção ao final da lista).
                                     @else
                                         Empréstimo ficará vinculado a este consultor.
                                     @endif
@@ -1557,7 +1558,8 @@
 
                 function atualizarRetroativoUi() {
                     const isRetroativo = isRetroativoCheck && isRetroativoCheck.checked;
-                    const mostrarConsultor = ehApenasGestor || (isRetroativo && window.ehGestorOuAdmin);
+                    // Gestor e admin sempre escolhem o consultor (lista inclui "Nome (Você)" ao final)
+                    const mostrarConsultor = window.ehGestorOuAdmin === true;
                     if (consultorResponsavelWrap) {
                         consultorResponsavelWrap.style.display = mostrarConsultor ? 'block' : 'none';
                     }

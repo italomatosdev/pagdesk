@@ -2,6 +2,8 @@
 
 Este documento descreve a funcionalidade de **empréstimo retroativo**: cadastro de empréstimos já existentes (com data no passado), opção de o consultor criar com aceite do gestor/administrador, e o registro de parcelas já pagas com opção de gerar ou não caixa.
 
+Para o fluxo geral de **criação de empréstimo** (normal e retroativo) e a escolha do **consultor responsável**, veja também **[CRIACAO_EMPRESTIMO.md](CRIACAO_EMPRESTIMO.md)**.
+
 ---
 
 ## 1. Visão geral
@@ -9,15 +11,15 @@ Este documento descreve a funcionalidade de **empréstimo retroativo**: cadastro
 O empréstimo retroativo serve para **lançar no sistema empréstimos que já existem na prática** (contrato e parcelas já em andamento). Permite:
 
 - **Data de início no passado**
-- **Vincular a um consultor** (gestor/admin escolhe; consultor que cria fica como responsável)
+- **Vincular a um consultor** (gestor/admin escolhem no select; consultor que cria fica como responsável)
 - **Registrar parcelas já pagas** na tela do empréstimo, com opção de **gerar movimentação de caixa** ou não
 
 Dois fluxos de criação:
 
 | Quem cria              | Comportamento                                                                 |
 |------------------------|-------------------------------------------------------------------------------|
-| **Gestor ou Administrador** | Empréstimo criado já **ativo**. Pode escolher o consultor responsável.        |
-| **Consultor**           | Empréstimo criado em **aguardando aceite**. Só fica ativo após aprovação em **Liberações**. |
+| **Gestor ou Administrador** | Empréstimo criado já **ativo**. Escolhem o **consultor responsável** (lista inclui "Nome (Você)" ao final). |
+| **Consultor**           | Empréstimo criado em **aguardando aceite**. O responsável é o próprio usuário. Só fica ativo após aprovação em **Liberações**. |
 
 ---
 
@@ -46,7 +48,7 @@ Enquanto essa opção não estiver marcada, o bloco de empréstimo retroativo **
 
 1. Selecione a operação (com retroativo permitido).
 2. Marque **"Empréstimo retroativo"**.
-3. Escolha o **Consultor responsável** no select.
+3. Escolha o **Consultor responsável** no select. A lista mostra os consultores da operação e, **sempre ao final**, a opção **"Nome (Você)"** para vincular o empréstimo a si mesmo, se desejar.
 4. Preencha os demais campos (cliente, valor, parcelas, **data de início** pode ser no passado, tipo etc.).
 5. Salve.
 
@@ -168,7 +170,7 @@ Na **tela do empréstimo** (detalhe), em um card **"Registrar parcelas já pagas
 
 ### 7.5 Views principais
 
-- **emprestimos/create.blade.php:** bloco retroativo (todos); select consultor só para gestor/admin; texto diferente para consultor.
+- **emprestimos/create.blade.php:** bloco retroativo (todos); select **consultor responsável** sempre visível para gestor e administrador (normal e retroativo); lista = consultores da operação + **"Nome (Você)"** ao final; texto diferente para consultor.
 - **emprestimos/show.blade.php:** alerta "aguardando aceite"; card "Registrar parcelas já pagas" (com tabela, checkbox, data, gerar caixa, Sweet confirm no submit).
 - **emprestimos/retroativo-pendentes.blade.php:** lista com checkbox, "Aprovar selecionados", Aprovar/Rejeitar por linha, modal rejeitar; "Voltar a Liberações".
 - **liberacoes/index.blade.php:** botão "Empréstimos retroativos" e contagem de pendentes.

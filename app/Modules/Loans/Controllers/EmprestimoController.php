@@ -203,14 +203,24 @@ class EmprestimoController extends Controller
                     : collect([]);
             }
 
-            // Consultores por operação (para empréstimo retroativo - gestor/admin escolhem o consultor)
+            // Consultores por operação (gestor/admin escolhem o consultor; opção "Nome (Você)" ao final)
             $consultoresPorOperacao = [];
             foreach ($operacoes as $op) {
-                $consultoresPorOperacao[$op->id] = \App\Models\User::whereHas('operacoes', fn ($q) => $q->where('operacoes.id', $op->id))
+                $lista = \App\Models\User::whereHas('operacoes', fn ($q) => $q->where('operacoes.id', $op->id))
                     ->whereHas('roles', fn ($q) => $q->where('name', 'consultor'))
                     ->orderBy('name')
                     ->get(['id', 'name'])
-                    ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name]);
+                    ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])
+                    ->values()
+                    ->toArray();
+                // Gestor ou admin com acesso à operação: adicionar "Nome (Você)" sempre ao final da lista
+                if ($user->hasAnyRole(['gestor', 'administrador'])) {
+                    $temAcesso = $user->hasRole('administrador') || $user->temAcessoOperacao($op->id);
+                    if ($temAcesso) {
+                        $lista[] = ['id' => $user->id, 'name' => $user->name . ' (Você)'];
+                    }
+                }
+                $consultoresPorOperacao[$op->id] = $lista;
             }
             
             // Se o usuário tem apenas 1 operação, já vir selecionada
@@ -379,9 +389,10 @@ class EmprestimoController extends Controller
         ];
         $validated = $request->validate($rules);
 
-        // Gestor (não admin): sempre deve selecionar operação e consultor — empréstimo fica para o consultor
+        // Gestor ou administrador: devem selecionar o consultor responsável (podem escolher a si mesmos — "Nome (Você)")
         $ehApenasGestor = $user->hasRole('gestor') && !$user->hasRole('administrador');
-        if ($ehApenasGestor) {
+        $ehGestorOuAdminQueEscolhe = $ehApenasGestor || $user->hasRole('administrador');
+        if ($ehGestorOuAdminQueEscolhe) {
             $consultorId = $request->input('consultor_id');
             if (empty($consultorId)) {
                 return back()->withErrors(['consultor_id' => 'Selecione o consultor responsável pelo empréstimo.'])->withInput();
@@ -393,23 +404,12 @@ class EmprestimoController extends Controller
             $validated['consultor_id'] = (int) $consultorId;
         }
 
-        // Empréstimo retroativo: admin também escolhe consultor; consultor cria com aceite
+        // Empréstimo retroativo: consultor (não gestor/admin) cria com aceite
         if ($isRetroativo) {
             if (!$user->temAcessoOperacao($validated['operacao_id'])) {
                 return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
             }
-            if ($user->hasRole('administrador')) {
-                $consultorId = $request->input('consultor_id');
-                if (empty($consultorId)) {
-                    return back()->withErrors(['consultor_id' => 'Selecione o consultor responsável pelo empréstimo retroativo.'])->withInput();
-                }
-                $consultor = \App\Models\User::find($consultorId);
-                if (!$consultor || !$consultor->temAcessoOperacao($validated['operacao_id'])) {
-                    return back()->withErrors(['consultor_id' => 'O consultor selecionado não pertence a esta operação.'])->withInput();
-                }
-                $validated['consultor_id'] = (int) $consultorId;
-                $validated['is_retroativo'] = true;
-            } elseif (!$ehApenasGestor) {
+            if (!$ehGestorOuAdminQueEscolhe) {
                 // Consultor: ele é o responsável; empréstimo fica aguardando aceite de gestor/admin
                 $validated['consultor_id'] = $user->id;
                 $validated['is_retroativo'] = true;
@@ -417,7 +417,8 @@ class EmprestimoController extends Controller
             } else {
                 $validated['is_retroativo'] = true;
             }
-        } elseif (!$ehApenasGestor) {
+        } elseif (!$ehGestorOuAdminQueEscolhe) {
+            // Apenas consultor (sem gestor/admin): empréstimo normal fica para ele
             $validated['consultor_id'] = $user->id;
         }
 
