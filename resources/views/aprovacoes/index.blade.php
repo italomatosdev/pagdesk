@@ -51,6 +51,7 @@
                                         <th>Valor</th>
                                         <th>Parcelas</th>
                                         <th>Consultor</th>
+                                        <th>Próx. venc.</th>
                                         <th>Data</th>
                                         <th>Ações</th>
                                     </tr>
@@ -64,6 +65,7 @@
                                             <td>R$ {{ number_format($emprestimo->valor_total, 2, ',', '.') }}</td>
                                             <td>{{ $emprestimo->numero_parcelas }}x ({{ ucfirst($emprestimo->frequencia) }})</td>
                                             <td>{{ $emprestimo->consultor->name }}</td>
+                                            <td>{{ $emprestimo->getProximoVencimento()?->format('d/m/Y') ?? '—' }}</td>
                                             <td>{{ $emprestimo->created_at->format('d/m/Y H:i') }}</td>
                                             <td>
                                                 <div class="d-flex gap-2">
@@ -120,7 +122,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="8" class="text-center">Nenhum empréstimo pendente de aprovação.</td>
+                                            <td colspan="9" class="text-center">Nenhum empréstimo pendente de aprovação.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>

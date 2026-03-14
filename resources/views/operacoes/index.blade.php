@@ -17,9 +17,11 @@
                     <div class="card-header">
                         <div class="d-flex align-items-center justify-content-between">
                             <h4 class="card-title mb-0">Lista de Operações</h4>
-                            <a href="{{ route('operacoes.create') }}" class="btn btn-primary">
-                                <i class="bx bx-plus"></i> Nova Operação
-                            </a>
+                            @if(auth()->user()->isSuperAdmin())
+                                <a href="{{ route('operacoes.create') }}" class="btn btn-primary">
+                                    <i class="bx bx-plus"></i> Nova Operação
+                                </a>
+                            @endif
                         </div>
                     </div>
                     <div class="card-body">

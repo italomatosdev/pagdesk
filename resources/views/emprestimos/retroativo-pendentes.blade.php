@@ -51,6 +51,7 @@
                                         <th>Operação</th>
                                         <th>Solicitante</th>
                                         <th>Valor</th>
+                                        <th>Próx. venc.</th>
                                         <th>Data solicitação</th>
                                         <th class="text-end">Ações</th>
                                     </tr>
@@ -68,6 +69,7 @@
                                             <td>{{ $s->emprestimo->operacao->nome ?? '-' }}</td>
                                             <td>{{ $s->solicitante->name ?? '-' }}</td>
                                             <td>R$ {{ number_format($s->emprestimo->valor_total, 2, ',', '.') }}</td>
+                                            <td>{{ $s->emprestimo->getProximoVencimento()?->format('d/m/Y') ?? '—' }}</td>
                                             <td>{{ $s->created_at->format('d/m/Y H:i') }}</td>
                                             <td class="text-end">
                                                 <div class="btn-group btn-group-sm">

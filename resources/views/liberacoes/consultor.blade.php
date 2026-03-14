@@ -47,6 +47,7 @@
                                         <th>Cliente</th>
                                         <th>Operação</th>
                                         <th>Valor</th>
+                                        <th>Próx. venc.</th>
                                         <th>Status</th>
                                         <th>Liberado em</th>
                                         <th>Pago em</th>
@@ -68,6 +69,7 @@
                                             <td class="h6 text-primary">
                                                 R$ {{ number_format($liberacao->valor_liberado, 2, ',', '.') }}
                                             </td>
+                                            <td>{{ $liberacao->emprestimo->getProximoVencimento()?->format('d/m/Y') ?? '—' }}</td>
                                             <td>
                                                 @php
                                                     $badgeClass = match($liberacao->status) {
@@ -137,7 +139,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="10" class="text-center">Nenhuma liberação encontrada.</td>
+                                            <td colspan="11" class="text-center">Nenhuma liberação encontrada.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>

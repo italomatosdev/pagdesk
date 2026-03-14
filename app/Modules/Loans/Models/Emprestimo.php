@@ -2,6 +2,7 @@
 
 namespace App\Modules\Loans\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -109,6 +110,27 @@ class Emprestimo extends Model
     public function getUltimaParcela(): ?Parcela
     {
         return $this->parcelas()->orderByDesc('numero')->orderByDesc('data_vencimento')->first();
+    }
+
+    /**
+     * Data do próximo vencimento: primeira parcela ainda não paga (pendente/atrasada),
+     * ordenada por data_vencimento. Empréstimo de 1 parcela = essa parcela; várias = primeira pendente.
+     */
+    public function getProximoVencimento(): ?Carbon
+    {
+        $quitados = ['paga', 'quitada_garantia'];
+        if ($this->relationLoaded('parcelas')) {
+            $proxima = $this->parcelas
+                ->filter(fn (Parcela $p) => !in_array($p->status, $quitados, true))
+                ->sortBy('data_vencimento')
+                ->first();
+            return $proxima?->data_vencimento;
+        }
+        $p = $this->parcelas()
+            ->whereNotIn('status', $quitados)
+            ->orderBy('data_vencimento')
+            ->first();
+        return $p?->data_vencimento;
     }
 
     /**

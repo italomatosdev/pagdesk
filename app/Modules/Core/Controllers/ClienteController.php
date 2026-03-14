@@ -447,12 +447,13 @@ class ClienteController extends Controller
         if ($isSuperAdmin) {
             $cliente->load([
                 'operationClients.operacao.empresa',
-                'emprestimos.operacao.empresa'
+                'emprestimos.operacao.empresa',
+                'emprestimos.parcelas'
             ]);
         } else {
             $cliente->load([
                 'operationClients' => fn ($q) => $q->whereIn('operacao_id', $operacoesIds)->with(['operacao', 'consultor']),
-                'emprestimos' => fn ($q) => $q->whereIn('operacao_id', $operacoesIds)->with('operacao')
+                'emprestimos' => fn ($q) => $q->whereIn('operacao_id', $operacoesIds)->with(['operacao', 'parcelas'])
             ]);
         }
 
@@ -523,11 +524,33 @@ class ClienteController extends Controller
             return max(0, (float) $p->valor - (float) $p->valor_pago);
         });
 
+        // Totalizadores do cliente (empréstimos ativos no escopo)
+        $idsAtivos = $emprestimosAtivos->pluck('id')->toArray();
+        $totalEmprestado = $emprestimosAtivos->sum('valor_total');
+        $totalAReceber = 0;
+        $totalPago = 0;
+        if (!empty($idsAtivos)) {
+            $totalAReceber = (float) Parcela::whereIn('emprestimo_id', $idsAtivos)
+                ->whereNotIn('status', ['paga', 'quitada_garantia'])
+                ->selectRaw('SUM(valor - COALESCE(valor_pago, 0)) as total')
+                ->value('total');
+            $totalPago = (float) Parcela::whereIn('emprestimo_id', $idsAtivos)
+                ->selectRaw('SUM(COALESCE(valor_pago, 0)) as total')
+                ->value('total');
+        }
+
+        $statsCliente = [
+            'total_emprestado' => $totalEmprestado,
+            'total_a_receber' => $totalAReceber,
+            'total_pago' => $totalPago,
+        ];
+
         return view('clientes.show', compact(
             'cliente',
             'emprestimosPorOperacao',
             'atrasadasPorOperacao',
             'totalAtrasado',
+            'statsCliente',
             'isSuperAdmin'
         ));
     }
