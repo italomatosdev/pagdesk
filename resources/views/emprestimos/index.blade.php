@@ -99,21 +99,31 @@
                     <div class="card-body">
                         <!-- Filtros -->
                         <form method="GET" action="{{ route('emprestimos.index') }}" class="mb-3">
-                            <div class="row g-3">
+                            @php
+                                $statusesFiltro = (array) request('status', []);
+                                $opcoesStatus = [
+                                    'draft' => 'Rascunho',
+                                    'pendente' => 'Pendente',
+                                    'aprovado' => 'Aprovado',
+                                    'ativo' => 'Ativo',
+                                    'finalizado' => 'Finalizado',
+                                    'cancelado' => 'Cancelado',
+                                ];
+                            @endphp
+                            <div class="row g-3 align-items-end mb-2">
                                 <div class="col-md-2">
-                                    <select name="operacao_id" class="form-select">
-                                        <option value="">Todas as Operações</option>
+                                    <label class="form-label small text-muted mb-0">Operação</label>
+                                    <select name="operacao_id" class="form-select form-select-sm">
+                                        <option value="">Todas</option>
                                         @foreach($operacoes as $operacao)
-                                            <option value="{{ $operacao->id }}" 
-                                                    {{ request('operacao_id') == $operacao->id ? 'selected' : '' }}>
-                                                {{ $operacao->nome }}
-                                            </option>
+                                            <option value="{{ $operacao->id }}" {{ request('operacao_id') == $operacao->id ? 'selected' : '' }}>{{ $operacao->nome }}</option>
                                         @endforeach
                                     </select>
                                 </div>
                                 <div class="col-md-2">
-                                    <select name="tipo" class="form-select">
-                                        <option value="">Todos os Tipos</option>
+                                    <label class="form-label small text-muted mb-0">Tipo</label>
+                                    <select name="tipo" class="form-select form-select-sm">
+                                        <option value="">Todos</option>
                                         <option value="dinheiro" {{ request('tipo') == 'dinheiro' ? 'selected' : '' }}>Dinheiro</option>
                                         <option value="price" {{ request('tipo') == 'price' ? 'selected' : '' }}>Price</option>
                                         <option value="empenho" {{ request('tipo') == 'empenho' ? 'selected' : '' }}>Empenho</option>
@@ -123,35 +133,29 @@
                                     </select>
                                 </div>
                                 <div class="col-md-2">
-                                    <select name="status" class="form-select">
-                                        <option value="">Todos os Status</option>
-                                        <option value="draft" {{ request('status') == 'draft' ? 'selected' : '' }}>Rascunho</option>
-                                        <option value="pendente" {{ request('status') == 'pendente' ? 'selected' : '' }}>Pendente</option>
-                                        <option value="aprovado" {{ request('status') == 'aprovado' ? 'selected' : '' }}>Aprovado</option>
-                                        <option value="ativo" {{ request('status') == 'ativo' ? 'selected' : '' }}>Ativo</option>
-                                        <option value="finalizado" {{ request('status') == 'finalizado' ? 'selected' : '' }}>Finalizado</option>
-                                        <option value="cancelado" {{ request('status') == 'cancelado' ? 'selected' : '' }}>Cancelado</option>
-                                    </select>
+                                    <label class="form-label small text-muted mb-0">ID Cliente</label>
+                                    <input type="number" name="cliente_id" class="form-control form-control-sm" placeholder="—" value="{{ request('cliente_id') }}">
                                 </div>
-                                <div class="col-md-2">
-                                    <input type="number" name="cliente_id" class="form-control" 
-                                           placeholder="ID do Cliente" 
-                                           value="{{ request('cliente_id') }}">
-                                </div>
-                                <div class="col-md-2">
-                                    <div class="form-check mt-2">
-                                        <input type="checkbox" name="apenas_atrasadas" value="1" 
-                                               class="form-check-input" id="apenas_atrasadas"
-                                               {{ request('apenas_atrasadas') ? 'checked' : '' }}>
-                                        <label class="form-check-label text-danger" for="apenas_atrasadas">
-                                            <i class="bx bx-error-circle"></i> Com atrasadas
-                                        </label>
+                                <div class="col-auto pb-1">
+                                    <div class="form-check">
+                                        <input type="checkbox" name="apenas_atrasadas" value="1" class="form-check-input" id="apenas_atrasadas" {{ request('apenas_atrasadas') ? 'checked' : '' }}>
+                                        <label class="form-check-label text-danger small" for="apenas_atrasadas"><i class="bx bx-error-circle"></i> Com atrasadas</label>
                                     </div>
                                 </div>
-                                <div class="col-md-2">
-                                    <button type="submit" class="btn btn-primary me-2">
-                                        <i class="bx bx-search"></i> Buscar
-                                    </button>
+                                <div class="col-auto">
+                                    <button type="submit" class="btn btn-primary btn-sm"><i class="bx bx-search"></i> Buscar</button>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-12">
+                                    <span class="text-muted small me-2">Status (vários):</span>
+                                    @foreach($opcoesStatus as $valor => $label)
+                                        <div class="form-check form-check-inline d-inline-block me-3 mb-0">
+                                            <input type="checkbox" name="status[]" value="{{ $valor }}" id="status_{{ $valor }}" class="form-check-input" {{ in_array($valor, $statusesFiltro) ? 'checked' : '' }}>
+                                            <label class="form-check-label small" for="status_{{ $valor }}">{{ $label }}</label>
+                                        </div>
+                                    @endforeach
+                                    <span class="text-muted small">— nenhum = todos</span>
                                 </div>
                             </div>
                         </form>

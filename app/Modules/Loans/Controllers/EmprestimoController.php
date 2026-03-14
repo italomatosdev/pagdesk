@@ -66,8 +66,9 @@ class EmprestimoController extends Controller
             }
         }
 
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
+        $statuses = array_filter((array) $request->input('status', []));
+        if (!empty($statuses)) {
+            $query->whereIn('status', $statuses);
         }
 
         if ($request->filled('tipo')) {
@@ -148,8 +149,9 @@ class EmprestimoController extends Controller
         if ($request->filled('operacao_id') && $user->temAcessoOperacao($request->operacao_id)) {
             $query->where('operacao_id', $request->operacao_id);
         }
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
+        $statusesExport = array_filter((array) $request->input('status', []));
+        if (!empty($statusesExport)) {
+            $query->whereIn('status', $statusesExport);
         }
         if ($request->filled('tipo')) {
             if ($request->tipo === 'outros') {
