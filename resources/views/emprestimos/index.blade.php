@@ -165,7 +165,8 @@
                                         <th>Cliente</th>
                                         <th>Operação</th>
                                         <th>Tipo</th>
-                                        <th>Valor</th>
+                                        <th>Valor (emprestado)</th>
+                                        <th>Valor total (c/ juros)</th>
                                         <th>Parcelas</th>
                                         <th>Status</th>
                                         <th>Consultor</th>
@@ -196,6 +197,7 @@
                                                 </span>
                                             </td>
                                             <td>R$ {{ number_format($emprestimo->valor_total, 2, ',', '.') }}</td>
+                                            <td>R$ {{ number_format($emprestimo->calcularValorTotalComJuros(), 2, ',', '.') }}</td>
                                             <td>{{ $emprestimo->numero_parcelas }}x ({{ ucfirst($emprestimo->frequencia) }})</td>
                                             <td>
                                                 @php
@@ -233,7 +235,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="10" class="text-center">Nenhum empréstimo encontrado.</td>
+                                            <td colspan="11" class="text-center">Nenhum empréstimo encontrado.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>
