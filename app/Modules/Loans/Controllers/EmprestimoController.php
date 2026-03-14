@@ -10,6 +10,7 @@ use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Parcela;
 use App\Modules\Loans\Models\SolicitacaoEmprestimoRetroativo;
 use App\Modules\Loans\Services\EmprestimoService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -338,13 +339,27 @@ class EmprestimoController extends Controller
         $request->merge(['numero_parcelas' => $numeroParcelasRaw]);
 
         $isRetroativo = $request->boolean('is_retroativo');
+        $hojeBrasil = Carbon::today('America/Sao_Paulo')->toDateString();
         $rules = [
             'operacao_id' => 'required|exists:operacoes,id',
             'cliente_id' => 'required|exists:clientes,id',
             'valor_total' => 'required|numeric|min:0.01',
             'numero_parcelas' => 'required|integer|min:1',
             'frequencia' => 'required|in:diaria,semanal,mensal',
-            'data_inicio' => 'required|date' . ($isRetroativo ? '' : '|after_or_equal:today'),
+            'data_inicio' => $isRetroativo
+                ? ['required', 'date']
+                : [
+                    'required',
+                    'date',
+                    function ($attribute, $value, $fail) use ($hojeBrasil) {
+                        $data = $value instanceof \DateTimeInterface
+                            ? $value->format('Y-m-d')
+                            : Carbon::parse($value)->format('Y-m-d');
+                        if ($data < $hojeBrasil) {
+                            $fail('A data de início deve ser igual ou posterior a ' . Carbon::parse($hojeBrasil)->format('d/m/Y') . '.');
+                        }
+                    },
+                ],
             'tipo' => 'required|in:dinheiro,price,empenho,troca_cheque',
             'taxa_juros' => 'nullable|numeric|min:0|max:100',
             'observacoes' => 'nullable|string',
@@ -364,12 +379,26 @@ class EmprestimoController extends Controller
         ];
         $validated = $request->validate($rules);
 
-        // Empréstimo retroativo: gestor/admin criam direto (escolhem consultor); consultor cria com aceite
+        // Gestor (não admin): sempre deve selecionar operação e consultor — empréstimo fica para o consultor
+        $ehApenasGestor = $user->hasRole('gestor') && !$user->hasRole('administrador');
+        if ($ehApenasGestor) {
+            $consultorId = $request->input('consultor_id');
+            if (empty($consultorId)) {
+                return back()->withErrors(['consultor_id' => 'Selecione o consultor responsável pelo empréstimo.'])->withInput();
+            }
+            $consultor = \App\Models\User::find($consultorId);
+            if (!$consultor || !$consultor->temAcessoOperacao($validated['operacao_id'])) {
+                return back()->withErrors(['consultor_id' => 'O consultor selecionado não pertence a esta operação.'])->withInput();
+            }
+            $validated['consultor_id'] = (int) $consultorId;
+        }
+
+        // Empréstimo retroativo: admin também escolhe consultor; consultor cria com aceite
         if ($isRetroativo) {
             if (!$user->temAcessoOperacao($validated['operacao_id'])) {
                 return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
             }
-            if ($user->hasAnyRole(['administrador', 'gestor'])) {
+            if ($user->hasRole('administrador')) {
                 $consultorId = $request->input('consultor_id');
                 if (empty($consultorId)) {
                     return back()->withErrors(['consultor_id' => 'Selecione o consultor responsável pelo empréstimo retroativo.'])->withInput();
@@ -380,15 +409,20 @@ class EmprestimoController extends Controller
                 }
                 $validated['consultor_id'] = (int) $consultorId;
                 $validated['is_retroativo'] = true;
-            } else {
+            } elseif (!$ehApenasGestor) {
                 // Consultor: ele é o responsável; empréstimo fica aguardando aceite de gestor/admin
                 $validated['consultor_id'] = $user->id;
                 $validated['is_retroativo'] = true;
                 $validated['solicitar_aceite_retroativo'] = true;
+            } else {
+                $validated['is_retroativo'] = true;
             }
-        } else {
+        } elseif (!$ehApenasGestor) {
             $validated['consultor_id'] = $user->id;
         }
+
+        // Registrar quem criou o empréstimo (para auditoria; gestor que criou em nome do consultor)
+        $validated['criado_por_user_id'] = $user->id;
 
         // Validação específica para Price: taxa de juros obrigatória
         if ($validated['tipo'] === 'price' && (empty($validated['taxa_juros']) || $validated['taxa_juros'] <= 0)) {
@@ -531,6 +565,7 @@ class EmprestimoController extends Controller
             'cliente',
             'operacao',
             'consultor',
+            'criadoPor',
             'aprovador',
             'parcelas' => function ($query) {
                 $query->orderBy('numero');

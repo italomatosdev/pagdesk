@@ -16,6 +16,7 @@ class Emprestimo extends Model
         'operacao_id',
         'cliente_id',
         'consultor_id',
+        'criado_por_user_id',
         'valor_total',
         'numero_parcelas',
         'frequencia',
@@ -75,6 +76,14 @@ class Emprestimo extends Model
     public function consultor()
     {
         return $this->belongsTo(\App\Models\User::class, 'consultor_id');
+    }
+
+    /**
+     * Relacionamento: Usuário que criou o registro (gestor ou consultor)
+     */
+    public function criadoPor()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'criado_por_user_id');
     }
 
     /**

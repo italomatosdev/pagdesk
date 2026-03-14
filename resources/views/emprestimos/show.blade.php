@@ -210,6 +210,12 @@
                             <div class="col-md-6 mb-3">
                                 <strong>Consultor:</strong> {{ $emprestimo->consultor->name }}
                             </div>
+                            @if($emprestimo->criadoPor && $emprestimo->criado_por_user_id !== $emprestimo->consultor_id)
+                                <div class="col-md-6 mb-3">
+                                    <strong>Criado por:</strong> {{ $emprestimo->criadoPor->name }}
+                                    <small class="text-muted">(gestor/admin criou em nome do consultor)</small>
+                                </div>
+                            @endif
                             @if($emprestimo->aprovado_por)
                                 <div class="col-md-6 mb-3">
                                     <strong>Aprovado por:</strong> {{ $emprestimo->aprovador->name }}
