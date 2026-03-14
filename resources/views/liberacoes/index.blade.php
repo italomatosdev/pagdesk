@@ -215,50 +215,6 @@
                                                         <i class="bx bx-check"></i> Liberar
                                                     </button>
                                                 </div>
-
-                                                <!-- Modal Liberar Dinheiro -->
-                                                <div class="modal fade" id="liberarModal{{ $liberacao->id }}" tabindex="-1">
-                                                    <div class="modal-dialog">
-                                                        <div class="modal-content">
-                                                            <form action="{{ route('liberacoes.liberar', $liberacao->id) }}" 
-                                                                  method="POST" enctype="multipart/form-data"
-                                                                  class="form-liberar-dinheiro"
-                                                                  data-valor="{{ number_format($liberacao->valor_liberado, 2, ',', '.') }}"
-                                                                  data-consultor="{{ $liberacao->consultor->name }}"
-                                                                  data-cliente="{{ $liberacao->emprestimo->cliente->nome }}"
-                                                                  data-emprestimo-id="{{ $liberacao->emprestimo_id }}">
-                                                                @csrf
-                                                                <div class="modal-header">
-                                                                    <h5 class="modal-title">Liberar Dinheiro</h5>
-                                                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                                                </div>
-                                                                <div class="modal-body">
-                                                                    <div class="alert alert-info">
-                                                                        <strong>Valor:</strong> R$ {{ number_format($liberacao->valor_liberado, 2, ',', '.') }}<br>
-                                                                        <strong>Consultor:</strong> {{ $liberacao->consultor->name }}<br>
-                                                                        <strong>Cliente:</strong> {{ $liberacao->emprestimo->cliente->nome }}<br>
-                                                                        <strong>Empréstimo:</strong> #{{ $liberacao->emprestimo_id }}
-                                                                    </div>
-                                                                    <div class="mb-3">
-                                                                        <label class="form-label">Comprovante (opcional)</label>
-                                                                        <input type="file" name="comprovante" class="form-control" 
-                                                                               accept=".pdf,.jpg,.jpeg,.png">
-                                                                        <small class="text-muted">Formatos aceitos: PDF, JPG, PNG (máx. 2MB)</small>
-                                                                    </div>
-                                                                    <div class="mb-3">
-                                                                        <label class="form-label">Observações (opcional)</label>
-                                                                        <textarea name="observacoes" class="form-control" rows="3" 
-                                                                                  placeholder="Ex: Transferência realizada, comprovante anexado, etc."></textarea>
-                                                                    </div>
-                                                                </div>
-                                                                <div class="modal-footer">
-                                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                                                                    <button type="submit" class="btn btn-success">Confirmar Liberação</button>
-                                                                </div>
-                                                            </form>
-                                                        </div>
-                                                    </div>
-                                                </div>
                                             </td>
                                         </tr>
                                     @empty
@@ -276,6 +232,52 @@
                 </div>
             </div>
         </div>
+
+        <!-- Modais de liberação individual (fora da table para não quebrar no mobile) -->
+        @foreach($liberacoes as $liberacao)
+        <div class="modal fade" id="liberarModal{{ $liberacao->id }}" tabindex="-1" aria-labelledby="liberarModalLabel{{ $liberacao->id }}" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <form action="{{ route('liberacoes.liberar', $liberacao->id) }}" 
+                          method="POST" enctype="multipart/form-data"
+                          class="form-liberar-dinheiro"
+                          data-valor="{{ number_format($liberacao->valor_liberado, 2, ',', '.') }}"
+                          data-consultor="{{ $liberacao->consultor->name }}"
+                          data-cliente="{{ $liberacao->emprestimo->cliente->nome }}"
+                          data-emprestimo-id="{{ $liberacao->emprestimo_id }}">
+                        @csrf
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="liberarModalLabel{{ $liberacao->id }}">Liberar Dinheiro</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-info">
+                                <strong>Valor:</strong> R$ {{ number_format($liberacao->valor_liberado, 2, ',', '.') }}<br>
+                                <strong>Consultor:</strong> {{ $liberacao->consultor->name }}<br>
+                                <strong>Cliente:</strong> {{ $liberacao->emprestimo->cliente->nome }}<br>
+                                <strong>Empréstimo:</strong> #{{ $liberacao->emprestimo_id }}
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Comprovante (opcional)</label>
+                                <input type="file" name="comprovante" class="form-control" 
+                                       accept=".pdf,.jpg,.jpeg,.png">
+                                <small class="text-muted">Formatos aceitos: PDF, JPG, PNG (máx. 2MB)</small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Observações (opcional)</label>
+                                <textarea name="observacoes" class="form-control" rows="3" 
+                                          placeholder="Ex: Transferência realizada, comprovante anexado, etc."></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-success">Confirmar Liberação</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        @endforeach
 
         <!-- Modal Liberar em Lote -->
         <div class="modal fade" id="modalLiberarLote" tabindex="-1">
