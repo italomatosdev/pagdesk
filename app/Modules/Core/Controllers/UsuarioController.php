@@ -39,7 +39,7 @@ class UsuarioController extends Controller
 
     /**
      * Listar usuários
-     * Super Admin vê todos; administrador vê apenas usuários da própria empresa.
+     * Super Admin vê todos; administrador/gestor vê apenas usuários das mesmas operações.
      */
     public function index(): View
     {
@@ -48,17 +48,11 @@ class UsuarioController extends Controller
 
         // Apenas Super Admin vê todos os usuários do sistema
         if (!$user->isSuperAdmin()) {
-            $empresaId = $user->empresa_id;
-            // Se não tem empresa_id, tenta obter pela primeira operação vinculada
-            if ($empresaId === null && $user->operacoes()->exists()) {
-                $primeiraOperacao = $user->operacoes()->first();
-                $empresaId = $primeiraOperacao?->empresa_id;
-            }
-            if ($empresaId !== null) {
-                $query->where('empresa_id', $empresaId);
-            } else {
-                // Administrador sem empresa e sem operação: não listar usuários de outras empresas
+            $operacoesIds = $user->getOperacoesIds();
+            if (empty($operacoesIds)) {
                 $query->whereRaw('1 = 0');
+            } else {
+                $query->whereHas('operacoes', fn ($q) => $q->whereIn('operacoes.id', $operacoesIds));
             }
         }
 
@@ -68,12 +62,17 @@ class UsuarioController extends Controller
     }
 
     /**
-     * Mostrar formulário para criar usuário (dentro da empresa do administrador)
+     * Mostrar formulário para criar usuário (nas operações do administrador/gestor)
      */
     public function create(): View
     {
         $user = auth()->user();
-        $empresa = $user->empresa ?? $user->operacoes()->first()?->empresa;
+        $operacoesIds = $user->getOperacoesIds();
+        if (empty($operacoesIds)) {
+            abort(403, 'Sua conta não está vinculada a nenhuma operação. Entre em contato com o suporte.');
+        }
+
+        $empresa = $user->operacoes()->first()?->empresa;
         if (!$empresa) {
             abort(403, 'Sua conta não está vinculada a uma empresa. Entre em contato com o suporte.');
         }
@@ -83,7 +82,7 @@ class UsuarioController extends Controller
         if ($user->hasRole('gestor') && !$user->hasRole('administrador')) {
             $roles = $roles->filter(fn ($r) => $r->name !== 'administrador');
         }
-        $operacoes = Operacao::where('empresa_id', $empresa->id)
+        $operacoes = Operacao::whereIn('id', $operacoesIds)
             ->where('ativo', true)
             ->orderBy('nome')
             ->get();
@@ -92,12 +91,17 @@ class UsuarioController extends Controller
     }
 
     /**
-     * Criar usuário (vinculado à empresa do administrador e às operações selecionadas)
+     * Criar usuário (vinculado às operações do administrador/gestor)
      */
     public function store(Request $request): RedirectResponse
     {
         $user = auth()->user();
-        $empresa = $user->empresa ?? $user->operacoes()->first()?->empresa;
+        $operacoesPermitidas = $user->getOperacoesIds();
+        if (empty($operacoesPermitidas)) {
+            abort(403, 'Sua conta não está vinculada a nenhuma operação.');
+        }
+
+        $empresa = $user->operacoes()->first()?->empresa;
         if (!$empresa) {
             abort(403, 'Sua conta não está vinculada a uma empresa.');
         }
@@ -118,14 +122,10 @@ class UsuarioController extends Controller
         }
 
         try {
-            // Validar que as operações pertencem à empresa do administrador
+            // Validar que as operações são as que o administrador/gestor possui
             $operacoesIds = $validated['operacoes'] ?? [];
             if (!empty($operacoesIds)) {
-                $operacoesValidas = Operacao::where('empresa_id', $empresa->id)
-                    ->whereIn('id', $operacoesIds)
-                    ->pluck('id')
-                    ->toArray();
-                $operacoesIds = array_values(array_intersect($operacoesIds, $operacoesValidas));
+                $operacoesIds = array_values(array_intersect($operacoesIds, $operacoesPermitidas));
             }
 
             $usuario = User::create([
@@ -149,7 +149,7 @@ class UsuarioController extends Controller
     }
 
     /**
-     * Mostrar detalhes do usuário
+     * Mostrar detalhes do usuário (apenas se pertencer às mesmas operações)
      */
     public function show(int $id): View
     {
@@ -157,11 +157,11 @@ class UsuarioController extends Controller
         $user = auth()->user();
 
         if (!$user->isSuperAdmin()) {
-            $empresaId = $user->empresa_id ?? $user->operacoes()->first()?->empresa_id;
-            if ($empresaId !== null) {
-                $query->where('empresa_id', $empresaId);
-            } else {
+            $operacoesIds = $user->getOperacoesIds();
+            if (empty($operacoesIds)) {
                 $query->whereRaw('1 = 0');
+            } else {
+                $query->whereHas('operacoes', fn ($q) => $q->whereIn('operacoes.id', $operacoesIds));
             }
         }
 
@@ -174,11 +174,11 @@ class UsuarioController extends Controller
 
         $operacoesQuery = Operacao::where('ativo', true);
         if (!$user->isSuperAdmin()) {
-            $empresaId = $user->empresa_id ?? $user->operacoes()->first()?->empresa_id;
-            if ($empresaId !== null) {
-                $operacoesQuery->where('empresa_id', $empresaId);
-            } else {
+            $operacoesIds = $user->getOperacoesIds();
+            if (empty($operacoesIds)) {
                 $operacoesQuery->whereRaw('1 = 0');
+            } else {
+                $operacoesQuery->whereIn('id', $operacoesIds);
             }
         }
         $operacoes = $operacoesQuery->orderBy('nome')->get();
@@ -203,8 +203,10 @@ class UsuarioController extends Controller
 
         try {
             if (!$user->isSuperAdmin()) {
-                $empresaId = $user->empresa_id ?? $user->operacoes()->first()?->empresa_id;
-                $query = $empresaId !== null ? User::where('empresa_id', $empresaId) : User::whereRaw('1 = 0');
+                $operacoesIds = $user->getOperacoesIds();
+                $query = empty($operacoesIds)
+                    ? User::whereRaw('1 = 0')
+                    : User::whereHas('operacoes', fn ($q) => $q->whereIn('operacoes.id', $operacoesIds));
                 $query->findOrFail($id);
             }
 
@@ -228,8 +230,10 @@ class UsuarioController extends Controller
         try {
             $user = auth()->user();
             if (!$user->isSuperAdmin()) {
-                $empresaId = $user->empresa_id ?? $user->operacoes()->first()?->empresa_id;
-                $query = $empresaId !== null ? User::where('empresa_id', $empresaId) : User::whereRaw('1 = 0');
+                $operacoesIds = $user->getOperacoesIds();
+                $query = empty($operacoesIds)
+                    ? User::whereRaw('1 = 0')
+                    : User::whereHas('operacoes', fn ($q) => $q->whereIn('operacoes.id', $operacoesIds));
                 $query->findOrFail($id);
             }
 
@@ -253,26 +257,22 @@ class UsuarioController extends Controller
 
         try {
             $user = auth()->user();
-            $empresaId = $user->empresa_id ?? $user->operacoes()->first()?->empresa_id;
+            $operacoesPermitidas = $user->getOperacoesIds();
 
             $query = User::query();
             if (!$user->isSuperAdmin()) {
-                if ($empresaId !== null) {
-                    $query->where('empresa_id', $empresaId);
-                } else {
+                if (empty($operacoesPermitidas)) {
                     $query->whereRaw('1 = 0');
+                } else {
+                    $query->whereHas('operacoes', fn ($q) => $q->whereIn('operacoes.id', $operacoesPermitidas));
                 }
             }
 
             $usuario = $query->findOrFail($id);
             $operacoesIds = $validated['operacoes'] ?? [];
 
-            if (!$user->isSuperAdmin() && $empresaId !== null && !empty($operacoesIds)) {
-                $operacoesValidas = Operacao::where('empresa_id', $empresaId)
-                    ->whereIn('id', $operacoesIds)
-                    ->pluck('id')
-                    ->toArray();
-                $operacoesIds = array_intersect($operacoesIds, $operacoesValidas);
+            if (!$user->isSuperAdmin() && !empty($operacoesIds)) {
+                $operacoesIds = array_values(array_intersect($operacoesIds, $operacoesPermitidas));
             }
             
             // Sincronizar operações (adiciona novas, remove as que não estão na lista)
@@ -304,27 +304,15 @@ class UsuarioController extends Controller
             $q->whereIn('name', ['consultor', 'gestor']);
         });
 
-        // Filtrar por empresa do usuário logado (exceto super admin que vê todos)
+        // Filtrar por operações do usuário logado (administrador é da operação, não da empresa)
         if (!$user->isSuperAdmin()) {
-            $empresaId = $user->empresa_id ?? $user->operacoes()->first()?->empresa_id;
-            if ($empresaId !== null) {
-                $query->where('empresa_id', $empresaId);
-            } else {
-                return response()->json(['results' => []]);
-            }
-        }
-
-        // Filtrar por operações do usuário logado (exceto administradores)
-        if (!$user->hasRole('administrador')) {
             $operacoesIds = $user->getOperacoesIds();
-            if (!empty($operacoesIds)) {
-                $query->whereHas('operacoes', function($q) use ($operacoesIds) {
-                    $q->whereIn('operacoes.id', $operacoesIds);
-                });
-            } else {
-                // Se não tem operações vinculadas, retorna vazio
+            if (empty($operacoesIds)) {
                 return response()->json(['results' => []]);
             }
+            $query->whereHas('operacoes', function ($q) use ($operacoesIds) {
+                $q->whereIn('operacoes.id', $operacoesIds);
+            });
         }
 
         // Buscar por nome ou email
