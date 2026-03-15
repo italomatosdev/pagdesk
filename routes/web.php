@@ -158,6 +158,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::get('/{id}', [App\Modules\Loans\Controllers\EmprestimoController::class, 'show'])->name('show');
         Route::post('/{id}/renovar', [App\Modules\Loans\Controllers\EmprestimoController::class, 'renovar'])->name('renovar');
         Route::post('/{id}/cancelar', [App\Modules\Loans\Controllers\EmprestimoController::class, 'cancelar'])->name('cancelar');
+        Route::post('/{id}/cancelar-com-desfazimento', [App\Modules\Loans\Controllers\EmprestimoController::class, 'cancelarComDesfazimento'])->name('cancelar-com-desfazimento');
         Route::post('/{id}/garantias/{garantiaId}/executar', [App\Modules\Loans\Controllers\EmprestimoController::class, 'executarGarantia'])->name('garantias.executar');
         Route::post('/{id}/parcelas-retroativo', [App\Modules\Loans\Controllers\EmprestimoController::class, 'registrarParcelasPagasRetroativo'])->name('parcelas-retroativo');
         

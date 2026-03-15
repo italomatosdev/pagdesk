@@ -741,6 +741,48 @@ class EmprestimoController extends Controller
     }
 
     /**
+     * Cancelar empréstimo com desfazimento de todos os pagamentos (gestor ou administrador).
+     * Permite cancelar mesmo com parcelas pagas ou empréstimo finalizado.
+     */
+    public function cancelarComDesfazimento(Request $request, int $id): RedirectResponse
+    {
+        $user = auth()->user();
+
+        if (!$user->hasAnyRole(['administrador', 'gestor'])) {
+            abort(403, 'Apenas gestores e administradores podem cancelar empréstimo com desfazimento.');
+        }
+
+        $request->validate([
+            'motivo_cancelamento' => 'required|string|min:10|max:1000',
+        ], [
+            'motivo_cancelamento.required' => 'O motivo do cancelamento é obrigatório.',
+            'motivo_cancelamento.min' => 'O motivo deve ter pelo menos 10 caracteres.',
+            'motivo_cancelamento.max' => 'O motivo não pode ter mais de 1000 caracteres.',
+        ]);
+
+        if (!$user->isSuperAdmin()) {
+            $emprestimo = Emprestimo::findOrFail($id);
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array($emprestimo->operacao_id, $opsIds)) {
+                abort(403, 'Você não tem acesso à operação deste empréstimo.');
+            }
+        }
+
+        try {
+            $this->emprestimoService->cancelarComDesfazimento($id, $user->id, $request->motivo_cancelamento);
+
+            return redirect()
+                ->route('emprestimos.show', $id)
+                ->with('success', 'Empréstimo cancelado com sucesso. Todos os pagamentos e movimentações foram desfeitos.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors());
+        } catch (\Exception $e) {
+            \Log::error('Erro ao cancelar empréstimo com desfazimento: ' . $e->getMessage());
+            return back()->with('error', 'Erro ao cancelar empréstimo: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Executar garantia de empréstimo tipo empenho
      */
     public function executarGarantia(Request $request, int $id, int $garantiaId): RedirectResponse
