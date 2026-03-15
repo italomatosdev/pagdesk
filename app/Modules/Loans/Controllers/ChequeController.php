@@ -3,6 +3,7 @@
 namespace App\Modules\Loans\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Core\Models\Operacao;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\EmprestimoCheque;
 use App\Modules\Loans\Services\ChequeService;
@@ -26,12 +27,31 @@ class ChequeController extends Controller
      */
     public function index(Request $request): View
     {
+        $user = auth()->user();
         $query = EmprestimoCheque::with(['emprestimo.cliente', 'emprestimo.operacao'])
             ->orderBy('data_vencimento')
             ->orderBy('id');
 
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (!empty($opsIds)) {
+                $query->whereHas('emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+
+        $operacaoId = $request->input('operacao_id');
+        if ($operacaoId !== null && $operacaoId !== '') {
+            $operacaoId = (int) $operacaoId;
+            if ($user->isSuperAdmin() || in_array($operacaoId, $user->getOperacoesIds(), true)) {
+                $query->whereHas('emprestimo', fn ($q) => $q->where('operacao_id', $operacaoId));
+            }
+        }
+
         $filtros = [
             'status' => $request->input('status'),
+            'operacao_id' => $operacaoId,
             'data_vencimento_de' => $request->input('data_vencimento_de'),
             'data_vencimento_ate' => $request->input('data_vencimento_ate'),
         ];
@@ -49,11 +69,20 @@ class ChequeController extends Controller
         }
 
         $totais = (clone $query)->reorder()->selectRaw('COUNT(*) as total, COALESCE(SUM(valor_cheque), 0) as valor_bruto, COALESCE(SUM(valor_liquido), 0) as valor_liquido')->first();
-        $cheques = $query->paginate(20);
+        $cheques = $query->paginate(20)->withQueryString();
+
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
+        } else {
+            $opsIds = $user->getOperacoesIds();
+            $operacoes = !empty($opsIds)
+                ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
+                : collect([]);
+        }
 
         $titulo = 'Cheques';
 
-        return view('cheques.index', compact('cheques', 'filtros', 'titulo', 'totais'));
+        return view('cheques.index', compact('cheques', 'filtros', 'titulo', 'totais', 'operacoes'));
     }
 
     /**
@@ -61,6 +90,7 @@ class ChequeController extends Controller
      */
     public function hoje(Request $request): View
     {
+        $user = auth()->user();
         $hoje = Carbon::today();
         $dataDe = $request->input('data_vencimento_de');
         $dataAte = $request->input('data_vencimento_ate');
@@ -68,6 +98,23 @@ class ChequeController extends Controller
         $query = EmprestimoCheque::with(['emprestimo.cliente', 'emprestimo.operacao'])
             ->orderBy('data_vencimento')
             ->orderBy('id');
+
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (!empty($opsIds)) {
+                $query->whereHas('emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+
+        $operacaoId = $request->input('operacao_id');
+        if ($operacaoId !== null && $operacaoId !== '') {
+            $operacaoId = (int) $operacaoId;
+            if ($user->isSuperAdmin() || in_array($operacaoId, $user->getOperacoesIds(), true)) {
+                $query->whereHas('emprestimo', fn ($q) => $q->where('operacao_id', $operacaoId));
+            }
+        }
 
         // Se o usuário informou filtro de data, usa o intervalo; senão filtra só por "hoje"
         if (!empty($dataDe) || !empty($dataAte)) {
@@ -79,6 +126,7 @@ class ChequeController extends Controller
             }
             $filtros = [
                 'status' => $request->input('status'),
+                'operacao_id' => $operacaoId,
                 'data_vencimento_de' => $dataDe,
                 'data_vencimento_ate' => $dataAte,
             ];
@@ -86,6 +134,7 @@ class ChequeController extends Controller
             $query->whereDate('data_vencimento', $hoje);
             $filtros = [
                 'status' => $request->input('status'),
+                'operacao_id' => $operacaoId,
                 'data_vencimento_de' => $hoje->format('Y-m-d'),
                 'data_vencimento_ate' => $hoje->format('Y-m-d'),
             ];
@@ -96,11 +145,20 @@ class ChequeController extends Controller
         }
 
         $totais = (clone $query)->reorder()->selectRaw('COUNT(*) as total, COALESCE(SUM(valor_cheque), 0) as valor_bruto, COALESCE(SUM(valor_liquido), 0) as valor_liquido')->first();
-        $cheques = $query->paginate(20);
+        $cheques = $query->paginate(20)->withQueryString();
+
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
+        } else {
+            $opsIds = $user->getOperacoesIds();
+            $operacoes = !empty($opsIds)
+                ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
+                : collect([]);
+        }
 
         $titulo = 'Cheques de Hoje';
 
-        return view('cheques.index', compact('cheques', 'filtros', 'titulo', 'totais'));
+        return view('cheques.index', compact('cheques', 'filtros', 'titulo', 'totais', 'operacoes'));
     }
 
     /**
@@ -124,6 +182,12 @@ class ChequeController extends Controller
         $user = auth()->user();
         if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             return back()->with('error', 'Você não tem permissão para adicionar cheques a este empréstimo.');
+        }
+        if ($user->hasAnyRole(['administrador', 'gestor']) && !$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                return back()->with('error', 'Você não tem permissão para esta operação.');
+            }
         }
 
         $validated = $request->validate([
@@ -163,6 +227,12 @@ class ChequeController extends Controller
         if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             return back()->with('error', 'Você não tem permissão para editar este cheque.');
         }
+        if ($user->hasAnyRole(['administrador', 'gestor']) && !$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                return back()->with('error', 'Você não tem permissão para esta operação.');
+            }
+        }
 
         $validated = $request->validate([
             'banco' => 'sometimes|required|string|max:100',
@@ -201,6 +271,12 @@ class ChequeController extends Controller
         if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             return back()->with('error', 'Você não tem permissão para excluir este cheque.');
         }
+        if ($user->hasAnyRole(['administrador', 'gestor']) && !$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                return back()->with('error', 'Você não tem permissão para esta operação.');
+            }
+        }
 
         try {
             $this->chequeService->deletar($chequeId);
@@ -224,6 +300,12 @@ class ChequeController extends Controller
         $user = auth()->user();
         if (!$user->hasAnyRole(['administrador', 'gestor'])) {
             return back()->with('error', 'Apenas administradores e gestores podem marcar cheques como depositados.');
+        }
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                return back()->with('error', 'Você não tem permissão para esta operação.');
+            }
         }
 
         $validated = $request->validate([
@@ -262,6 +344,12 @@ class ChequeController extends Controller
         if (!$user->hasAnyRole(['administrador', 'gestor'])) {
             return back()->with('error', 'Apenas administradores e gestores podem marcar cheques como compensados.');
         }
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                return back()->with('error', 'Você não tem permissão para esta operação.');
+            }
+        }
 
         $validated = $request->validate([
             'observacoes' => 'nullable|string|max:1000',
@@ -298,6 +386,12 @@ class ChequeController extends Controller
         $user = auth()->user();
         if (!$user->hasAnyRole(['administrador', 'gestor'])) {
             return back()->with('error', 'Apenas administradores e gestores podem marcar cheques como devolvidos.');
+        }
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                return back()->with('error', 'Você não tem permissão para esta operação.');
+            }
         }
 
         $validated = $request->validate([
@@ -346,6 +440,12 @@ class ChequeController extends Controller
             return redirect()->route('emprestimos.show', $emprestimo->id)
                 ->with('error', 'Apenas administradores e gestores podem registrar pagamento.');
         }
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                abort(403, 'Acesso negado a esta operação.');
+            }
+        }
 
         return view('cheques.pagar', compact('cheque', 'emprestimo'));
     }
@@ -362,6 +462,12 @@ class ChequeController extends Controller
         $user = auth()->user();
         if (!$user->hasAnyRole(['administrador', 'gestor'])) {
             return back()->with('error', 'Apenas administradores e gestores podem registrar pagamento em dinheiro.');
+        }
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                return back()->with('error', 'Você não tem permissão para esta operação.');
+            }
         }
 
         $validated = $request->validate([
@@ -414,6 +520,12 @@ class ChequeController extends Controller
         $user = auth()->user();
         if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             return back()->with('error', 'Você não tem permissão para substituir este cheque.');
+        }
+        if ($user->hasAnyRole(['administrador', 'gestor']) && !$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                return back()->with('error', 'Você não tem permissão para esta operação.');
+            }
         }
 
         $validated = $request->validate([
