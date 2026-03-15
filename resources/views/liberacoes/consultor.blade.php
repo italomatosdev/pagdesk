@@ -21,7 +21,17 @@
                         <!-- Filtros -->
                         <form method="GET" action="{{ route('liberacoes.minhas') }}" class="mb-3">
                             <div class="row g-3">
-                                <div class="col-md-4">
+                                <div class="col-md-3">
+                                    <label class="form-label">Operação</label>
+                                    <select name="operacao_id" class="form-select">
+                                        <option value="">Todas as Operações</option>
+                                        @foreach($operacoes ?? [] as $op)
+                                            <option value="{{ $op->id }}" {{ (string)($operacaoId ?? '') === (string)$op->id ? 'selected' : '' }}>{{ $op->nome }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Status</label>
                                     <select name="status" class="form-select">
                                         <option value="">Todos os Status</option>
                                         <option value="aguardando" {{ $status == 'aguardando' ? 'selected' : '' }}>Aguardando</option>
@@ -29,7 +39,7 @@
                                         <option value="pago_ao_cliente" {{ $status == 'pago_ao_cliente' ? 'selected' : '' }}>Pago ao Cliente</option>
                                     </select>
                                 </div>
-                                <div class="col-md-2">
+                                <div class="col-md-2 d-flex align-items-end">
                                     <button type="submit" class="btn btn-primary">
                                         <i class="bx bx-search"></i> Filtrar
                                     </button>
