@@ -32,20 +32,19 @@ class KanbanBoardController extends Controller
         
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
 
-        // Validar se o usuário tem acesso à operação selecionada
-        if ($operacaoId && !$user->hasRole('administrador') && !$user->temAcessoOperacao($operacaoId)) {
-            $operacaoId = null;
+        // Validar se o usuário tem acesso à operação selecionada (apenas operações do usuário)
+        if ($operacaoId) {
+            $operacoesIds = $user->getOperacoesIds();
+            if (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds, true)) {
+                $operacaoId = null;
+            }
         }
 
-        // Buscar operações disponíveis
-        if ($user->hasRole('administrador')) {
-            $operacoes = Operacao::where('ativo', true)->get();
-        } else {
-            $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds) 
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
-                : collect([]);
-        }
+        // Operações disponíveis no select: apenas as do usuário (Super Admin não acessa Kanban)
+        $operacoesIds = $user->getOperacoesIds();
+        $operacoes = !empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
 
         // Buscar pendências
         $pendencias = $this->kanbanService->buscarPendencias($operacaoId, $user);

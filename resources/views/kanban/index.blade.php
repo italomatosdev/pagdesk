@@ -16,7 +16,7 @@
                 <div class="card">
                     <div class="card-body">
                         <form method="GET" action="{{ route('kanban.index') }}" class="d-flex gap-2 align-items-end flex-wrap">
-                            @if($operacoes->count() > 1)
+                            @if($operacoes->isNotEmpty())
                             <div class="flex-grow-1" style="min-width: 200px;">
                                 <label for="operacao_id" class="form-label">Filtrar por Operação</label>
                                 <select name="operacao_id" id="operacao_id" class="form-select">
