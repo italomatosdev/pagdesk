@@ -439,8 +439,7 @@ class SettlementService
             $query->where('consultor_id', $consultorId);
         }
 
-        // Aplicar filtro de operações do usuário (exceto administradores)
-        if ($user && !$user->hasRole('administrador')) {
+        if ($user) {
             $operacoesIds = $user->getOperacoesIds();
             if (!empty($operacoesIds)) {
                 $query->whereIn('operacao_id', $operacoesIds);
@@ -449,7 +448,6 @@ class SettlementService
             }
         }
 
-        // Filtrar por operação
         if ($operacaoId) {
             $query->where('operacao_id', $operacaoId);
         }
@@ -481,14 +479,11 @@ class SettlementService
     {
         $query = Settlement::where('status', 'enviado');
 
-        // Aplicar filtro de operações do usuário (exceto administradores)
-        if (!$user->hasRole('administrador')) {
-            $operacoesIds = $user->getOperacoesIds();
-            if (!empty($operacoesIds)) {
-                $query->whereIn('operacao_id', $operacoesIds);
-            } else {
-                return 0;
-            }
+        $operacoesIds = $user->getOperacoesIds();
+        if (!empty($operacoesIds)) {
+            $query->whereIn('operacao_id', $operacoesIds);
+        } else {
+            return 0;
         }
 
         return $query->count();
@@ -506,13 +501,11 @@ class SettlementService
         $query = Settlement::with(['operacao', 'conferidor', 'validador', 'recebedor'])
             ->where('consultor_id', $consultorId);
 
-        // Aplicar filtro de operações do usuário (exceto administradores)
-        if ($user && !$user->hasRole('administrador')) {
+        if ($user) {
             $operacoesIds = $user->getOperacoesIds();
             if (!empty($operacoesIds)) {
                 $query->whereIn('operacao_id', $operacoesIds);
             } else {
-                // Se não tem operações vinculadas, retorna vazio
                 $query->whereRaw('1 = 0');
             }
         }

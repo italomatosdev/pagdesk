@@ -20,6 +20,18 @@
                         @csrf
                         @method('PUT')
                         <div class="mb-3">
+                            <label class="form-label">Operação</label>
+                            <select name="operacao_id" class="form-select">
+                                <option value="" {{ old('operacao_id', $categoria->operacao_id) === null || old('operacao_id', $categoria->operacao_id) === '' ? 'selected' : '' }}>Compartilhada (todas)</option>
+                                @foreach($operacoes ?? [] as $op)
+                                    <option value="{{ $op->id }}" {{ old('operacao_id', $categoria->operacao_id) == $op->id ? 'selected' : '' }}>{{ $op->nome }}</option>
+                                @endforeach
+                            </select>
+                            @error('operacao_id')
+                                <div class="text-danger">{{ $message }}</div>
+                            @enderror
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label">Nome <span class="text-danger">*</span></label>
                             <input type="text" name="nome" class="form-control" value="{{ old('nome', $categoria->nome) }}" maxlength="100" required>
                             @error('nome')

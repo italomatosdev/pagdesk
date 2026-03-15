@@ -31,25 +31,17 @@ class FechamentoCaixaController extends Controller
             abort(403, 'Super Admin não pode acessar Fechamento de Caixa.');
         }
 
-        // Operações disponíveis
-        if ($user->hasRole('administrador')) {
-            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
-        } else {
-            $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
-                : collect([]);
-        }
+        $operacoesIds = $user->getOperacoesIds();
+        $operacoes = !empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
 
         if ($operacoes->isEmpty()) {
             abort(403, 'Você não tem acesso a nenhuma operação.');
         }
 
-        // Operação selecionada
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : $operacoes->first()->id;
-        
-        // Validar acesso à operação
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($operacaoId)) {
+        if (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds, true)) {
             $operacaoId = $operacoes->first()->id;
         }
 
@@ -113,7 +105,8 @@ class FechamentoCaixaController extends Controller
                 abort(403, 'Acesso negado.');
             }
         } else {
-            if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($settlement->operacao_id)) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $settlement->operacao_id, $opsIds, true)) {
                 abort(403, 'Acesso negado.');
             }
         }
@@ -190,8 +183,8 @@ class FechamentoCaixaController extends Controller
             }
         }
 
-        // Validar acesso à operação
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($operacaoId)) {
+        $opsIds = $user->getOperacoesIds();
+        if (empty($opsIds) || !in_array($operacaoId, $opsIds, true)) {
             return back()->with('error', 'Você não tem acesso a esta operação.');
         }
 

@@ -17,6 +17,7 @@ class CategoriaMovimentacao extends Model
         'ativo',
         'ordem',
         'empresa_id',
+        'operacao_id',
     ];
 
     protected $casts = [
@@ -36,6 +37,11 @@ class CategoriaMovimentacao extends Model
     public function isDespesa(): bool
     {
         return $this->tipo === 'despesa';
+    }
+
+    public function operacao()
+    {
+        return $this->belongsTo(\App\Modules\Core\Models\Operacao::class, 'operacao_id');
     }
 
     public function movimentacoes()

@@ -46,29 +46,21 @@ class CashController extends Controller
             $consultorId = $consultorIdInput ? (int) $consultorIdInput : null;
         }
 
+        $operacoesIds = $user->getOperacoesIds();
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        
-        // Validar se o usuário tem acesso à operação selecionada
-        if ($operacaoId && !$user->hasRole('administrador') && !$user->temAcessoOperacao($operacaoId)) {
-            $operacaoId = null; // Resetar se não tiver acesso
+        if ($operacaoId !== null && (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds, true))) {
+            $operacaoId = null;
         }
-        
+
         $dataInicio = $request->input('data_inicio');
         $dataFim = $request->input('data_fim');
         $referenciaTipo = $request->input('referencia_tipo');
 
-        // Aplicar filtro de operações antes de chamar o service
         $query = \App\Modules\Cash\Models\CashLedgerEntry::with(['operacao', 'consultor', 'pagamento.parcela.emprestimo']);
-        
-        // Aplicar filtro de operações do usuário (exceto administradores)
-        if (!$user->hasRole('administrador')) {
-            $operacoesIds = $user->getOperacoesIds();
-            if (!empty($operacoesIds)) {
-                $query->whereIn('operacao_id', $operacoesIds);
-            } else {
-                // Se não tem operações vinculadas, retorna vazio
-                $query->whereRaw('1 = 0');
-            }
+        if (!empty($operacoesIds)) {
+            $query->whereIn('operacao_id', $operacoesIds);
+        } else {
+            $query->whereRaw('1 = 0');
         }
         
         // Filtrar por consultor/gestor ou caixa da operação
@@ -113,55 +105,38 @@ class CashController extends Controller
 
         // Calcular saldo
         if ($user->hasRole('consultor')) {
-            // Consultor sempre vê seu próprio saldo
             $saldo = $this->cashService->calcularSaldo($user->id, $operacaoId ?? 0);
         } elseif ($user->hasAnyRole(['administrador', 'gestor'])) {
             if ($consultorId !== null) {
-                // Admin/gestor com filtro de consultor/gestor específico
                 $saldo = $this->cashService->calcularSaldo($consultorId, $operacaoId ?? 0);
             } else {
-                // Admin/gestor sem filtro = mostrar saldo TOTAL (todas as movimentações)
-                // Se for gestor e não tiver operação selecionada, calcular para todas as operações dele
-                if (!$user->hasRole('administrador') && !$operacaoId) {
-                    $operacoesIds = $user->getOperacoesIds();
+                if (!$operacaoId && !empty($operacoesIds)) {
                     $saldo = 0;
-                    if (!empty($operacoesIds)) {
-                        foreach ($operacoesIds as $opId) {
-                            $saldo += $this->cashService->calcularSaldoTotal($opId);
-                        }
+                    foreach ($operacoesIds as $opId) {
+                        $saldo += $this->cashService->calcularSaldoTotal($opId);
                     }
                 } else {
                     $saldo = $this->cashService->calcularSaldoTotal($operacaoId);
                 }
             }
+        } else {
+            $saldo = 0;
         }
 
-        // Filtrar operações disponíveis para o usuário
-        if ($user->hasRole('administrador')) {
-            $operacoes = Operacao::where('ativo', true)->get();
-        } else {
-            $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds) 
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
-                : collect([]);
-        }
+        $operacoes = !empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
 
         // Calcular métricas do período filtrado
-        // Se for gestor/admin sem consultor selecionado, usar métodos que consideram TODAS as movimentações
         if ($user->hasAnyRole(['administrador', 'gestor']) && $consultorId === null) {
-            // Todas as movimentações (consultores + caixa da operação)
-            // Se for gestor e não tiver operação selecionada, calcular apenas para as operações dele
-            if (!$user->hasRole('administrador') && !$operacaoId) {
-                $operacoesIds = $user->getOperacoesIds();
+            if (!$operacaoId && !empty($operacoesIds)) {
                 $totalEntradas = 0;
                 $totalSaidas = 0;
                 $saldoInicial = 0;
-                if (!empty($operacoesIds)) {
-                    foreach ($operacoesIds as $opId) {
-                        $totalEntradas += $this->cashService->calcularTotalEntradas(null, $opId, $dataInicio, $dataFim);
-                        $totalSaidas += $this->cashService->calcularTotalSaidas(null, $opId, $dataInicio, $dataFim);
-                        $saldoInicial += $this->cashService->calcularSaldoInicial(null, $opId, $dataInicio, false);
-                    }
+                foreach ($operacoesIds as $opId) {
+                    $totalEntradas += $this->cashService->calcularTotalEntradas(null, $opId, $dataInicio, $dataFim);
+                    $totalSaidas += $this->cashService->calcularTotalSaidas(null, $opId, $dataInicio, $dataFim);
+                    $saldoInicial += $this->cashService->calcularSaldoInicial(null, $opId, $dataInicio, false);
                 }
             } else {
                 $totalEntradas = $this->cashService->calcularTotalEntradas(null, $operacaoId, $dataInicio, $dataFim);
@@ -233,38 +208,22 @@ class CashController extends Controller
             abort(403, 'Acesso negado. Apenas gestores e administradores podem criar movimentações manuais.');
         }
         
-        // Filtrar operações disponíveis para o usuário
-        if ($user->hasRole('administrador')) {
-            $operacoes = Operacao::where('ativo', true)->get();
-        } else {
-            $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds) 
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
-                : collect([]);
-        }
+        $operacoesIds = $user->getOperacoesIds();
+        $operacoes = !empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
 
-        // Buscar consultores e gestores com suas operações (para filtrar por operação no select)
         $usuarios = collect();
-        if ($user->hasRole('administrador')) {
+        if (!empty($operacoesIds)) {
             $usuarios = User::with(['operacoes', 'roles'])
                 ->whereHas('roles', function ($q) {
                     $q->whereIn('name', ['consultor', 'gestor']);
                 })
+                ->whereHas('operacoes', function ($q) use ($operacoesIds) {
+                    $q->whereIn('operacoes.id', $operacoesIds);
+                })
                 ->orderBy('name')
                 ->get();
-        } else {
-            $operacoesIds = $user->getOperacoesIds();
-            if (!empty($operacoesIds)) {
-                $usuarios = User::with(['operacoes', 'roles'])
-                    ->whereHas('roles', function ($q) {
-                        $q->whereIn('name', ['consultor', 'gestor']);
-                    })
-                    ->whereHas('operacoes', function ($q) use ($operacoesIds) {
-                        $q->whereIn('operacoes.id', $operacoesIds);
-                    })
-                    ->orderBy('name')
-                    ->get();
-            }
         }
 
         // Por operação: lista de usuários que pertencem a ela (para o select responsável)
@@ -286,9 +245,19 @@ class CashController extends Controller
             })->values()->toArray();
         }
 
-        $categoriasEntrada = CategoriaMovimentacao::where('tipo', 'entrada')->where('ativo', true)->orderBy('ordem')->orderBy('nome')->get(['id', 'nome']);
-        $categoriasDespesa = CategoriaMovimentacao::where('tipo', 'despesa')->where('ativo', true)->orderBy('ordem')->orderBy('nome')->get(['id', 'nome']);
-        return view('caixa.movimentacao.create', compact('operacoes', 'usuarios', 'usuariosPorOperacao', 'categoriasEntrada', 'categoriasDespesa'));
+        $categoriasPorOperacao = [];
+        foreach ($operacoesIds as $opId) {
+            $categorias = CategoriaMovimentacao::where('ativo', true)
+                ->where(function ($q) use ($opId) {
+                    $q->where('operacao_id', $opId)->orWhereNull('operacao_id');
+                })
+                ->orderBy('ordem')->orderBy('nome')->get(['id', 'nome', 'tipo']);
+            $categoriasPorOperacao[$opId] = [
+                'entrada' => $categorias->where('tipo', 'entrada')->values()->toArray(),
+                'despesa' => $categorias->where('tipo', 'despesa')->values()->toArray(),
+            ];
+        }
+        return view('caixa.movimentacao.create', compact('operacoes', 'usuarios', 'usuariosPorOperacao', 'categoriasPorOperacao'));
     }
 
     /**
@@ -336,30 +305,19 @@ class CashController extends Controller
             'comprovante' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
         ]);
 
-        // Validar se o usuário tem acesso à operação
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($validated['operacao_id'])) {
+        $opsIds = $user->getOperacoesIds();
+        if (empty($opsIds) || !in_array((int) $validated['operacao_id'], $opsIds, true)) {
             return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
         }
 
-        // Se consultor_id foi informado, validar o usuário
         if (!empty($validated['consultor_id'])) {
             $consultor = User::findOrFail($validated['consultor_id']);
-            
-            // Validar se é gestor ou consultor (não pode ser outro tipo)
             if (!$consultor->hasAnyRole(['consultor', 'gestor'])) {
                 return back()->with('error', 'O usuário selecionado deve ser um consultor ou gestor.')->withInput();
             }
-
-            // Validar se o consultor/gestor pertence à operação
-            if (!$user->hasRole('administrador')) {
-                $operacoesIds = $user->getOperacoesIds();
-                if (!empty($operacoesIds)) {
-                    $consultorOperacoes = $consultor->getOperacoesIds();
-                    $temAcesso = !empty(array_intersect($operacoesIds, $consultorOperacoes));
-                    if (!$temAcesso) {
-                        return back()->with('error', 'O usuário selecionado não pertence às suas operações.')->withInput();
-                    }
-                }
+            $consultorOperacoes = $consultor->getOperacoesIds();
+            if (empty(array_intersect($opsIds, $consultorOperacoes))) {
+                return back()->with('error', 'O usuário selecionado não pertence às suas operações.')->withInput();
             }
         } else {
             // Se consultor_id é NULL, é movimentação do caixa da operação
@@ -424,10 +382,9 @@ class CashController extends Controller
         }
 
         // Gestor/Admin: deve ter acesso à operação da movimentação
-        if ($user->hasAnyRole(['gestor', 'administrador']) && !$user->hasRole('administrador')) {
-            if (!$user->temAcessoOperacao($movimentacao->operacao_id)) {
-                abort(403, 'Acesso negado a esta movimentação.');
-            }
+        $opsIds = $user->getOperacoesIds();
+        if (empty($opsIds) || !in_array((int) $movimentacao->operacao_id, $opsIds, true)) {
+            abort(403, 'Acesso negado a esta movimentação.');
         }
 
         // Comprovante da referência (liberação) quando a movimentação não tem comprovante próprio

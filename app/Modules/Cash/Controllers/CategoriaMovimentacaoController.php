@@ -4,6 +4,7 @@ namespace App\Modules\Cash\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Cash\Models\CategoriaMovimentacao;
+use App\Modules\Core\Models\Operacao;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -25,17 +26,46 @@ class CategoriaMovimentacaoController extends Controller
     }
 
     /**
-     * Listar categorias (filtro opcional por tipo)
+     * Listar categorias das operações do usuário (operacao_id em getOperacoesIds() ou null = compartilhada).
      */
     public function index(Request $request): View
     {
-        $query = CategoriaMovimentacao::query()->orderBy('ordem')->orderBy('nome');
+        $user = auth()->user();
+        $operacoesIds = $user->getOperacoesIds();
+        $operacaoId = $request->input('operacao_id');
+        if ($operacaoId !== null && $operacaoId !== '') {
+            $operacaoId = (int) $operacaoId;
+            if (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds, true)) {
+                $operacaoId = null;
+            }
+        } else {
+            $operacaoId = null;
+        }
+
+        $operacoes = !empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
+
+        $query = CategoriaMovimentacao::with('operacao')->orderBy('ordem')->orderBy('nome');
         $tipo = $request->input('tipo');
         if (in_array($tipo, ['entrada', 'despesa'], true)) {
             $query->where('tipo', $tipo);
         }
+
+        if (!empty($operacoesIds)) {
+            $query->where(function ($q) use ($operacoesIds, $operacaoId) {
+                if ($operacaoId) {
+                    $q->where('operacao_id', $operacaoId);
+                } else {
+                    $q->whereIn('operacao_id', $operacoesIds)->orWhereNull('operacao_id');
+                }
+            });
+        } else {
+            $query->whereRaw('1 = 0');
+        }
+
         $categorias = $query->paginate(20)->withQueryString();
-        return view('caixa.categorias.index', compact('categorias', 'tipo'));
+        return view('caixa.categorias.index', compact('categorias', 'tipo', 'operacoes', 'operacaoId'));
     }
 
     /**
@@ -43,7 +73,12 @@ class CategoriaMovimentacaoController extends Controller
      */
     public function create(): View
     {
-        return view('caixa.categorias.create');
+        $user = auth()->user();
+        $operacoesIds = $user->getOperacoesIds();
+        $operacoes = !empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
+        return view('caixa.categorias.create', compact('operacoes'));
     }
 
     /**
@@ -51,15 +86,21 @@ class CategoriaMovimentacaoController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        $user = auth()->user();
+        $operacoesIds = $user->getOperacoesIds();
         $validated = $request->validate([
             'nome' => 'required|string|max:100',
             'tipo' => 'required|in:entrada,despesa',
+            'operacao_id' => 'required|exists:operacoes,id',
             'ativo' => 'boolean',
             'ordem' => 'nullable|integer|min:0',
         ]);
+        if (empty($operacoesIds) || !in_array((int) $validated['operacao_id'], $operacoesIds, true)) {
+            return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
+        }
         $validated['ativo'] = $request->boolean('ativo');
         $validated['ordem'] = (int) ($validated['ordem'] ?? 0);
-        $validated['empresa_id'] = auth()->user()->empresa_id;
+        $validated['empresa_id'] = $user->empresa_id;
         CategoriaMovimentacao::create($validated);
         return redirect()->route('caixa.categorias.index')->with('success', 'Categoria criada com sucesso.');
     }
@@ -69,8 +110,17 @@ class CategoriaMovimentacaoController extends Controller
      */
     public function edit(int $id): View
     {
-        $categoria = CategoriaMovimentacao::findOrFail($id);
-        return view('caixa.categorias.edit', compact('categoria'));
+        $user = auth()->user();
+        $opsIds = $user->getOperacoesIds();
+        $categoria = CategoriaMovimentacao::with('operacao')->findOrFail($id);
+        $podeEditar = !empty($opsIds) && ($categoria->operacao_id === null || in_array((int) $categoria->operacao_id, $opsIds, true));
+        if (!$podeEditar) {
+            abort(403, 'Você não tem acesso a esta categoria.');
+        }
+        $operacoes = !empty($opsIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
+            : collect([]);
+        return view('caixa.categorias.edit', compact('categoria', 'operacoes'));
     }
 
     /**
@@ -78,17 +128,28 @@ class CategoriaMovimentacaoController extends Controller
      */
     public function update(Request $request, int $id): RedirectResponse
     {
+        $user = auth()->user();
+        $opsIds = $user->getOperacoesIds();
         $categoria = CategoriaMovimentacao::findOrFail($id);
+        if (empty($opsIds) || ($categoria->operacao_id !== null && !in_array((int) $categoria->operacao_id, $opsIds, true))) {
+            abort(403, 'Você não tem acesso a esta categoria.');
+        }
         $validated = $request->validate([
             'nome' => 'required|string|max:100',
             'tipo' => 'required|in:entrada,despesa',
+            'operacao_id' => 'nullable|exists:operacoes,id',
             'ativo' => 'boolean',
             'ordem' => 'nullable|integer|min:0',
         ]);
+        $operacaoId = isset($validated['operacao_id']) && $validated['operacao_id'] !== '' ? (int) $validated['operacao_id'] : null;
+        if ($operacaoId !== null && !in_array((int) $operacaoId, $opsIds, true)) {
+            return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
+        }
         $categoria->ativo = $request->boolean('ativo');
         $categoria->ordem = (int) ($validated['ordem'] ?? 0);
         $categoria->nome = $validated['nome'];
         $categoria->tipo = $validated['tipo'];
+        $categoria->operacao_id = $operacaoId ?: null;
         $categoria->save();
         return redirect()->route('caixa.categorias.index')->with('success', 'Categoria atualizada com sucesso.');
     }
@@ -99,27 +160,39 @@ class CategoriaMovimentacaoController extends Controller
     public function destroy(int $id): RedirectResponse
     {
         $categoria = CategoriaMovimentacao::findOrFail($id);
+        $opsIds = auth()->user()->getOperacoesIds();
+        $podeExcluir = !empty($opsIds) && ($categoria->operacao_id === null || in_array((int) $categoria->operacao_id, $opsIds, true));
+        if (!$podeExcluir) {
+            abort(403, 'Você não tem acesso a esta categoria.');
+        }
         $categoria->delete();
         return redirect()->route('caixa.categorias.index')->with('success', 'Categoria excluída com sucesso.');
     }
 
     /**
-     * Criar categoria via AJAX (para modal inline)
+     * Criar categoria via AJAX (para modal inline na movimentação)
      */
     public function storeAjax(Request $request): \Illuminate\Http\JsonResponse
     {
+        $user = auth()->user();
+        $operacoesIds = $user->getOperacoesIds();
         try {
             $validated = $request->validate([
                 'nome' => 'required|string|max:100',
                 'tipo' => 'required|in:entrada,despesa',
+                'operacao_id' => 'required|exists:operacoes,id',
             ]);
+            if (empty($operacoesIds) || !in_array((int) $validated['operacao_id'], $operacoesIds, true)) {
+                return response()->json(['success' => false, 'message' => 'Você não tem acesso a esta operação.'], 403);
+            }
 
             $categoria = CategoriaMovimentacao::create([
                 'nome' => $validated['nome'],
                 'tipo' => $validated['tipo'],
                 'ativo' => true,
                 'ordem' => 0,
-                'empresa_id' => auth()->user()->empresa_id,
+                'empresa_id' => $user->empresa_id,
+                'operacao_id' => $validated['operacao_id'],
             ]);
 
             return response()->json([
