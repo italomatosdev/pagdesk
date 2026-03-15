@@ -259,20 +259,16 @@ class PagamentoController extends Controller
                             'empresa_id' => $parcela->empresa_id ?? $parcela->emprestimo->operacao->empresa_id ?? null,
                         ]);
                         $notificacaoService = app(\App\Modules\Core\Services\NotificacaoService::class);
-                        $notificacaoService->criarParaRole('gestor', [
+                        $operacaoId = (int) $emprestimo->operacao_id;
+                        $dadosNotif = [
                             'tipo' => 'renovacao_abate_valor_inferior_pendente',
                             'titulo' => 'Renovação com abate (valor inferior ao principal) aguardando aprovação',
                             'mensagem' => sprintf('Empréstimo #%d - %s. Valor R$ %s (principal R$ %s). Aguardando em Liberações.', $emprestimo->id, $emprestimo->cliente?->nome ?? 'Cliente', number_format($valorRenovacaoAbate, 2, ',', '.'), number_format($valorPrincipalParcela, 2, ',', '.')),
                             'url' => route('liberacoes.renovacao-abate'),
                             'dados' => ['solicitacao_id' => $solicitacao->id, 'emprestimo_id' => $emprestimo->id],
-                        ]);
-                        $notificacaoService->criarParaRole('administrador', [
-                            'tipo' => 'renovacao_abate_valor_inferior_pendente',
-                            'titulo' => 'Renovação com abate (valor inferior ao principal) aguardando aprovação',
-                            'mensagem' => sprintf('Empréstimo #%d - %s. Valor R$ %s. Aguardando em Liberações.', $emprestimo->id, $emprestimo->cliente?->nome ?? 'Cliente', number_format($valorRenovacaoAbate, 2, ',', '.')),
-                            'url' => route('liberacoes.renovacao-abate'),
-                            'dados' => ['solicitacao_id' => $solicitacao->id, 'emprestimo_id' => $emprestimo->id],
-                        ]);
+                        ];
+                        $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, $dadosNotif);
+                        $notificacaoService->criarParaRoleComOperacao('administrador', $operacaoId, $dadosNotif);
                         return redirect()->route('emprestimos.show', $emprestimo->id)
                             ->with('success', 'Solicitação de renovação com abate enviada para aprovação do gestor/administrador. Acompanhe em Liberações.');
                     }
@@ -344,6 +340,7 @@ class PagamentoController extends Controller
                 ]);
                 $notificacaoService = app(\App\Modules\Core\Services\NotificacaoService::class);
                 $emprestimo = $parcela->emprestimo;
+                $operacaoId = (int) $emprestimo->operacao_id;
                 $clienteNome = $emprestimo->cliente ? $emprestimo->cliente->nome : 'Cliente';
                 $dadosNotif = [
                     'tipo' => 'pagamento_juros_contrato_reduzido_pendente',
@@ -352,8 +349,8 @@ class PagamentoController extends Controller
                     'url' => route('liberacoes.juros-contrato-reduzido'),
                     'dados' => ['solicitacao_id' => $solicitacao->id, 'emprestimo_id' => $emprestimo->id],
                 ];
-                $notificacaoService->criarParaRole('gestor', $dadosNotif);
-                $notificacaoService->criarParaRole('administrador', $dadosNotif);
+                $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, $dadosNotif);
+                $notificacaoService->criarParaRoleComOperacao('administrador', $operacaoId, $dadosNotif);
                 $returnTo = $request->input('return_to');
                 $msg = 'Pagamento com valor inferior ao devido (juros do contrato reduzido) foi enviado para aprovação do gestor ou administrador em Liberações.';
                 if ($returnTo === 'cobrancas') {
@@ -390,6 +387,7 @@ class PagamentoController extends Controller
                         ]);
                         $notificacaoService = app(\App\Modules\Core\Services\NotificacaoService::class);
                         $emprestimo = $parcela->emprestimo;
+                        $operacaoId = (int) $emprestimo->operacao_id;
                         $clienteNome = $emprestimo->cliente ? $emprestimo->cliente->nome : 'Cliente';
                         $dadosNotif = [
                             'tipo' => 'pagamento_juros_parcial_pendente',
@@ -398,8 +396,8 @@ class PagamentoController extends Controller
                             'url' => route('liberacoes.juros-parcial'),
                             'dados' => ['solicitacao_id' => $solicitacao->id, 'emprestimo_id' => $emprestimo->id],
                         ];
-                        $notificacaoService->criarParaRole('gestor', $dadosNotif);
-                        $notificacaoService->criarParaRole('administrador', $dadosNotif);
+                        $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, $dadosNotif);
+                        $notificacaoService->criarParaRoleComOperacao('administrador', $operacaoId, $dadosNotif);
                         $returnTo = $request->input('return_to');
                         $msg = 'Pagamento com juros abaixo do devido foi enviado para aprovação do gestor ou administrador em Liberações.';
                         if ($returnTo === 'cobrancas') {

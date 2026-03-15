@@ -221,20 +221,16 @@ class QuitacaoService
             $clienteNome = $cliente ? $cliente->nome : 'Cliente';
             $mensagem = "Quitação com desconto do empréstimo #{$emprestimo->id} ({$clienteNome}): R$ " . number_format($valorSolicitado, 2, ',', '.') . " (saldo R$ " . number_format($saldoDevedor, 2, ',', '.') . "). Solicitado por {$user->name}.";
             $notificacaoService = app(NotificacaoService::class);
-            $notificacaoService->criarParaRole('gestor', [
+            $operacaoId = (int) $emprestimo->operacao_id;
+            $dadosNotif = [
                 'tipo' => 'quitacao_desconto_pendente',
                 'titulo' => 'Quitação com desconto – aguardando aprovação',
                 'mensagem' => $mensagem,
                 'url' => route('quitacao.pendentes'),
                 'dados' => ['solicitacao_id' => $solicitacao->id, 'emprestimo_id' => $emprestimo->id],
-            ]);
-            $notificacaoService->criarParaRole('administrador', [
-                'tipo' => 'quitacao_desconto_pendente',
-                'titulo' => 'Quitação com desconto – aguardando aprovação',
-                'mensagem' => $mensagem,
-                'url' => route('quitacao.pendentes'),
-                'dados' => ['solicitacao_id' => $solicitacao->id, 'emprestimo_id' => $emprestimo->id],
-            ]);
+            ];
+            $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, $dadosNotif);
+            $notificacaoService->criarParaRoleComOperacao('administrador', $operacaoId, $dadosNotif);
 
             return $solicitacao;
         });

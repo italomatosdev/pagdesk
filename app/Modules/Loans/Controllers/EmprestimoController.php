@@ -605,24 +605,18 @@ class EmprestimoController extends Controller
                 'status' => 'pendente',
             ]);
 
-            // Notificar gestores e admins
+            // Notificar gestores e admins da operação
             $notificacaoService = app(\App\Modules\Core\Services\NotificacaoService::class);
-            
-            $notificacaoService->criarParaRole('gestor', [
+            $operacaoId = (int) $emprestimoOrigem->operacao_id;
+            $dadosNotif = [
                 'tipo' => 'negociacao_pendente',
                 'titulo' => 'Nova Solicitação de Negociação',
                 'mensagem' => "{$user->name} solicitou negociação do empréstimo #{$emprestimoOrigemId} - Cliente: {$emprestimoOrigem->cliente->nome}. Saldo devedor: R$ " . number_format($saldoDevedor, 2, ',', '.'),
                 'url' => route('liberacoes.negociacoes'),
                 'dados' => ['solicitacao_id' => $solicitacao->id],
-            ]);
-
-            $notificacaoService->criarParaRole('administrador', [
-                'tipo' => 'negociacao_pendente',
-                'titulo' => 'Nova Solicitação de Negociação',
-                'mensagem' => "{$user->name} solicitou negociação do empréstimo #{$emprestimoOrigemId} - Cliente: {$emprestimoOrigem->cliente->nome}. Saldo devedor: R$ " . number_format($saldoDevedor, 2, ',', '.'),
-                'url' => route('liberacoes.negociacoes'),
-                'dados' => ['solicitacao_id' => $solicitacao->id],
-            ]);
+            ];
+            $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, $dadosNotif);
+            $notificacaoService->criarParaRoleComOperacao('administrador', $operacaoId, $dadosNotif);
 
             return redirect()->route('emprestimos.show', $emprestimoOrigemId)
                 ->with('success', 'Solicitação de negociação enviada para aprovação do gestor/administrador.');

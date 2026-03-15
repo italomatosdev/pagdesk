@@ -4,6 +4,7 @@ namespace App\Modules\Core\Services;
 
 use App\Modules\Core\Models\Notificacao;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 class NotificacaoService
@@ -18,6 +19,7 @@ class NotificacaoService
     {
         return Notificacao::create([
             'user_id' => $dados['user_id'],
+            'operacao_id' => $dados['operacao_id'] ?? null,
             'tipo' => $dados['tipo'],
             'titulo' => $dados['titulo'],
             'mensagem' => $dados['mensagem'],
@@ -36,6 +38,7 @@ class NotificacaoService
     public function criarParaMultiplos(array $userIds, array $dados): void
     {
         $notificacoes = [];
+        $operacaoId = $dados['operacao_id'] ?? null;
         foreach ($userIds as $userId) {
             // Converter array de dados para JSON se for array
             $dadosJson = null;
@@ -47,6 +50,7 @@ class NotificacaoService
 
             $notificacoes[] = [
                 'user_id' => $userId,
+                'operacao_id' => $operacaoId,
                 'tipo' => $dados['tipo'],
                 'titulo' => $dados['titulo'],
                 'mensagem' => $dados['mensagem'],
@@ -79,6 +83,54 @@ class NotificacaoService
     }
 
     /**
+     * Criar notificação para usuários com uma role que tenham acesso à operação indicada.
+     * Super Admin recebe sempre; demais só se a operação estiver nas operações do usuário.
+     *
+     * @param string $role
+     * @param int $operacaoId
+     * @param array $dados
+     * @return void
+     */
+    public function criarParaRoleComOperacao(string $role, int $operacaoId, array $dados): void
+    {
+        $users = User::with('operacoes')
+            ->whereHas('roles', fn ($q) => $q->where('name', $role))
+            ->get();
+
+        $userIds = $users->filter(function (User $user) use ($operacaoId) {
+            if ($user->isSuperAdmin()) {
+                return true;
+            }
+            return in_array($operacaoId, $user->getOperacoesIds(), true);
+        })->pluck('id')->toArray();
+
+        if (!empty($userIds)) {
+            $dados['operacao_id'] = $operacaoId;
+            $this->criarParaMultiplos($userIds, $dados);
+        }
+    }
+
+    /**
+     * Query base de notificações visíveis ao usuário (filtro por operação).
+     * Super Admin vê todas; demais só notificações sem operação ou da sua operação.
+     */
+    protected function queryNotificacoesDoUsuario(int $userId): Builder
+    {
+        $query = Notificacao::where('user_id', $userId);
+        $user = User::find($userId);
+        if ($user && !$user->isSuperAdmin()) {
+            $operacoesIds = $user->getOperacoesIds();
+            $query->where(function (Builder $q) use ($operacoesIds) {
+                $q->whereNull('operacao_id');
+                if (!empty($operacoesIds)) {
+                    $q->orWhereIn('operacao_id', $operacoesIds);
+                }
+            });
+        }
+        return $query;
+    }
+
+    /**
      * Listar notificações do usuário
      *
      * @param int $userId
@@ -88,7 +140,7 @@ class NotificacaoService
      */
     public function listar(int $userId, int $limit = 20, bool $apenasNaoLidas = false)
     {
-        $query = Notificacao::where('user_id', $userId)
+        $query = $this->queryNotificacoesDoUsuario($userId)
             ->orderBy('created_at', 'desc');
 
         if ($apenasNaoLidas) {
@@ -108,7 +160,7 @@ class NotificacaoService
      */
     public function listarComPaginacao(int $userId, int $perPage = 20, ?string $filtro = null)
     {
-        $query = Notificacao::where('user_id', $userId)
+        $query = $this->queryNotificacoesDoUsuario($userId)
             ->orderBy('created_at', 'desc');
 
         if ($filtro === 'nao_lidas') {
@@ -128,7 +180,7 @@ class NotificacaoService
      */
     public function contarNaoLidas(int $userId): int
     {
-        return Notificacao::where('user_id', $userId)
+        return $this->queryNotificacoesDoUsuario($userId)
             ->where('lida', false)
             ->count();
     }
@@ -142,8 +194,8 @@ class NotificacaoService
      */
     public function marcarComoLida(int $notificacaoId, int $userId): bool
     {
-        $notificacao = Notificacao::where('id', $notificacaoId)
-            ->where('user_id', $userId)
+        $notificacao = $this->queryNotificacoesDoUsuario($userId)
+            ->where('id', $notificacaoId)
             ->first();
 
         if ($notificacao) {
@@ -162,7 +214,7 @@ class NotificacaoService
      */
     public function marcarTodasComoLidas(int $userId): int
     {
-        return Notificacao::where('user_id', $userId)
+        return $this->queryNotificacoesDoUsuario($userId)
             ->where('lida', false)
             ->update([
                 'lida' => true,

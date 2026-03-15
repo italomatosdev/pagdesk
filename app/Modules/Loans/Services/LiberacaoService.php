@@ -361,10 +361,10 @@ class LiberacaoService
 
             // Notificações
             $notificacaoService = app(NotificacaoService::class);
-            $cliente = $liberacao->emprestimo->cliente;
-            
-            // Notificar gestores sobre pagamento confirmado
-            $notificacaoService->criarParaRole('gestor', [
+            $emprestimo = $liberacao->emprestimo;
+            $cliente = $emprestimo->cliente;
+            $operacaoId = (int) $emprestimo->operacao_id;
+            $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, [
                 'tipo' => 'pagamento_registrado',
                 'titulo' => 'Pagamento ao Cliente Confirmado',
                 'mensagem' => "Consultor confirmou pagamento de R$ " . number_format($liberacao->valor_liberado, 2, ',', '.') . " ao cliente {$cliente->nome}",

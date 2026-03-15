@@ -141,6 +141,7 @@ class PagamentoService
                     $emprestimo->cliente ? $emprestimo->cliente->nome : 'Cliente',
                     number_format($pagamento->valor, 2, ',', '.')
                 );
+                $operacaoId = (int) $emprestimo->operacao_id;
                 $dadosNotif = [
                     'tipo' => 'pagamento_produto_objeto_pendente',
                     'titulo' => $titulo,
@@ -148,8 +149,8 @@ class PagamentoService
                     'url' => route('liberacoes.pagamentos-produto-objeto'),
                     'dados' => ['pagamento_id' => $pagamento->id, 'emprestimo_id' => $emprestimo->id],
                 ];
-                $notificacaoService->criarParaRole('gestor', $dadosNotif);
-                $notificacaoService->criarParaRole('administrador', $dadosNotif);
+                $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, $dadosNotif);
+                $notificacaoService->criarParaRoleComOperacao('administrador', $operacaoId, $dadosNotif);
                 return $pagamento->fresh();
             }
 
