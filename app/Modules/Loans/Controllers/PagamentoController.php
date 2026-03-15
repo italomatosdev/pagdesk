@@ -33,6 +33,13 @@ class PagamentoController extends Controller
 
         if ($parcelaId) {
             $parcela = Parcela::with(['emprestimo.cliente', 'emprestimo.operacao'])->findOrFail($parcelaId);
+            $user = auth()->user();
+            if (!$user->isSuperAdmin()) {
+                $opsIds = $user->getOperacoesIds();
+                if (empty($opsIds) || !in_array((int) $parcela->emprestimo->operacao_id, $opsIds, true)) {
+                    abort(403, 'Sem acesso a esta operação.');
+                }
+            }
         }
 
         return view('pagamentos.create', compact('parcela', 'returnTo', 'renovar', 'executarGarantia'));
@@ -95,7 +102,16 @@ class PagamentoController extends Controller
             }
         }
 
-        $validated['consultor_id'] = auth()->id();
+        $user = auth()->user();
+        $parcelaAcesso = Parcela::with('emprestimo')->findOrFail($validated['parcela_id']);
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $parcelaAcesso->emprestimo->operacao_id, $opsIds, true)) {
+                return back()->with('error', 'Sem acesso a esta operação.')->withInput();
+            }
+        }
+
+        $validated['consultor_id'] = $user->id();
 
         // Se método é produto/objeto: operação deve permitir e processar itens (upload por item)
         if (($validated['metodo'] ?? '') === 'produto_objeto') {

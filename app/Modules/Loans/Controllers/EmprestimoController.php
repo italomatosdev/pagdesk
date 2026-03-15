@@ -655,6 +655,14 @@ class EmprestimoController extends Controller
             'cheques', // Cheques para empréstimo tipo troca_cheque
         ])->findOrFail($id);
 
+        $user = auth()->user();
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                abort(403, 'Sem acesso a esta operação.');
+            }
+        }
+
         $temRenovacaoAbatePendente = \App\Modules\Loans\Models\SolicitacaoRenovacaoAbate::whereHas('parcela', fn ($q) => $q->where('emprestimo_id', $id))
             ->where('status', 'aguardando')
             ->exists();
@@ -675,11 +683,14 @@ class EmprestimoController extends Controller
         $user = auth()->user();
         $emprestimo = Emprestimo::findOrFail($id);
 
-        // Verificar se o consultor é dono do empréstimo (ou é gestor/admin)
         if (!$user->hasAnyRole(['administrador', 'gestor'])) {
-            // Consultor só pode renovar seus próprios empréstimos
             if ($emprestimo->consultor_id !== $user->id) {
                 abort(403, 'Você só pode renovar seus próprios empréstimos.');
+            }
+        } else {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                abort(403, 'Sem acesso a esta operação.');
             }
         }
 
