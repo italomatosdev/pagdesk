@@ -490,9 +490,10 @@ class LiberacaoService
      *
      * @param int $consultorId
      * @param string|null $status
+     * @param int|string|null $operacaoId
      * @return \Illuminate\Database\Eloquent\Collection
      */
-    public function listarPorConsultor(int $consultorId, ?string $status = null)
+    public function listarPorConsultor(int $consultorId, ?string $status = null, $operacaoId = null)
     {
         $query = LiberacaoEmprestimo::with([
             'emprestimo.cliente',
@@ -505,6 +506,10 @@ class LiberacaoService
 
         if ($status) {
             $query->where('status', $status);
+        }
+
+        if ($operacaoId !== null && $operacaoId !== '') {
+            $query->whereHas('emprestimo', fn ($q) => $q->where('operacao_id', $operacaoId));
         }
 
         return $query->get();

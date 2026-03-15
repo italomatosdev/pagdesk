@@ -59,7 +59,17 @@ class ParcelaController extends Controller
             return $parcela->isAtrasada();
         });
 
-        return view('cobrancas.index', compact('vencendoHoje', 'atrasadas', 'operacoes', 'operacaoId'));
+        $valorVencendoHoje = (float) $vencendoHoje->sum('valor');
+        $valorAtrasado = (float) $atrasadas->sum('valor');
+
+        return view('cobrancas.index', compact(
+            'vencendoHoje',
+            'atrasadas',
+            'operacoes',
+            'operacaoId',
+            'valorVencendoHoje',
+            'valorAtrasado'
+        ));
     }
 
     /**

@@ -25,6 +25,17 @@ class ProfileController extends Controller
     }
 
     /**
+     * Página "Minhas operações" – lista as operações que o usuário faz parte.
+     * Acesso apenas pelo dropdown do usuário (não está no sidebar).
+     */
+    public function operacoes(): View
+    {
+        $user = auth()->user();
+        $operacoes = $user->operacoes()->orderBy('nome')->get();
+        return view('profile.operacoes', compact('operacoes'));
+    }
+
+    /**
      * Atualizar perfil do usuário logado
      */
     public function update(Request $request): RedirectResponse

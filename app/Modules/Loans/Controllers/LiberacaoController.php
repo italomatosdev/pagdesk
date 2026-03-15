@@ -159,10 +159,24 @@ class LiberacaoController extends Controller
      */
     public function minhasLiberacoes(Request $request): View
     {
+        $user = auth()->user();
         $status = $request->input('status');
-        $liberacoes = $this->liberacaoService->listarPorConsultor(auth()->id(), $status);
+        $operacaoId = $request->input('operacao_id');
+        if ($operacaoId !== null && $operacaoId !== '' && !$user->temAcessoOperacao($operacaoId)) {
+            $operacaoId = null;
+        }
+        $liberacoes = $this->liberacaoService->listarPorConsultor($user->id, $status, $operacaoId);
 
-        return view('liberacoes.consultor', compact('liberacoes', 'status'));
+        if ($user->isSuperAdmin()) {
+            $operacoes = \App\Modules\Core\Models\Operacao::where('ativo', true)->orderBy('nome')->get();
+        } else {
+            $opsIds = $user->getOperacoesIds();
+            $operacoes = !empty($opsIds)
+                ? \App\Modules\Core\Models\Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
+                : collect([]);
+        }
+
+        return view('liberacoes.consultor', compact('liberacoes', 'status', 'operacoes', 'operacaoId'));
     }
 
     /**

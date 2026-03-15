@@ -43,6 +43,92 @@
                 </div>
             </div>
 
+            <!-- Totalizadores (estilo dashboard) -->
+            <div class="col-12 mb-3">
+                <div class="row">
+                    <div class="col-md-6 col-xl-3 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="mb-0 font-size-15">Valor vencendo hoje</h6>
+                                        <h4 class="mt-3 mb-0 font-size-22">R$ {{ number_format($valorVencendoHoje ?? 0, 2, ',', '.') }}</h4>
+                                        <small class="text-muted">{{ $vencendoHoje->count() }} parcela(s)</small>
+                                    </div>
+                                    <div class="">
+                                        <div class="avatar">
+                                            <div class="avatar-title rounded bg-warning-subtle">
+                                                <i class="bx bx-calendar-check font-size-24 mb-0 text-warning"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="mb-0 font-size-15">Cobranças hoje</h6>
+                                        <h4 class="mt-3 mb-0 font-size-22">{{ number_format($vencendoHoje->count(), 0, ',', '.') }}</h4>
+                                        <small class="text-muted">parcela(s) vencendo hoje</small>
+                                    </div>
+                                    <div class="">
+                                        <div class="avatar">
+                                            <div class="avatar-title rounded bg-info-subtle">
+                                                <i class="bx bx-list-check font-size-24 mb-0 text-info"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="mb-0 font-size-15">Valor em atraso</h6>
+                                        <h4 class="mt-3 mb-0 font-size-22">R$ {{ number_format($valorAtrasado ?? 0, 2, ',', '.') }}</h4>
+                                        <small class="text-muted">{{ $atrasadas->count() }} parcela(s)</small>
+                                    </div>
+                                    <div class="">
+                                        <div class="avatar">
+                                            <div class="avatar-title rounded bg-danger-subtle">
+                                                <i class="bx bx-error-circle font-size-24 mb-0 text-danger"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="mb-0 font-size-15">Cobranças atrasadas</h6>
+                                        <h4 class="mt-3 mb-0 font-size-22">{{ number_format($atrasadas->count(), 0, ',', '.') }}</h4>
+                                        <small class="text-muted">parcela(s) em atraso</small>
+                                    </div>
+                                    <div class="">
+                                        <div class="avatar">
+                                            <div class="avatar-title rounded bg-secondary-subtle">
+                                                <i class="bx bx-time-five font-size-24 mb-0 text-secondary"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Vencendo Hoje -->
             <div class="col-12">
                 <div class="card">
@@ -69,15 +155,17 @@
                                     @forelse($vencendoHoje as $parcela)
                                         <tr>
                                             <td>{{ $parcela->emprestimo->cliente->nome }}</td>
-                                            <td>#{{ $parcela->emprestimo->id }}</td>
+                                            <td>
+                                                <a href="{{ route('emprestimos.show', $parcela->emprestimo->id) }}">#{{ $parcela->emprestimo->id }}</a>
+                                            </td>
                                             <td>{{ $parcela->numero }}/{{ $parcela->emprestimo->numero_parcelas }}</td>
                                             <td>R$ {{ number_format($parcela->valor, 2, ',', '.') }}</td>
                                             <td>{{ $parcela->data_vencimento->format('d/m/Y') }}</td>
                                             <td>
                                                 <div class="d-flex gap-1 flex-wrap">
-                                                    <a href="{{ route('pagamentos.create', ['parcela_id' => $parcela->id]) }}" 
-                                                       class="btn btn-sm btn-success" title="Registrar Pagamento">
-                                                        <i class="bx bx-money"></i> Registrar Pagamento
+                                                    <a href="{{ route('emprestimos.show', $parcela->emprestimo->id) }}" 
+                                                       class="btn btn-sm btn-info" title="Ver empréstimo">
+                                                        <i class="bx bx-show"></i>
                                                     </a>
                                                     @if($parcela->emprestimo->cliente->temWhatsapp())
                                                         <a href="{{ $parcela->emprestimo->cliente->whatsapp_link }}" 
@@ -129,7 +217,9 @@
                                     @forelse($atrasadas as $parcela)
                                         <tr class="{{ $parcela->dias_atraso > 30 ? 'table-danger' : '' }}">
                                             <td>{{ $parcela->emprestimo->cliente->nome }}</td>
-                                            <td>#{{ $parcela->emprestimo->id }}</td>
+                                            <td>
+                                                <a href="{{ route('emprestimos.show', $parcela->emprestimo->id) }}">#{{ $parcela->emprestimo->id }}</a>
+                                            </td>
                                             <td>{{ $parcela->numero }}/{{ $parcela->emprestimo->numero_parcelas }}</td>
                                             <td>R$ {{ number_format($parcela->valor, 2, ',', '.') }}</td>
                                             <td>{{ $parcela->data_vencimento->format('d/m/Y') }}</td>
@@ -138,9 +228,9 @@
                                             </td>
                                             <td>
                                                 <div class="d-flex gap-1 flex-wrap">
-                                                    <a href="{{ route('pagamentos.create', ['parcela_id' => $parcela->id]) }}" 
-                                                       class="btn btn-sm btn-success" title="Registrar Pagamento">
-                                                        <i class="bx bx-money"></i> Registrar Pagamento
+                                                    <a href="{{ route('emprestimos.show', $parcela->emprestimo->id) }}" 
+                                                       class="btn btn-sm btn-info" title="Ver empréstimo">
+                                                        <i class="bx bx-show"></i>
                                                     </a>
                                                     @if($parcela->emprestimo->cliente->temWhatsapp())
                                                         <a href="{{ $parcela->emprestimo->cliente->whatsapp_link }}" 

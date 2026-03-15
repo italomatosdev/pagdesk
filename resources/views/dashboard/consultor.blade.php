@@ -26,13 +26,13 @@
                                 <input type="date" name="date_to" id="date_to" class="form-control"
                                     value="{{ $dateTo->format('Y-m-d') }}">
                             </div>
-                            @if($operacoes->count() > 1)
+                            @if($operacoes->isNotEmpty())
                             <div class="flex-grow-1">
                                 <label for="operacao_id" class="form-label">Operação</label>
                                 <select name="operacao_id" id="operacao_id" class="form-select">
                                     <option value="">Todas as Operações</option>
                                     @foreach($operacoes as $operacao)
-                                        <option value="{{ $operacao->id }}" {{ request('operacao_id') == $operacao->id ? 'selected' : '' }}>
+                                        <option value="{{ $operacao->id }}" {{ (string)request('operacao_id') === (string)$operacao->id ? 'selected' : '' }}>
                                             {{ $operacao->nome }}
                                         </option>
                                     @endforeach

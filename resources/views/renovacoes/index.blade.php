@@ -27,9 +27,9 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Cliente</label>
-                            <input type="text" name="cliente_id" class="form-control" 
-                                   placeholder="ID do Cliente" 
-                                   value="{{ request('cliente_id') }}">
+                            <input type="text" name="cliente_busca" class="form-control"
+                                   placeholder="Nome ou CPF/CNPJ"
+                                   value="{{ request('cliente_busca') }}">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label d-block">&nbsp;</label>

@@ -360,6 +360,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
     // Perfil do usuário
     Route::prefix('perfil')->name('profile.')->group(function () {
         Route::get('/', [App\Http\Controllers\ProfileController::class, 'show'])->name('show');
+        Route::get('/operacoes', [App\Http\Controllers\ProfileController::class, 'operacoes'])->name('operacoes');
         Route::put('/', [App\Http\Controllers\ProfileController::class, 'update'])->name('update');
         Route::post('/avatar', [App\Http\Controllers\ProfileController::class, 'updateAvatar'])->name('update-avatar');
         Route::delete('/avatar', [App\Http\Controllers\ProfileController::class, 'removeAvatar'])->name('remove-avatar');

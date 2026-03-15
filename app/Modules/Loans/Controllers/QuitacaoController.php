@@ -30,6 +30,12 @@ class QuitacaoController extends Controller
         if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             abort(403, 'Você não tem permissão para quitar este empréstimo.');
         }
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                abort(403, 'Sem acesso a esta operação.');
+            }
+        }
 
         if (!$emprestimo->isAtivo()) {
             return redirect()->route('emprestimos.show', $emprestimo->id)
@@ -61,6 +67,12 @@ class QuitacaoController extends Controller
         $user = auth()->user();
         if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             abort(403, 'Você não tem permissão para quitar este empréstimo.');
+        }
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                abort(403, 'Sem acesso a esta operação.');
+            }
         }
 
         $saldoDevedor = $this->quitacaoService->getSaldoDevedor($emprestimo);

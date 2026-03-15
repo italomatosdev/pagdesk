@@ -48,6 +48,7 @@
                                         <th>ID</th>
                                         <th>Cliente</th>
                                         <th>Operação</th>
+                                        <th>Tipo</th>
                                         <th>Valor</th>
                                         <th>Parcelas</th>
                                         <th>Consultor</th>
@@ -62,6 +63,13 @@
                                             <td>#{{ $emprestimo->id }}</td>
                                             <td>{{ $emprestimo->cliente->nome }}</td>
                                             <td>{{ $emprestimo->operacao->nome }}</td>
+                                            <td>{{ ($tipoLabels ?? [
+                                                'dinheiro' => 'Dinheiro',
+                                                'price' => 'Price',
+                                                'empenho' => 'Empenho',
+                                                'troca_cheque' => 'Troca de Cheque',
+                                                'crediario' => 'Crediário',
+                                            ])[$emprestimo->tipo] ?? ucfirst($emprestimo->tipo ?? '—') }}</td>
                                             <td>R$ {{ number_format($emprestimo->valor_total, 2, ',', '.') }}</td>
                                             <td>{{ $emprestimo->numero_parcelas }}x ({{ ucfirst($emprestimo->frequencia) }})</td>
                                             <td>{{ $emprestimo->consultor->name }}</td>
@@ -122,7 +130,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="9" class="text-center">Nenhum empréstimo pendente de aprovação.</td>
+                                            <td colspan="10" class="text-center">Nenhum empréstimo pendente de aprovação.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>
