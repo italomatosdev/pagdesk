@@ -42,19 +42,22 @@ class LiberacaoController extends Controller
         $user = auth()->user();
         $operacaoId = $request->input('operacao_id');
         
-        // Validar se o usuário tem acesso à operação selecionada
-        if ($operacaoId && !$user->hasRole('administrador') && !$user->temAcessoOperacao($operacaoId)) {
-            $operacaoId = null; // Resetar se não tiver acesso
+        // Validar se o usuário tem acesso à operação selecionada (Super Admin vê todas; demais só as vinculadas)
+        if ($operacaoId && !$user->isSuperAdmin()) {
+            $operacoesIds = $user->getOperacoesIds();
+            if (empty($operacoesIds) || !in_array((int) $operacaoId, $operacoesIds, true)) {
+                $operacaoId = null;
+            }
         }
-        
+
         $liberacoes = $this->liberacaoService->listarAguardando($operacaoId, $user);
-        
-        // Filtrar operações disponíveis para o usuário
-        if ($user->hasRole('administrador')) {
+
+        // Operações disponíveis no filtro: Super Admin vê todas; demais só as vinculadas
+        if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->get();
         } else {
             $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds) 
+            $operacoes = !empty($operacoesIds)
                 ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
                 : collect([]);
         }
@@ -319,8 +322,11 @@ class LiberacaoController extends Controller
         $user = auth()->user();
         $operacaoId = $request->input('operacao_id');
         $status = $request->input('status', 'todos'); // todos | aceito | pendente | rejeitado
-        if ($operacaoId && !$user->hasRole('administrador') && !$user->temAcessoOperacao($operacaoId)) {
-            $operacaoId = null;
+        if ($operacaoId && !$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $operacaoId, $opsIds, true)) {
+                $operacaoId = null;
+            }
         }
 
         $query = PagamentoProdutoObjetoItem::with([
@@ -329,7 +335,7 @@ class LiberacaoController extends Controller
             'pagamento.consultor',
         ])->whereHas('pagamento.parcela.emprestimo', function ($q) use ($user) {
             $q->where('empresa_id', $user->empresa_id);
-            if (!$user->hasRole('administrador')) {
+            if (!$user->isSuperAdmin()) {
                 $opsIds = $user->getOperacoesIds();
                 if (!empty($opsIds)) {
                     $q->whereIn('operacao_id', $opsIds);
@@ -352,7 +358,7 @@ class LiberacaoController extends Controller
 
         $itens = $query->orderByDesc('id')->paginate(20)->withQueryString();
 
-        if ($user->hasRole('administrador')) {
+        if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->get();
         } else {
             $operacoesIds = $user->getOperacoesIds();
@@ -375,8 +381,11 @@ class LiberacaoController extends Controller
 
         $user = auth()->user();
         $operacaoId = $request->input('operacao_id');
-        if ($operacaoId && !$user->hasRole('administrador') && !$user->temAcessoOperacao($operacaoId)) {
-            $operacaoId = null;
+        if ($operacaoId && !$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $operacaoId, $opsIds, true)) {
+                $operacaoId = null;
+            }
         }
 
         $query = Pagamento::with(['parcela.emprestimo.cliente', 'parcela.emprestimo.operacao', 'consultor', 'produtoObjetoItens'])
@@ -387,7 +396,7 @@ class LiberacaoController extends Controller
         if ($operacaoId) {
             $query->whereHas('parcela.emprestimo', fn ($q) => $q->where('operacao_id', $operacaoId));
         }
-        if (!$user->hasRole('administrador')) {
+        if (!$user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
             if (!empty($operacoesIds)) {
                 $query->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $operacoesIds));
@@ -398,7 +407,7 @@ class LiberacaoController extends Controller
 
         $pagamentos = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
-        if ($user->hasRole('administrador')) {
+        if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->get();
         } else {
             $operacoesIds = $user->getOperacoesIds();
@@ -421,8 +430,11 @@ class LiberacaoController extends Controller
 
         $pagamento = Pagamento::with('parcela.emprestimo')->findOrFail($id);
         $user = auth()->user();
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($pagamento->parcela->emprestimo->operacao_id)) {
-            abort(403, 'Sem acesso a esta operação.');
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $pagamento->parcela->emprestimo->operacao_id, $opsIds, true)) {
+                abort(403, 'Sem acesso a esta operação.');
+            }
         }
 
         try {
@@ -448,8 +460,11 @@ class LiberacaoController extends Controller
 
         $pagamento = Pagamento::with('parcela.emprestimo')->findOrFail($id);
         $user = auth()->user();
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($pagamento->parcela->emprestimo->operacao_id)) {
-            abort(403, 'Sem acesso a esta operação.');
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $pagamento->parcela->emprestimo->operacao_id, $opsIds, true)) {
+                abort(403, 'Sem acesso a esta operação.');
+            }
         }
 
         try {
@@ -476,8 +491,11 @@ class LiberacaoController extends Controller
         $user = auth()->user();
         $operacaoId = $request->input('operacao_id');
 
-        if ($operacaoId && !$user->hasRole('administrador') && !$user->temAcessoOperacao($operacaoId)) {
-            $operacaoId = null;
+        if ($operacaoId && !$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $operacaoId, $opsIds, true)) {
+                $operacaoId = null;
+            }
         }
 
         $query = SolicitacaoPagamentoJurosParcial::with([
@@ -489,7 +507,7 @@ class LiberacaoController extends Controller
         if ($operacaoId) {
             $query->whereHas('parcela.emprestimo', fn ($q) => $q->where('operacao_id', $operacaoId));
         }
-        if (!$user->hasRole('administrador')) {
+        if (!$user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
             if (!empty($opsIds)) {
                 $query->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
@@ -500,12 +518,12 @@ class LiberacaoController extends Controller
 
         $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
-        if ($user->hasRole('administrador')) {
-            $operacoes = Operacao::where('ativo', true)->get();
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
         } else {
-            $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
+            $opsIds = $user->getOperacoesIds();
+            $operacoes = !empty($opsIds)
+                ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
                 : collect([]);
         }
 
@@ -527,8 +545,11 @@ class LiberacaoController extends Controller
         }
 
         $user = auth()->user();
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($solicitacao->parcela->emprestimo->operacao_id)) {
-            abort(403, 'Sem acesso a esta operação.');
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $solicitacao->parcela->emprestimo->operacao_id, $opsIds, true)) {
+                abort(403, 'Sem acesso a esta operação.');
+            }
         }
 
         try {
@@ -563,8 +584,11 @@ class LiberacaoController extends Controller
         }
 
         $user = auth()->user();
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($solicitacao->parcela->emprestimo->operacao_id)) {
-            abort(403, 'Sem acesso a esta operação.');
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $solicitacao->parcela->emprestimo->operacao_id, $opsIds, true)) {
+                abort(403, 'Sem acesso a esta operação.');
+            }
         }
 
         $solicitacao->update([
@@ -588,8 +612,11 @@ class LiberacaoController extends Controller
         $user = auth()->user();
         $operacaoId = $request->input('operacao_id');
 
-        if ($operacaoId && !$user->hasRole('administrador') && !$user->temAcessoOperacao($operacaoId)) {
-            $operacaoId = null;
+        if ($operacaoId && !$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $operacaoId, $opsIds, true)) {
+                $operacaoId = null;
+            }
         }
 
         $query = SolicitacaoPagamentoJurosContratoReduzido::with([
@@ -601,7 +628,7 @@ class LiberacaoController extends Controller
         if ($operacaoId) {
             $query->whereHas('parcela.emprestimo', fn ($q) => $q->where('operacao_id', $operacaoId));
         }
-        if (!$user->hasRole('administrador')) {
+        if (!$user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
             if (!empty($opsIds)) {
                 $query->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
@@ -612,12 +639,12 @@ class LiberacaoController extends Controller
 
         $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
-        if ($user->hasRole('administrador')) {
-            $operacoes = Operacao::where('ativo', true)->get();
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
         } else {
-            $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
+            $opsIds = $user->getOperacoesIds();
+            $operacoes = !empty($opsIds)
+                ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
                 : collect([]);
         }
 
@@ -639,8 +666,11 @@ class LiberacaoController extends Controller
         }
 
         $user = auth()->user();
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($solicitacao->parcela->emprestimo->operacao_id)) {
-            abort(403, 'Sem acesso a esta operação.');
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $solicitacao->parcela->emprestimo->operacao_id, $opsIds, true)) {
+                abort(403, 'Sem acesso a esta operação.');
+            }
         }
 
         try {
@@ -675,8 +705,11 @@ class LiberacaoController extends Controller
         }
 
         $user = auth()->user();
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($solicitacao->parcela->emprestimo->operacao_id)) {
-            abort(403, 'Sem acesso a esta operação.');
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $solicitacao->parcela->emprestimo->operacao_id, $opsIds, true)) {
+                abort(403, 'Sem acesso a esta operação.');
+            }
         }
 
         $solicitacao->update([
@@ -700,8 +733,11 @@ class LiberacaoController extends Controller
         $user = auth()->user();
         $operacaoId = $request->input('operacao_id');
 
-        if ($operacaoId && !$user->hasRole('administrador') && !$user->temAcessoOperacao($operacaoId)) {
-            $operacaoId = null;
+        if ($operacaoId && !$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $operacaoId, $opsIds, true)) {
+                $operacaoId = null;
+            }
         }
 
         $query = SolicitacaoRenovacaoAbate::with([
@@ -713,7 +749,7 @@ class LiberacaoController extends Controller
         if ($operacaoId) {
             $query->whereHas('parcela.emprestimo', fn ($q) => $q->where('operacao_id', $operacaoId));
         }
-        if (!$user->hasRole('administrador')) {
+        if (!$user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
             if (!empty($opsIds)) {
                 $query->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
@@ -724,12 +760,12 @@ class LiberacaoController extends Controller
 
         $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
-        if ($user->hasRole('administrador')) {
-            $operacoes = Operacao::where('ativo', true)->get();
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
         } else {
-            $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
+            $opsIds = $user->getOperacoesIds();
+            $operacoes = !empty($opsIds)
+                ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
                 : collect([]);
         }
 
@@ -751,8 +787,11 @@ class LiberacaoController extends Controller
         }
 
         $user = auth()->user();
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($solicitacao->parcela->emprestimo->operacao_id)) {
-            abort(403, 'Sem acesso a esta operação.');
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $solicitacao->parcela->emprestimo->operacao_id, $opsIds, true)) {
+                abort(403, 'Sem acesso a esta operação.');
+            }
         }
 
         try {
@@ -814,8 +853,11 @@ class LiberacaoController extends Controller
         }
 
         $user = auth()->user();
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($solicitacao->parcela->emprestimo->operacao_id)) {
-            abort(403, 'Sem acesso a esta operação.');
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $solicitacao->parcela->emprestimo->operacao_id, $opsIds, true)) {
+                abort(403, 'Sem acesso a esta operação.');
+            }
         }
 
         $solicitacao->update([
@@ -853,8 +895,11 @@ class LiberacaoController extends Controller
         $user = auth()->user();
         $operacaoId = $request->input('operacao_id');
 
-        if ($operacaoId && !$user->hasRole('administrador') && !$user->temAcessoOperacao($operacaoId)) {
-            $operacaoId = null;
+        if ($operacaoId && !$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $operacaoId, $opsIds, true)) {
+                $operacaoId = null;
+            }
         }
 
         $query = SolicitacaoNegociacao::with([
@@ -867,7 +912,7 @@ class LiberacaoController extends Controller
         if ($operacaoId) {
             $query->where('operacao_id', $operacaoId);
         }
-        if (!$user->hasRole('administrador')) {
+        if (!$user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
             if (!empty($opsIds)) {
                 $query->whereIn('operacao_id', $opsIds);
@@ -878,12 +923,12 @@ class LiberacaoController extends Controller
 
         $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
-        if ($user->hasRole('administrador')) {
-            $operacoes = Operacao::where('ativo', true)->get();
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
         } else {
-            $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
+            $opsIds = $user->getOperacoesIds();
+            $operacoes = !empty($opsIds)
+                ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
                 : collect([]);
         }
 
@@ -905,8 +950,11 @@ class LiberacaoController extends Controller
         }
 
         $user = auth()->user();
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($solicitacao->operacao_id)) {
-            abort(403, 'Sem acesso a esta operação.');
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $solicitacao->operacao_id, $opsIds, true)) {
+                abort(403, 'Sem acesso a esta operação.');
+            }
         }
 
         try {
@@ -940,8 +988,11 @@ class LiberacaoController extends Controller
         }
 
         $user = auth()->user();
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($solicitacao->operacao_id)) {
-            abort(403, 'Sem acesso a esta operação.');
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $solicitacao->operacao_id, $opsIds, true)) {
+                abort(403, 'Sem acesso a esta operação.');
+            }
         }
 
         try {

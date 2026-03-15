@@ -54,6 +54,7 @@ Localização: `app/Modules/Core/Services/NotificacaoService.php`
 - `criar(array $dados)` - Cria uma notificação para um usuário
 - `criarParaMultiplos(array $userIds, array $dados)` - Cria notificações para múltiplos usuários
 - `criarParaRole(string $role, array $dados)` - Cria notificações para todos os usuários com uma role específica
+- `criarParaRoleComOperacao(string $role, int $operacaoId, array $dados)` - Cria notificações para usuários com a role que tenham acesso à operação (Super Admin recebe sempre; gestor/administrador só se vinculado à operação)
 - `listar(int $userId, int $limit, bool $apenasNaoLidas)` - Lista notificações do usuário
 - `contarNaoLidas(int $userId)` - Conta notificações não lidas
 - `marcarComoLida(int $notificacaoId, int $userId)` - Marca uma notificação como lida

@@ -147,18 +147,15 @@ class EmprestimoService
                     'empresa_id' => $empresaId,
                 ]);
                 $notificacaoService = app(NotificacaoService::class);
-                $notificacaoService->criarParaRole('gestor', [
+                $operacaoId = (int) $emprestimo->operacao_id;
+                $dadosNotif = [
                     'tipo' => 'emprestimo_retroativo_aguardando_aceite',
                     'titulo' => 'Empréstimo retroativo aguardando aceite',
                     'mensagem' => 'Empréstimo #' . $emprestimo->id . ' (retroativo) criado por consultor aguardando sua aprovação.',
                     'url' => route('emprestimos.retroativo.pendentes'),
-                ]);
-                $notificacaoService->criarParaRole('administrador', [
-                    'tipo' => 'emprestimo_retroativo_aguardando_aceite',
-                    'titulo' => 'Empréstimo retroativo aguardando aceite',
-                    'mensagem' => 'Empréstimo #' . $emprestimo->id . ' (retroativo) criado por consultor aguardando sua aprovação.',
-                    'url' => route('emprestimos.retroativo.pendentes'),
-                ]);
+                ];
+                $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, $dadosNotif);
+                $notificacaoService->criarParaRoleComOperacao('administrador', $operacaoId, $dadosNotif);
             }
 
             // Se aprovado, verificar se precisa criar liberação (retroativo não cria liberação)
@@ -213,9 +210,9 @@ class EmprestimoService
             $cliente = $emprestimo->cliente;
             
             if ($cliente) {
+                $operacaoId = (int) $emprestimo->operacao_id;
                 if ($status === 'pendente') {
-                    // Notificar administradores sobre empréstimo pendente
-                    $notificacaoService->criarParaRole('administrador', [
+                    $notificacaoService->criarParaRoleComOperacao('administrador', $operacaoId, [
                         'tipo' => 'emprestimo_pendente',
                         'titulo' => 'Novo Empréstimo Pendente',
                         'mensagem' => "Empréstimo de R$ " . number_format($emprestimo->valor_total, 2, ',', '.') . " para {$cliente->nome} aguardando aprovação",
@@ -223,8 +220,7 @@ class EmprestimoService
                         'dados' => ['emprestimo_id' => $emprestimo->id],
                     ]);
                 } elseif ($status === 'aprovado') {
-                    // Notificar gestores sobre empréstimo aprovado aguardando liberação
-                    $notificacaoService->criarParaRole('gestor', [
+                    $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, [
                         'tipo' => 'emprestimo_aprovado',
                         'titulo' => 'Empréstimo Aprovado - Liberação Pendente',
                         'mensagem' => "Empréstimo de R$ " . number_format($emprestimo->valor_total, 2, ',', '.') . " para {$cliente->nome} aprovado e aguardando liberação",
@@ -748,8 +744,8 @@ class EmprestimoService
             $cliente = $emprestimo->cliente;
             
             if ($cliente) {
-                // Notificar gestores sobre empréstimo aprovado aguardando liberação
-                $notificacaoService->criarParaRole('gestor', [
+                $operacaoId = (int) $emprestimo->operacao_id;
+                $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, [
                     'tipo' => 'emprestimo_aprovado',
                     'titulo' => 'Empréstimo Aprovado - Liberação Pendente',
                     'mensagem' => "Empréstimo de R$ " . number_format($emprestimo->valor_total, 2, ',', '.') . " para {$cliente->nome} aprovado e aguardando liberação",

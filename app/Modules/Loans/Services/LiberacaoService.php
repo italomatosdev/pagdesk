@@ -107,6 +107,16 @@ class LiberacaoService
             $liberacao = LiberacaoEmprestimo::with(['emprestimo', 'consultor'])->findOrFail($liberacaoId);
             $emprestimo = $liberacao->emprestimo;
 
+            $gestor = \App\Models\User::find($gestorId);
+            if ($gestor && !$gestor->isSuperAdmin()) {
+                $operacoesIds = $gestor->getOperacoesIds();
+                if (empty($operacoesIds) || !in_array((int) $emprestimo->operacao_id, $operacoesIds, true)) {
+                    throw ValidationException::withMessages([
+                        'liberacao' => 'Você não tem permissão para liberar desta operação.',
+                    ]);
+                }
+            }
+
             // VALIDAÇÃO 1: Empréstimo deve estar APROVADO
             if (!$emprestimo->isAprovado()) {
                 throw ValidationException::withMessages([
@@ -361,10 +371,10 @@ class LiberacaoService
 
             // Notificações
             $notificacaoService = app(NotificacaoService::class);
-            $cliente = $liberacao->emprestimo->cliente;
-            
-            // Notificar gestores sobre pagamento confirmado
-            $notificacaoService->criarParaRole('gestor', [
+            $emprestimo = $liberacao->emprestimo;
+            $cliente = $emprestimo->cliente;
+            $operacaoId = (int) $emprestimo->operacao_id;
+            $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, [
                 'tipo' => 'pagamento_registrado',
                 'titulo' => 'Pagamento ao Cliente Confirmado',
                 'mensagem' => "Consultor confirmou pagamento de R$ " . number_format($liberacao->valor_liberado, 2, ',', '.') . " ao cliente {$cliente->nome}",
@@ -454,15 +464,14 @@ class LiberacaoService
         ->where('status', 'aguardando')
         ->orderBy('created_at', 'asc');
 
-        // Aplicar filtro de operações do usuário (exceto administradores)
-        if ($user && !$user->hasRole('administrador')) {
+        // Aplicar filtro de operações do usuário (Super Admin vê todas; demais só das operações vinculadas)
+        if ($user && !$user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
             if (!empty($operacoesIds)) {
                 $query->whereHas('emprestimo', function ($q) use ($operacoesIds) {
                     $q->whereIn('operacao_id', $operacoesIds);
                 });
             } else {
-                // Se não tem operações vinculadas, retorna vazio
                 $query->whereRaw('1 = 0');
             }
         }

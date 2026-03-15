@@ -68,11 +68,19 @@
                                 @enderror
                             </div>
                             <script>
-                                window.categoriasPorTipo = {
-                                    entrada: @json($categoriasEntrada ?? []),
-                                    despesa: @json($categoriasDespesa ?? [])
-                                };
+                                window.categoriasPorOperacao = @json($categoriasPorOperacao ?? []);
+                                window.categoriasPorTipo = { entrada: [], despesa: [] };
                                 window.oldCategoriaId = @json(old('categoria_id'));
+                                function aplicarCategoriasDaOperacao(operacaoId) {
+                                    var porOp = window.categoriasPorOperacao[operacaoId];
+                                    if (porOp) {
+                                        window.categoriasPorTipo.entrada = porOp.entrada || [];
+                                        window.categoriasPorTipo.despesa = porOp.despesa || [];
+                                    } else {
+                                        window.categoriasPorTipo.entrada = [];
+                                        window.categoriasPorTipo.despesa = [];
+                                    }
+                                }
                             </script>
 
                             <div class="mb-3">
@@ -183,6 +191,16 @@
                     <div class="modal-body">
                         <form id="formNovaCategoria">
                             <div class="mb-3">
+                                <label class="form-label">Operação <span class="text-danger">*</span></label>
+                                <select name="operacao_id" id="modal_categoria_operacao_id" class="form-select" required>
+                                    <option value="">Selecione a operação</option>
+                                    @foreach($operacoes ?? [] as $op)
+                                        <option value="{{ $op->id }}" {{ old('operacao_id') == $op->id ? 'selected' : '' }}>{{ $op->nome }}</option>
+                                    @endforeach
+                                </select>
+                                <small class="text-muted">Operação à qual esta categoria pertencerá.</small>
+                            </div>
+                            <div class="mb-3">
                                 <label class="form-label">Nome da Categoria <span class="text-danger">*</span></label>
                                 <input type="text" name="nome" id="categoria_nome" class="form-control" 
                                        placeholder="Ex: Aluguel, Energia, Comissão..." required maxlength="100">
@@ -281,7 +299,9 @@
                 // Delegação no form: assim o change da operação sempre é capturado
                 form.addEventListener('change', function(e) {
                     if (e.target && e.target.id === 'operacao_id') {
+                        aplicarCategoriasDaOperacao(e.target.value);
                         atualizarSelectUsuarios();
+                        atualizarSelectCategorias();
                     }
                     if (e.target && e.target.id === 'tipo') {
                         atualizarSelectCategorias();
@@ -289,9 +309,13 @@
                 });
                 form.addEventListener('input', function(e) {
                     if (e.target && e.target.id === 'operacao_id') {
+                        aplicarCategoriasDaOperacao(e.target.value);
                         atualizarSelectUsuarios();
+                        atualizarSelectCategorias();
                     }
                 });
+                var opId = operacaoSelect && operacaoSelect.value ? operacaoSelect.value : (Object.keys(window.categoriasPorOperacao || {})[0] || '');
+                aplicarCategoriasDaOperacao(opId);
                 atualizarSelectUsuarios();
                 atualizarSelectCategorias();
 
@@ -384,8 +408,13 @@
 
                     if (!modal || !btnSalvar) return;
 
-                    // Ao abrir o modal, pré-selecionar o tipo baseado no tipo de movimentação
+                    // Ao abrir o modal: sincronizar operação com o formulário e pré-selecionar o tipo
                     modal.addEventListener('show.bs.modal', function() {
+                        const operacaoPrincipal = document.getElementById('operacao_id');
+                        const operacaoModal = document.getElementById('modal_categoria_operacao_id');
+                        if (operacaoPrincipal && operacaoModal) {
+                            operacaoModal.value = operacaoPrincipal.value || '';
+                        }
                         const tipoMov = tipoMovimentacao ? tipoMovimentacao.value : '';
                         if (tipoMov === 'entrada') {
                             tipoCategoria.value = 'entrada';
@@ -394,7 +423,6 @@
                         } else {
                             tipoCategoria.value = '';
                         }
-                        // Limpar formulário
                         document.getElementById('categoria_nome').value = '';
                         categoriaErro.classList.add('d-none');
                     });
@@ -404,9 +432,10 @@
                         const nome = document.getElementById('categoria_nome').value.trim();
                         const tipo = tipoCategoria.value;
 
-                        // Validação
-                        if (!nome || !tipo) {
-                            categoriaErro.textContent = 'Preencha todos os campos obrigatórios.';
+                        const operacaoSelectModal = document.getElementById('modal_categoria_operacao_id');
+                        const operacaoId = operacaoSelectModal && operacaoSelectModal.value;
+                        if (!nome || !tipo || !operacaoId) {
+                            categoriaErro.textContent = 'Preencha todos os campos obrigatórios (incluindo operação).';
                             categoriaErro.classList.remove('d-none');
                             return;
                         }
@@ -422,7 +451,7 @@
                                 'X-CSRF-TOKEN': '{{ csrf_token() }}',
                                 'Accept': 'application/json'
                             },
-                            body: JSON.stringify({ nome: nome, tipo: tipo })
+                            body: JSON.stringify({ nome: nome, tipo: tipo, operacao_id: operacaoId })
                         })
                         .then(function(response) {
                             return response.json().then(function(data) {

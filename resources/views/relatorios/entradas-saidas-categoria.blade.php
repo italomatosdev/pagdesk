@@ -28,9 +28,9 @@
                         </div>
                         @if($operacoes->isNotEmpty())
                         <div class="col-auto">
-                            <label class="form-label mb-0">Escopo</label>
+                            <label class="form-label mb-0">Operação</label>
                             <select name="operacao_id" class="form-select form-select-sm" style="width: 220px;">
-                                <option value="">Caixa único (todas)</option>
+                                <option value="">Todas</option>
                                 @foreach($operacoes as $op)
                                     <option value="{{ $op->id }}" {{ $operacaoId == $op->id ? 'selected' : '' }}>{{ $op->nome }}</option>
                                 @endforeach
@@ -133,7 +133,6 @@
                 <div class="card-body">
                     @if(empty($porCategoria))
                         <p class="text-muted mb-0">Nenhuma movimentação no período com os filtros aplicados.</p>
-                        <small class="text-muted">Execute o comando <code>php artisan caixa:preencher-categorias-retroativo</code> para classificar movimentações antigas.</small>
                     @else
                         <div class="table-responsive">
                             <table class="table table-bordered table-hover mb-0">

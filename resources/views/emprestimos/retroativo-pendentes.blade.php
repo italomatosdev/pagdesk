@@ -29,6 +29,26 @@
                         <div class="alert alert-danger">{{ session('error') }}</div>
                     @endif
 
+                    @if(($operacoes ?? collect())->isNotEmpty())
+                    <form method="GET" action="{{ route('emprestimos.retroativo.pendentes') }}" class="mb-3">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label">Operação</label>
+                                <select name="operacao_id" class="form-select">
+                                    <option value="">Todas</option>
+                                    @foreach($operacoes as $op)
+                                        <option value="{{ $op->id }}" {{ (isset($operacaoId) && (string)$operacaoId === (string)$op->id) ? 'selected' : '' }}>{{ $op->nome }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-auto">
+                                <button type="submit" class="btn btn-primary"><i class="bx bx-filter"></i> Filtrar</button>
+                                <a href="{{ route('emprestimos.retroativo.pendentes') }}" class="btn btn-light"><i class="bx bx-reset"></i> Limpar</a>
+                            </div>
+                        </div>
+                    </form>
+                    @endif
+
                     @if($solicitacoes->isEmpty())
                         <p class="text-muted mb-0">Nenhum empréstimo retroativo aguardando aceite.</p>
                     @else

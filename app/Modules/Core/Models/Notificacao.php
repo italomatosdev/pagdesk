@@ -12,6 +12,7 @@ class Notificacao extends Model
 
     protected $fillable = [
         'user_id',
+        'operacao_id',
         'tipo',
         'titulo',
         'mensagem',
@@ -39,6 +40,14 @@ class Notificacao extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(\App\Models\User::class);
+    }
+
+    /**
+     * Relacionamento com Operação (contexto da notificação)
+     */
+    public function operacao(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Core\Models\Operacao::class, 'operacao_id');
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Modules\Loans\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Core\Models\Operacao;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\EmprestimoGarantia;
 use App\Modules\Loans\Models\EmprestimoGarantiaAnexo;
@@ -20,17 +21,23 @@ class GarantiaController extends Controller
     }
 
     /**
-     * Listar todas as garantias
+     * Listar todas as garantias (apenas das operações do usuário; Super Admin vê todas).
      */
     public function index(Request $request)
     {
         $user = auth()->user();
-        $operacoesIds = $user->getOperacoesIds();
+        if ($user->isSuperAdmin()) {
+            $operacoesIds = Operacao::where('ativo', true)->pluck('id')->toArray();
+        } else {
+            $operacoesIds = $user->getOperacoesIds();
+        }
 
         $query = EmprestimoGarantia::with(['emprestimo.cliente', 'emprestimo.operacao', 'anexos'])
             ->whereHas('emprestimo', function ($q) use ($operacoesIds) {
                 if (!empty($operacoesIds)) {
                     $q->whereIn('operacao_id', $operacoesIds);
+                } else {
+                    $q->whereRaw('1 = 0');
                 }
             });
 
@@ -54,10 +61,12 @@ class GarantiaController extends Controller
             });
         }
 
-        if ($request->filled('operacao_id')) {
-            $query->whereHas('emprestimo', function ($q) use ($request) {
-                $q->where('operacao_id', $request->input('operacao_id'));
-            });
+        $operacaoIdFiltro = $request->input('operacao_id');
+        if ($operacaoIdFiltro !== null && $operacaoIdFiltro !== '') {
+            $operacaoIdFiltro = (int) $operacaoIdFiltro;
+            if (!empty($operacoesIds) && in_array($operacaoIdFiltro, $operacoesIds, true)) {
+                $query->whereHas('emprestimo', fn ($q) => $q->where('operacao_id', $operacaoIdFiltro));
+            }
         }
 
         if ($request->filled('status_emprestimo')) {
@@ -65,51 +74,29 @@ class GarantiaController extends Controller
                 $q->where('status', $request->input('status_emprestimo'));
             });
         } else {
-            // Por padrão, excluir garantias de empréstimos cancelados
-            $query->whereHas('emprestimo', function ($q) {
-                $q->where('status', '!=', 'cancelado');
-            });
+            $query->whereHas('emprestimo', fn ($q) => $q->where('status', '!=', 'cancelado'));
         }
 
         $garantias = $query->orderBy('created_at', 'desc')->paginate(20)->withQueryString();
 
-        // Operações para filtro
-        $operacoes = \App\Modules\Core\Models\Operacao::where('ativo', true)
-            ->whereIn('id', $operacoesIds)
-            ->get();
+        $operacoes = !empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
 
-        // Estatísticas (excluir garantias de empréstimos cancelados)
+        $statsQuery = function ($q) use ($operacoesIds) {
+            if (!empty($operacoesIds)) {
+                $q->whereIn('operacao_id', $operacoesIds);
+            } else {
+                $q->whereRaw('1 = 0');
+            }
+            $q->where('status', '!=', 'cancelado');
+        };
         $stats = [
-            'total' => EmprestimoGarantia::whereHas('emprestimo', function ($q) use ($operacoesIds) {
-                if (!empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
-                }
-                $q->where('status', '!=', 'cancelado');
-            })->count(),
-            'valor_total' => EmprestimoGarantia::whereHas('emprestimo', function ($q) use ($operacoesIds) {
-                if (!empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
-                }
-                $q->where('status', '!=', 'cancelado');
-            })->sum('valor_avaliado'),
-            'imoveis' => EmprestimoGarantia::where('categoria', 'imovel')->whereHas('emprestimo', function ($q) use ($operacoesIds) {
-                if (!empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
-                }
-                $q->where('status', '!=', 'cancelado');
-            })->count(),
-            'veiculos' => EmprestimoGarantia::where('categoria', 'veiculo')->whereHas('emprestimo', function ($q) use ($operacoesIds) {
-                if (!empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
-                }
-                $q->where('status', '!=', 'cancelado');
-            })->count(),
-            'outros' => EmprestimoGarantia::where('categoria', 'outros')->whereHas('emprestimo', function ($q) use ($operacoesIds) {
-                if (!empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
-                }
-                $q->where('status', '!=', 'cancelado');
-            })->count(),
+            'total' => EmprestimoGarantia::whereHas('emprestimo', $statsQuery)->count(),
+            'valor_total' => EmprestimoGarantia::whereHas('emprestimo', $statsQuery)->sum('valor_avaliado'),
+            'imoveis' => EmprestimoGarantia::where('categoria', 'imovel')->whereHas('emprestimo', $statsQuery)->count(),
+            'veiculos' => EmprestimoGarantia::where('categoria', 'veiculo')->whereHas('emprestimo', $statsQuery)->count(),
+            'outros' => EmprestimoGarantia::where('categoria', 'outros')->whereHas('emprestimo', $statsQuery)->count(),
         ];
 
         return view('garantias.index', compact('garantias', 'operacoes', 'stats'));
@@ -127,12 +114,12 @@ class GarantiaController extends Controller
             'anexos'
         ])->findOrFail($garantiaId);
 
-        // Verificar permissão (mesma lógica do index)
         $user = auth()->user();
-        $operacoesIds = $user->getOperacoesIds();
-        
-        if (!empty($operacoesIds) && !in_array($garantia->emprestimo->operacao_id, $operacoesIds)) {
-            abort(403, 'Você não tem permissão para visualizar esta garantia.');
+        if (!$user->isSuperAdmin()) {
+            $operacoesIds = $user->getOperacoesIds();
+            if (empty($operacoesIds) || !in_array((int) $garantia->emprestimo->operacao_id, $operacoesIds, true)) {
+                abort(403, 'Você não tem permissão para visualizar esta garantia.');
+            }
         }
 
         return view('garantias.show', compact('garantia'));
@@ -155,10 +142,15 @@ class GarantiaController extends Controller
             return back()->with('error', 'Não é possível adicionar garantias a empréstimos finalizados.');
         }
 
-        // Verificar permissão
         $user = auth()->user();
         if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             return back()->with('error', 'Você não tem permissão para adicionar garantias a este empréstimo.');
+        }
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                return back()->with('error', 'Você não tem acesso a esta operação.');
+            }
         }
 
         $validated = $request->validate([
@@ -218,10 +210,15 @@ class GarantiaController extends Controller
             return back()->with('error', 'Não é possível editar garantias de empréstimos finalizados.');
         }
 
-        // Verificar permissão
         $user = auth()->user();
         if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             return back()->with('error', 'Você não tem permissão para editar esta garantia.');
+        }
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                return back()->with('error', 'Você não tem acesso a esta operação.');
+            }
         }
 
         $validated = $request->validate([
@@ -278,10 +275,15 @@ class GarantiaController extends Controller
             return back()->with('error', 'Não é possível excluir garantias de empréstimos finalizados.');
         }
 
-        // Verificar permissão
         $user = auth()->user();
         if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             return back()->with('error', 'Você não tem permissão para excluir esta garantia.');
+        }
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                return back()->with('error', 'Você não tem acesso a esta operação.');
+            }
         }
 
         try {
@@ -307,10 +309,15 @@ class GarantiaController extends Controller
             return back()->with('error', 'Não é possível excluir anexos de garantias de empréstimos finalizados.');
         }
 
-        // Verificar permissão
         $user = auth()->user();
         if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             return back()->with('error', 'Você não tem permissão para excluir este anexo.');
+        }
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                return back()->with('error', 'Você não tem acesso a esta operação.');
+            }
         }
 
         try {
@@ -338,13 +345,21 @@ class GarantiaController extends Controller
             return back()->with('error', 'Não é possível adicionar anexos a garantias de empréstimos finalizados.');
         }
 
-        // Verificar permissão
         $user = auth()->user();
         if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['error' => 'Sem permissão'], 403);
             }
             return back()->with('error', 'Você não tem permissão para fazer upload nesta garantia.');
+        }
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json(['error' => 'Sem acesso a esta operação.'], 403);
+                }
+                return back()->with('error', 'Você não tem acesso a esta operação.');
+            }
         }
 
         $request->validate([

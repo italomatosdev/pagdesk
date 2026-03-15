@@ -214,7 +214,18 @@
                         <i class="bx bx-transfer icon nav-icon"></i>
                         <span class="menu-item">Liberações</span>
                         @php
-                            $liberacoesPendentes = \App\Modules\Loans\Models\LiberacaoEmprestimo::where('status', 'aguardando')->count();
+                            $userSidebar = auth()->user();
+                            $opsIdsSidebar = $userSidebar->getOperacoesIds();
+                            $aplicarFiltroOps = !$userSidebar->isSuperAdmin();
+                            $queryLiberacoes = \App\Modules\Loans\Models\LiberacaoEmprestimo::where('status', 'aguardando');
+                            if ($aplicarFiltroOps) {
+                                if (!empty($opsIdsSidebar)) {
+                                    $queryLiberacoes->whereHas('emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIdsSidebar));
+                                } else {
+                                    $queryLiberacoes->whereRaw('1 = 0');
+                                }
+                            }
+                            $liberacoesPendentes = $queryLiberacoes->count();
                             $produtoObjetoPendentes = \App\Modules\Loans\Models\Pagamento::where('metodo', 'produto_objeto')->whereNull('aceite_gestor_id')->whereNull('rejeitado_por_id');
                             $solicitacoesJurosParcial = \App\Modules\Loans\Models\SolicitacaoPagamentoJurosParcial::where('status', 'aguardando');
                             $solicitacoesJurosContratoReduzido = \App\Modules\Loans\Models\SolicitacaoPagamentoJurosContratoReduzido::where('status', 'aguardando');
@@ -222,16 +233,15 @@
                             $solicitacoesQuitacaoDesconto = \App\Modules\Loans\Models\SolicitacaoQuitacao::where('status', 'pendente');
                             $solicitacoesNegociacao = \App\Modules\Loans\Models\SolicitacaoNegociacao::where('status', 'pendente');
                             $solicitacoesRetroativo = \App\Modules\Loans\Models\SolicitacaoEmprestimoRetroativo::where('status', 'aguardando');
-                            if (!auth()->user()->hasRole('administrador')) {
-                                $opsIds = auth()->user()->getOperacoesIds();
-                                if (!empty($opsIds)) {
-                                    $produtoObjetoPendentes->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
-                                    $solicitacoesJurosParcial->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
-                                    $solicitacoesNegociacao->whereIn('operacao_id', $opsIds);
-                                    $solicitacoesJurosContratoReduzido->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
-                                    $solicitacoesRenovacaoAbate->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
-                                    $solicitacoesQuitacaoDesconto->whereHas('emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
-                                    $solicitacoesRetroativo->whereHas('emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
+                            if ($aplicarFiltroOps) {
+                                if (!empty($opsIdsSidebar)) {
+                                    $produtoObjetoPendentes->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIdsSidebar));
+                                    $solicitacoesJurosParcial->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIdsSidebar));
+                                    $solicitacoesNegociacao->whereIn('operacao_id', $opsIdsSidebar);
+                                    $solicitacoesJurosContratoReduzido->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIdsSidebar));
+                                    $solicitacoesRenovacaoAbate->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIdsSidebar));
+                                    $solicitacoesQuitacaoDesconto->whereHas('emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIdsSidebar));
+                                    $solicitacoesRetroativo->whereHas('emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIdsSidebar));
                                 } else {
                                     $produtoObjetoPendentes->whereRaw('1 = 0');
                                     $solicitacoesJurosParcial->whereRaw('1 = 0');
@@ -320,7 +330,16 @@
                         <i class="bx bx-check-circle icon nav-icon"></i>
                         <span class="menu-item">Aprovações</span>
                         @php
-                            $pendentes = \App\Modules\Loans\Models\Emprestimo::where('status', 'pendente')->count();
+                            $queryPendentes = \App\Modules\Loans\Models\Emprestimo::where('status', 'pendente');
+                            if (!auth()->user()->isSuperAdmin()) {
+                                $opsAprov = auth()->user()->getOperacoesIds();
+                                if (!empty($opsAprov)) {
+                                    $queryPendentes->whereIn('operacao_id', $opsAprov);
+                                } else {
+                                    $queryPendentes->whereRaw('1 = 0');
+                                }
+                            }
+                            $pendentes = $queryPendentes->count();
                         @endphp
                         @if($pendentes > 0)
                             <span class="badge rounded-pill bg-danger">{{ $pendentes }}</span>

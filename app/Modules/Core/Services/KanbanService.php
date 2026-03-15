@@ -24,13 +24,13 @@ class KanbanService
 
         $operacoesIds = $user->getOperacoesIds();
 
-        // Helper para aplicar filtro de operação
+        // Helper para aplicar filtro de operação (Super Admin vê todas; demais só das operações vinculadas)
         $aplicarFiltroOperacao = function ($query) use ($operacaoId, $operacoesIds, $user) {
             if ($operacaoId) {
                 $query->where('operacao_id', $operacaoId);
-            } elseif (!$user->hasRole('administrador') && !empty($operacoesIds)) {
+            } elseif (!$user->isSuperAdmin() && !empty($operacoesIds)) {
                 $query->whereIn('operacao_id', $operacoesIds);
-            } elseif (!$user->hasRole('administrador')) {
+            } elseif (!$user->isSuperAdmin()) {
                 $query->whereRaw('1 = 0');
             }
         };

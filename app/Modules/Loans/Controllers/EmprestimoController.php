@@ -605,24 +605,18 @@ class EmprestimoController extends Controller
                 'status' => 'pendente',
             ]);
 
-            // Notificar gestores e admins
+            // Notificar gestores e admins da operação
             $notificacaoService = app(\App\Modules\Core\Services\NotificacaoService::class);
-            
-            $notificacaoService->criarParaRole('gestor', [
+            $operacaoId = (int) $emprestimoOrigem->operacao_id;
+            $dadosNotif = [
                 'tipo' => 'negociacao_pendente',
                 'titulo' => 'Nova Solicitação de Negociação',
                 'mensagem' => "{$user->name} solicitou negociação do empréstimo #{$emprestimoOrigemId} - Cliente: {$emprestimoOrigem->cliente->nome}. Saldo devedor: R$ " . number_format($saldoDevedor, 2, ',', '.'),
                 'url' => route('liberacoes.negociacoes'),
                 'dados' => ['solicitacao_id' => $solicitacao->id],
-            ]);
-
-            $notificacaoService->criarParaRole('administrador', [
-                'tipo' => 'negociacao_pendente',
-                'titulo' => 'Nova Solicitação de Negociação',
-                'mensagem' => "{$user->name} solicitou negociação do empréstimo #{$emprestimoOrigemId} - Cliente: {$emprestimoOrigem->cliente->nome}. Saldo devedor: R$ " . number_format($saldoDevedor, 2, ',', '.'),
-                'url' => route('liberacoes.negociacoes'),
-                'dados' => ['solicitacao_id' => $solicitacao->id],
-            ]);
+            ];
+            $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, $dadosNotif);
+            $notificacaoService->criarParaRoleComOperacao('administrador', $operacaoId, $dadosNotif);
 
             return redirect()->route('emprestimos.show', $emprestimoOrigemId)
                 ->with('success', 'Solicitação de negociação enviada para aprovação do gestor/administrador.');
@@ -798,9 +792,16 @@ class EmprestimoController extends Controller
     {
         $user = auth()->user();
 
-        // Apenas gestores e administradores podem executar garantias
         if (!$user->hasAnyRole(['administrador', 'gestor'])) {
             abort(403, 'Apenas gestores e administradores podem executar garantias.');
+        }
+
+        $emprestimo = Emprestimo::findOrFail($id);
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                abort(403, 'Sem acesso a esta operação.');
+            }
         }
 
         $request->validate([
@@ -922,11 +923,19 @@ class EmprestimoController extends Controller
     /**
      * Listagem de empréstimos retroativos aguardando aceite (gestor e administrador).
      */
-    public function indexPendentesRetroativo(): View
+    public function indexPendentesRetroativo(Request $request): View
     {
         $user = auth()->user();
         if (!$user->hasAnyRole(['gestor', 'administrador'])) {
             abort(403, 'Apenas gestores e administradores podem ver empréstimos retroativos pendentes de aceite.');
+        }
+
+        $operacaoId = $request->input('operacao_id');
+        if ($operacaoId && !$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $operacaoId, $opsIds, true)) {
+                $operacaoId = null;
+            }
         }
 
         $query = SolicitacaoEmprestimoRetroativo::with(['emprestimo.cliente', 'emprestimo.operacao', 'emprestimo.parcelas', 'solicitante'])
@@ -939,9 +948,21 @@ class EmprestimoController extends Controller
                 $query->whereRaw('1 = 0');
             }
         }
-        $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15);
+        if ($operacaoId) {
+            $query->whereHas('emprestimo', fn ($q) => $q->where('operacao_id', $operacaoId));
+        }
+        $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
-        return view('emprestimos.retroativo-pendentes', compact('solicitacoes'));
+        if ($user->isSuperAdmin()) {
+            $operacoes = \App\Modules\Core\Models\Operacao::where('ativo', true)->orderBy('nome')->get();
+        } else {
+            $opsIds = $user->getOperacoesIds();
+            $operacoes = !empty($opsIds)
+                ? \App\Modules\Core\Models\Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
+                : collect([]);
+        }
+
+        return view('emprestimos.retroativo-pendentes', compact('solicitacoes', 'operacoes', 'operacaoId'));
     }
 
     /**

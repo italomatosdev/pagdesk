@@ -15,11 +15,12 @@ class ParcelaService
     /**
      * Listar cobranças do dia (vencendo hoje e atrasadas)
      *
-     * @param int|null $operacaoId Filtrar por operação
+     * @param int|null $operacaoId Filtrar por uma operação
      * @param int|null $consultorId Filtrar por consultor
+     * @param array|null $operacaoIds Restringir a essas operações (usado quando $operacaoId é null)
      * @return Collection
      */
-    public function cobrancasDoDia(?int $operacaoId = null, ?int $consultorId = null): Collection
+    public function cobrancasDoDia(?int $operacaoId = null, ?int $consultorId = null, ?array $operacaoIds = null): Collection
     {
         $query = Parcela::with(['emprestimo.cliente', 'emprestimo.consultor', 'emprestimo.operacao'])
             ->whereIn('status', ['pendente', 'atrasada'])
@@ -31,6 +32,10 @@ class ParcelaService
         if ($operacaoId) {
             $query->whereHas('emprestimo', function ($q) use ($operacaoId) {
                 $q->where('operacao_id', $operacaoId);
+            });
+        } elseif (!empty($operacaoIds)) {
+            $query->whereHas('emprestimo', function ($q) use ($operacaoIds) {
+                $q->whereIn('operacao_id', $operacaoIds);
             });
         }
 

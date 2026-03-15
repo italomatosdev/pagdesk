@@ -25,6 +25,17 @@
                         <div class="alert alert-success">{{ session('success') }}</div>
                     @endif
                     <form method="get" class="mb-3 row g-2 align-items-end">
+                        @if(($operacoes ?? collect())->isNotEmpty())
+                        <div class="col-auto">
+                            <label class="form-label mb-0">Operação</label>
+                            <select name="operacao_id" class="form-select form-select-sm" style="width: auto;">
+                                <option value="">Todas</option>
+                                @foreach($operacoes as $op)
+                                    <option value="{{ $op->id }}" {{ (isset($operacaoId) && $operacaoId == $op->id) ? 'selected' : '' }}>{{ $op->nome }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        @endif
                         <div class="col-auto">
                             <label class="form-label mb-0">Tipo</label>
                             <select name="tipo" class="form-select form-select-sm" style="width: auto;">
@@ -35,6 +46,7 @@
                         </div>
                         <div class="col-auto">
                             <button type="submit" class="btn btn-sm btn-secondary">Filtrar</button>
+                            <a href="{{ route('caixa.categorias.index') }}" class="btn btn-sm btn-light">Limpar</a>
                         </div>
                     </form>
                     <div class="table-responsive">
@@ -43,6 +55,7 @@
                                 <tr>
                                     <th>#</th>
                                     <th>Nome</th>
+                                    <th>Operação</th>
                                     <th>Tipo</th>
                                     <th>Ordem</th>
                                     <th>Status</th>
@@ -54,6 +67,7 @@
                                     <tr>
                                         <td>{{ $c->id }}</td>
                                         <td>{{ $c->nome }}</td>
+                                        <td>{{ $c->operacao ? $c->operacao->nome : '—' }}</td>
                                         <td>
                                             <span class="badge bg-{{ $c->tipo === 'entrada' ? 'success' : 'warning' }}">
                                                 {{ $c->tipo === 'entrada' ? 'Entrada' : 'Despesa' }}
@@ -80,7 +94,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="6" class="text-center">Nenhuma categoria cadastrada.</td>
+                                        <td colspan="7" class="text-center">Nenhuma categoria cadastrada.</td>
                                     </tr>
                                 @endforelse
                             </tbody>

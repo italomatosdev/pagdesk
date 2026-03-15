@@ -75,9 +75,18 @@
                 </div>
                 <div class="card-body">
                     <!-- Filtros -->
-                    <form method="GET" class="mb-3">
+                    <form method="GET" action="{{ request()->url() }}" class="mb-3">
                         <div class="row g-2">
-                            <div class="col-md-3">
+                            <div class="col-md-2">
+                                <label class="form-label">Operação</label>
+                                <select name="operacao_id" class="form-select">
+                                    <option value="">Todas</option>
+                                    @foreach($operacoes ?? [] as $op)
+                                        <option value="{{ $op->id }}" {{ (isset($filtros['operacao_id']) && (string)$filtros['operacao_id'] === (string)$op->id) ? 'selected' : '' }}>{{ $op->nome }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-2">
                                 <label class="form-label">Status</label>
                                 <select name="status" class="form-select">
                                     <option value="">Todos</option>
@@ -88,21 +97,21 @@
                                     <option value="cancelado" {{ ($filtros['status'] ?? '') === 'cancelado' ? 'selected' : '' }}>Cancelado</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label class="form-label">Vencimento (de)</label>
                                 <input type="date"
                                        name="data_vencimento_de"
                                        class="form-control"
                                        value="{{ $filtros['data_vencimento_de'] ?? '' }}">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label class="form-label">Vencimento (até)</label>
                                 <input type="date"
                                        name="data_vencimento_ate"
                                        class="form-control"
                                        value="{{ $filtros['data_vencimento_ate'] ?? '' }}">
                             </div>
-                            <div class="col-md-3 d-flex align-items-end">
+                            <div class="col-md-2 d-flex align-items-end">
                                 <div class="d-flex w-100 gap-2">
                                     <button type="submit" class="btn btn-primary w-100">
                                         <i class="bx bx-search-alt"></i> Filtrar
