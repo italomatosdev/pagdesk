@@ -149,22 +149,22 @@
                     <div class="p-3 border-bottom">
                         <h6 class="mb-0">{{ auth()->user()->name }}</h6>
                         <p class="mb-0 font-size-11 text-muted">{{ auth()->user()->email }}</p>
-                        @if(auth()->user()->roles->count() > 0)
-                            <div class="mt-2">
-                                @foreach(auth()->user()->roles as $role)
-                                    <span class="badge bg-{{ $role->name === 'administrador' ? 'danger' : ($role->name === 'gestor' ? 'warning' : 'info') }} me-1">
-                                        {{ ucfirst($role->name) }}
-                                    </span>
-                                @endforeach
-                            </div>
-                        @endif
                         @if(auth()->user()->operacoes->count() > 0)
+                            @php
+                                $operacoesUsuario = auth()->user()->operacoes;
+                                $limiteOperacoesDropdown = 5;
+                                $operacoesMostrar = $operacoesUsuario->take($limiteOperacoesDropdown);
+                                $temMaisOperacoes = $operacoesUsuario->count() > $limiteOperacoesDropdown;
+                            @endphp
                             <div class="mt-2">
                                 <small class="text-muted">Operações:</small>
                                 <div>
-                                    @foreach(auth()->user()->operacoes as $operacao)
+                                    @foreach($operacoesMostrar as $operacao)
                                         <span class="badge bg-secondary me-1">{{ $operacao->nome }}</span>
                                     @endforeach
+                                    @if($temMaisOperacoes)
+                                        <a href="{{ route('profile.operacoes') }}" class="small text-primary text-decoration-none ms-1">Ver todas ({{ $operacoesUsuario->count() }})</a>
+                                    @endif
                                 </div>
                             </div>
                         @endif
@@ -172,6 +172,11 @@
                     <a class="dropdown-item" href="{{ route('profile.show') }}"><i
                             class="mdi mdi-account-circle text-muted font-size-16 align-middle me-2"></i> <span
                             class="align-middle">Meu Perfil</span></a>
+                    @if(auth()->user()->operacoes->count() > 0)
+                    <a class="dropdown-item" href="{{ route('profile.operacoes') }}"><i
+                            class="mdi mdi-briefcase-outline text-muted font-size-16 align-middle me-2"></i> <span
+                            class="align-middle">Minhas Operações</span></a>
+                    @endif
                     <div class="dropdown-divider"></div>
                     <a class="dropdown-item" href="javascript:void();"
                         onclick="event.preventDefault(); document.getElementById('logout-form').submit();"><i

@@ -62,7 +62,7 @@
                             @endif
 
                             @if($user->operacoes->count() > 0)
-                                <div class="mt-3">
+                                <div class="mt-3" id="operacoes">
                                     <small class="text-muted d-block mb-2">Operações:</small>
                                     @foreach($user->operacoes as $operacao)
                                         <span class="badge bg-secondary me-1 mb-1">{{ $operacao->nome }}</span>
