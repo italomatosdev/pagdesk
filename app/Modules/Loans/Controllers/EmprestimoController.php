@@ -318,14 +318,19 @@ class EmprestimoController extends Controller
                 $emprestimoOrigem = Emprestimo::with(['cliente', 'operacao', 'parcelas'])->find($emprestimoOrigemId);
                 
                 if ($emprestimoOrigem) {
-                    // Verificar permissão
                     if (!$user->hasAnyRole(['administrador', 'gestor'])) {
-                        // Consultor só pode negociar seus próprios empréstimos
                         if ($emprestimoOrigem->consultor_id !== $user->id) {
                             abort(403, 'Você só pode negociar seus próprios empréstimos.');
                         }
+                    } else {
+                        if (!$user->isSuperAdmin()) {
+                            $opsIds = $user->getOperacoesIds();
+                            if (empty($opsIds) || !in_array((int) $emprestimoOrigem->operacao_id, $opsIds, true)) {
+                                abort(403, 'Sem acesso a esta operação.');
+                            }
+                        }
                     }
-                    
+
                     // Verificar se pode ser negociado
                     if (!$emprestimoOrigem->isAtivo()) {
                         return redirect()->route('emprestimos.show', $emprestimoOrigem->id)
@@ -561,10 +566,16 @@ class EmprestimoController extends Controller
 
         $emprestimoOrigem = Emprestimo::with(['operacao', 'cliente'])->findOrFail($emprestimoOrigemId);
 
-        // Verificar permissão
         if (!$user->hasAnyRole(['administrador', 'gestor'])) {
             if ($emprestimoOrigem->consultor_id !== $user->id) {
                 return back()->with('error', 'Você só pode negociar seus próprios empréstimos.')->withInput();
+            }
+        } else {
+            if (!$user->isSuperAdmin()) {
+                $opsIds = $user->getOperacoesIds();
+                if (empty($opsIds) || !in_array((int) $emprestimoOrigem->operacao_id, $opsIds, true)) {
+                    return back()->with('error', 'Sem acesso a esta operação.')->withInput();
+                }
             }
         }
 

@@ -468,6 +468,14 @@ class PagamentoController extends Controller
     {
         $emprestimo = \App\Modules\Loans\Models\Emprestimo::with(['parcelas', 'operacao', 'cliente'])->findOrFail($emprestimo);
 
+        $user = auth()->user();
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                abort(403, 'Sem acesso a esta operação.');
+            }
+        }
+
         if (!$emprestimo->isFrequenciaDiaria()) {
             return redirect()->route('emprestimos.show', $emprestimo->id)
                 ->with('error', 'Quitação em lote só está disponível para empréstimos de frequência diária.');
@@ -514,6 +522,15 @@ class PagamentoController extends Controller
      */
     public function quitarDiariasStore(Request $request, $emprestimo): RedirectResponse
     {
+        $emprestimoModel = \App\Modules\Loans\Models\Emprestimo::findOrFail($emprestimo);
+        $user = auth()->user();
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimoModel->operacao_id, $opsIds, true)) {
+                return back()->with('error', 'Sem acesso a esta operação.')->withInput();
+            }
+        }
+
         $validated = $request->validate([
             'metodo' => 'required|in:dinheiro,pix,transferencia,outro',
             'data_pagamento' => 'required|date',
@@ -550,7 +567,6 @@ class PagamentoController extends Controller
         }
         $totalDue = $this->pagamentoService->calcularTotalQuitacaoDiarias((int) $emprestimo, $validated);
         $quitacaoService = app(\App\Modules\Loans\Services\QuitacaoService::class);
-        $emprestimoModel = \App\Modules\Loans\Models\Emprestimo::findOrFail($emprestimo);
         $saldoDevedor = $quitacaoService->getSaldoDevedor($emprestimoModel);
 
         if ($valorSolicitado !== null && $valorSolicitado < $saldoDevedor) {
