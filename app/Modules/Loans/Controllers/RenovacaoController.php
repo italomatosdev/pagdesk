@@ -37,9 +37,18 @@ class RenovacaoController extends Controller
             }
         }
 
-        // Filtros
-        if ($request->filled('cliente_id')) {
-            $query->where('cliente_id', $request->cliente_id);
+        // Filtro por nome ou CPF do cliente
+        if ($request->filled('cliente_busca')) {
+            $termo = trim($request->cliente_busca);
+            $digits = preg_replace('/[^0-9]/', '', $termo);
+            $query->whereHas('cliente', function ($q) use ($termo, $digits) {
+                $q->where(function ($q2) use ($termo, $digits) {
+                    $q2->where('nome', 'like', '%' . $termo . '%');
+                    if ($digits !== '') {
+                        $q2->orWhere('documento', 'like', '%' . $digits . '%');
+                    }
+                });
+            });
         }
 
         if ($request->filled('operacao_id')) {
