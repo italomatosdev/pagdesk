@@ -776,6 +776,19 @@ class LiberacaoController extends Controller
                 'aprovado_por_id' => $user->id,
                 'aprovado_em' => now(),
             ]);
+
+            $notificacaoService = app(\App\Modules\Core\Services\NotificacaoService::class);
+            if ($solicitacao->consultor_id) {
+                $notificacaoService->criar([
+                    'user_id' => $solicitacao->consultor_id,
+                    'tipo' => 'renovacao_abate_aprovada',
+                    'titulo' => 'Renovação com abate aprovada',
+                    'mensagem' => 'Sua solicitação de renovação com abate do empréstimo #' . $solicitacao->parcela->emprestimo_id . ' foi aprovada. O novo empréstimo #' . $novoEmprestimo->id . ' foi criado.',
+                    'url' => route('emprestimos.show', $novoEmprestimo->id),
+                    'dados' => ['emprestimo_id' => $novoEmprestimo->id, 'emprestimo_origem_id' => $solicitacao->parcela->emprestimo_id],
+                ]);
+            }
+
             return redirect()->route('liberacoes.renovacao-abate')
                 ->with('success', 'Solicitação aprovada. A renovação foi realizada e o novo empréstimo #' . $novoEmprestimo->id . ' foi criado.');
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -810,6 +823,20 @@ class LiberacaoController extends Controller
             'rejeitado_por_id' => $user->id,
             'rejeitado_em' => now(),
         ]);
+
+        $notificacaoService = app(\App\Modules\Core\Services\NotificacaoService::class);
+        $emprestimoId = $solicitacao->parcela->emprestimo_id;
+        if ($solicitacao->consultor_id) {
+            $notificacaoService->criar([
+                'user_id' => $solicitacao->consultor_id,
+                'tipo' => 'renovacao_abate_rejeitada',
+                'titulo' => 'Renovação com abate rejeitada',
+                'mensagem' => 'Sua solicitação de renovação com abate do empréstimo #' . $emprestimoId . ' foi rejeitada. Você pode enviar uma nova solicitação.',
+                'url' => route('emprestimos.show', $emprestimoId),
+                'dados' => ['emprestimo_id' => $emprestimoId],
+            ]);
+        }
+
         return redirect()->route('liberacoes.renovacao-abate')
             ->with('success', 'Solicitação rejeitada. O consultor pode enviar uma nova solicitação.');
     }

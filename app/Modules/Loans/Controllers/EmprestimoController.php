@@ -661,7 +661,16 @@ class EmprestimoController extends Controller
             'cheques', // Cheques para empréstimo tipo troca_cheque
         ])->findOrFail($id);
 
-        return view('emprestimos.show', compact('emprestimo'));
+        $temRenovacaoAbatePendente = \App\Modules\Loans\Models\SolicitacaoRenovacaoAbate::whereHas('parcela', fn ($q) => $q->where('emprestimo_id', $id))
+            ->where('status', 'aguardando')
+            ->exists();
+
+        $solicitacoesRenovacaoAbate = \App\Modules\Loans\Models\SolicitacaoRenovacaoAbate::whereHas('parcela', fn ($q) => $q->where('emprestimo_id', $id))
+            ->with(['aprovadoPor', 'rejeitadoPor'])
+            ->orderByDesc('id')
+            ->get();
+
+        return view('emprestimos.show', compact('emprestimo', 'temRenovacaoAbatePendente', 'solicitacoesRenovacaoAbate'));
     }
 
     /**

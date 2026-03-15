@@ -243,19 +243,40 @@
                         @php
                             $parcela = $emprestimo->parcelas->first();
                             $estaAtrasada = $parcela && $parcela->isAtrasada();
-                            $podeRenovar = $emprestimo->isAtivo() && 
-                                          $emprestimo->numero_parcelas === 1 && 
+                            $ehMensal = $emprestimo->frequencia === 'mensal';
+                            // Mensal: pode renovar antes do vencimento. Demais: só quando parcela atrasada. Não mostrar se já existe renovação com abate pendente.
+                            $podeRenovar = $emprestimo->isAtivo() &&
+                                          $emprestimo->numero_parcelas === 1 &&
                                           !$emprestimo->jurosJaForamPagos() &&
-                                          $estaAtrasada; // Apenas se estiver atrasada
+                                          ($estaAtrasada || $ehMensal) &&
+                                          empty($temRenovacaoAbatePendente);
                         @endphp
-                        @if($podeRenovar && $parcela)
+                        @if(!empty($temRenovacaoAbatePendente))
+                            <hr>
+                            <div class="alert alert-warning mb-3">
+                                <h6 class="alert-heading">
+                                    <i class="bx bx-time-five"></i> Renovação com abate pendente de aprovação
+                                </h6>
+                                <p class="mb-2">
+                                    Existe uma solicitação de renovação com abate (valor inferior ao principal) aguardando aprovação do gestor ou administrador.
+                                    Não é possível enviar outra renovação enquanto esta estiver pendente.
+                                </p>
+                                @if(auth()->user()->hasAnyRole(['gestor', 'administrador']))
+                                    <a href="{{ route('liberacoes.renovacao-abate') }}" class="btn btn-outline-warning btn-sm">
+                                        <i class="bx bx-list-ul"></i> Ver em Liberações
+                                    </a>
+                                @else
+                                    <span class="text-muted small">Aguarde a aprovação do gestor ou administrador.</span>
+                                @endif
+                            </div>
+                        @elseif($podeRenovar && $parcela)
                             <hr>
                             <div class="alert alert-info mb-3">
                                 <h6 class="alert-heading">
                                     <i class="bx bx-info-circle"></i> Renovação de Empréstimo Disponível
                                 </h6>
                                 <p class="mb-2">
-                                    Este empréstimo pode ser renovado. O cliente pagará apenas os <strong>juros do período</strong> 
+                                    Este empréstimo pode ser renovado. O cliente pagará apenas os <strong>juros do período</strong>
                                     e o valor principal será renovado com novo prazo.
                                 </p>
                                 <div class="row mb-2">
@@ -273,8 +294,57 @@
                         @elseif($emprestimo->isAtivo() && $emprestimo->numero_parcelas === 1 && $emprestimo->jurosJaForamPagos())
                             <hr>
                             <div class="alert alert-warning mb-0">
-                                <i class="bx bx-info-circle"></i> 
+                                <i class="bx bx-info-circle"></i>
                                 Os juros deste empréstimo já foram pagos. Não é necessário renovar.
+                            </div>
+                        @endif
+
+                        @if(isset($solicitacoesRenovacaoAbate) && $solicitacoesRenovacaoAbate->isNotEmpty())
+                            <hr>
+                            <div class="card mb-3">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0"><i class="bx bx-history"></i> Histórico de solicitações de renovação com abate</h6>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-bordered mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>Data</th>
+                                                    <th>Valor</th>
+                                                    <th>Status</th>
+                                                    <th>Resolução</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach($solicitacoesRenovacaoAbate as $sol)
+                                                    <tr>
+                                                        <td>{{ $sol->created_at ? $sol->created_at->format('d/m/Y H:i') : '—' }}</td>
+                                                        <td>R$ {{ number_format($sol->valor, 2, ',', '.') }}</td>
+                                                        <td>
+                                                            @if($sol->status === 'aguardando')
+                                                                <span class="badge bg-warning">Aguardando aprovação</span>
+                                                            @elseif($sol->status === 'aprovado')
+                                                                <span class="badge bg-success">Aprovado</span>
+                                                            @else
+                                                                <span class="badge bg-danger">Rejeitado</span>
+                                                            @endif
+                                                        </td>
+                                                        <td>
+                                                            @if($sol->status === 'aprovado' && $sol->aprovadoPor)
+                                                                Por {{ $sol->aprovadoPor->name ?? 'N/A' }} em {{ $sol->aprovado_em ? $sol->aprovado_em->format('d/m/Y H:i') : '—' }}
+                                                            @elseif($sol->status === 'rejeitado' && $sol->rejeitadoPor)
+                                                                Por {{ $sol->rejeitadoPor->name ?? 'N/A' }} em {{ $sol->rejeitado_em ? $sol->rejeitado_em->format('d/m/Y H:i') : '—' }}
+                                                            @else
+                                                                —
+                                                            @endif
+                                                        </td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         @endif
 
