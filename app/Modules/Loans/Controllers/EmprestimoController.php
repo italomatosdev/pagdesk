@@ -916,11 +916,19 @@ class EmprestimoController extends Controller
     /**
      * Listagem de empréstimos retroativos aguardando aceite (gestor e administrador).
      */
-    public function indexPendentesRetroativo(): View
+    public function indexPendentesRetroativo(Request $request): View
     {
         $user = auth()->user();
         if (!$user->hasAnyRole(['gestor', 'administrador'])) {
             abort(403, 'Apenas gestores e administradores podem ver empréstimos retroativos pendentes de aceite.');
+        }
+
+        $operacaoId = $request->input('operacao_id');
+        if ($operacaoId && !$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $operacaoId, $opsIds, true)) {
+                $operacaoId = null;
+            }
         }
 
         $query = SolicitacaoEmprestimoRetroativo::with(['emprestimo.cliente', 'emprestimo.operacao', 'emprestimo.parcelas', 'solicitante'])
@@ -933,9 +941,21 @@ class EmprestimoController extends Controller
                 $query->whereRaw('1 = 0');
             }
         }
-        $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15);
+        if ($operacaoId) {
+            $query->whereHas('emprestimo', fn ($q) => $q->where('operacao_id', $operacaoId));
+        }
+        $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
-        return view('emprestimos.retroativo-pendentes', compact('solicitacoes'));
+        if ($user->isSuperAdmin()) {
+            $operacoes = \App\Modules\Core\Models\Operacao::where('ativo', true)->orderBy('nome')->get();
+        } else {
+            $opsIds = $user->getOperacoesIds();
+            $operacoes = !empty($opsIds)
+                ? \App\Modules\Core\Models\Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
+                : collect([]);
+        }
+
+        return view('emprestimos.retroativo-pendentes', compact('solicitacoes', 'operacoes', 'operacaoId'));
     }
 
     /**

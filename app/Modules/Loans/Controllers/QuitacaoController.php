@@ -3,6 +3,7 @@
 namespace App\Modules\Loans\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Core\Models\Operacao;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\SolicitacaoQuitacao;
 use App\Modules\Loans\Services\QuitacaoService;
@@ -143,16 +144,24 @@ class QuitacaoController extends Controller
     /**
      * Listagem de solicitações de quitação pendentes (gestor e administrador).
      */
-    public function indexPendentes(): View
+    public function indexPendentes(Request $request): View
     {
         $user = auth()->user();
         if (!$user->hasAnyRole(['gestor', 'administrador'])) {
             abort(403, 'Apenas gestores e administradores podem ver solicitações de quitação.');
         }
 
+        $operacaoId = $request->input('operacao_id');
+        if ($operacaoId && !$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $operacaoId, $opsIds, true)) {
+                $operacaoId = null;
+            }
+        }
+
         $query = SolicitacaoQuitacao::with(['emprestimo.cliente', 'emprestimo.operacao', 'solicitante'])
             ->where('status', 'pendente');
-        if (!$user->hasRole('administrador')) {
+        if (!$user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
             if (!empty($opsIds)) {
                 $query->whereHas('emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
@@ -160,9 +169,21 @@ class QuitacaoController extends Controller
                 $query->whereRaw('1 = 0');
             }
         }
-        $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15);
+        if ($operacaoId) {
+            $query->whereHas('emprestimo', fn ($q) => $q->where('operacao_id', $operacaoId));
+        }
+        $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
-        return view('quitacao.pendentes', compact('solicitacoes'));
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
+        } else {
+            $opsIds = $user->getOperacoesIds();
+            $operacoes = !empty($opsIds)
+                ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
+                : collect([]);
+        }
+
+        return view('quitacao.pendentes', compact('solicitacoes', 'operacoes', 'operacaoId'));
     }
 
     /**
@@ -176,6 +197,12 @@ class QuitacaoController extends Controller
         }
 
         $solicitacao = SolicitacaoQuitacao::with('emprestimo')->findOrFail($id);
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $solicitacao->emprestimo->operacao_id, $opsIds, true)) {
+                abort(403, 'Sem acesso a esta operação.');
+            }
+        }
 
         try {
             $this->quitacaoService->aprovarSolicitacao($solicitacao, $user->id);
@@ -200,7 +227,13 @@ class QuitacaoController extends Controller
             'motivo_rejeicao' => 'required|string|min:10|max:500',
         ]);
 
-        $solicitacao = SolicitacaoQuitacao::findOrFail($id);
+        $solicitacao = SolicitacaoQuitacao::with('emprestimo')->findOrFail($id);
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $solicitacao->emprestimo->operacao_id, $opsIds, true)) {
+                abort(403, 'Sem acesso a esta operação.');
+            }
+        }
 
         try {
             $this->quitacaoService->rejeitarSolicitacao($solicitacao, $user->id, $validated['motivo_rejeicao']);
