@@ -300,10 +300,11 @@ class EmprestimoService
                 ]);
             }
 
-            // Verificar se a parcela está atrasada
-            if (!$parcela->isAtrasada()) {
+            // Empréstimo mensal: pode renovar antes do vencimento (parcela pendente). Demais frequências: só quando atrasada.
+            $ehMensal = $emprestimo->frequencia === 'mensal';
+            if (!$ehMensal && !$parcela->isAtrasada()) {
                 throw ValidationException::withMessages([
-                    'emprestimo' => 'A renovação só é permitida quando a parcela está atrasada.',
+                    'emprestimo' => 'A renovação só é permitida quando a parcela está em vencimento ou atrasada.',
                 ]);
             }
 
