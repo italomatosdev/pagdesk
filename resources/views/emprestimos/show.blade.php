@@ -207,6 +207,12 @@
                                 <strong>Data de Início:</strong> 
                                 {{ $emprestimo->data_inicio->format('d/m/Y') }}
                             </div>
+                            @if($emprestimo->created_at)
+                                <div class="col-md-6 mb-3">
+                                    <strong>Criado em:</strong> 
+                                    {{ $emprestimo->created_at->format('d/m/Y H:i') }}
+                                </div>
+                            @endif
                             <div class="col-md-6 mb-3">
                                 <strong>Consultor:</strong> {{ $emprestimo->consultor->name }}
                             </div>
