@@ -42,19 +42,22 @@ class LiberacaoController extends Controller
         $user = auth()->user();
         $operacaoId = $request->input('operacao_id');
         
-        // Validar se o usuário tem acesso à operação selecionada
-        if ($operacaoId && !$user->hasRole('administrador') && !$user->temAcessoOperacao($operacaoId)) {
-            $operacaoId = null; // Resetar se não tiver acesso
+        // Validar se o usuário tem acesso à operação selecionada (Super Admin vê todas; demais só as vinculadas)
+        if ($operacaoId && !$user->isSuperAdmin()) {
+            $operacoesIds = $user->getOperacoesIds();
+            if (empty($operacoesIds) || !in_array((int) $operacaoId, $operacoesIds, true)) {
+                $operacaoId = null;
+            }
         }
-        
+
         $liberacoes = $this->liberacaoService->listarAguardando($operacaoId, $user);
-        
-        // Filtrar operações disponíveis para o usuário
-        if ($user->hasRole('administrador')) {
+
+        // Operações disponíveis no filtro: Super Admin vê todas; demais só as vinculadas
+        if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->get();
         } else {
             $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds) 
+            $operacoes = !empty($operacoesIds)
                 ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
                 : collect([]);
         }

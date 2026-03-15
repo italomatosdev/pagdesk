@@ -25,13 +25,12 @@ class AprovacaoService
         $query = Emprestimo::with(['cliente', 'operacao', 'consultor', 'parcelas'])
             ->where('status', 'pendente');
 
-        // Aplicar filtro de operações do usuário (exceto administradores)
-        if ($user && !$user->hasRole('administrador')) {
+        // Aplicar filtro de operações do usuário (Super Admin vê todas; demais só das operações vinculadas)
+        if ($user && !$user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
             if (!empty($operacoesIds)) {
                 $query->whereIn('operacao_id', $operacoesIds);
             } else {
-                // Se não tem operações vinculadas, retorna vazio
                 $query->whereRaw('1 = 0');
             }
         }
@@ -51,11 +50,21 @@ class AprovacaoService
      * @param string|null $motivo
      * @return Emprestimo
      */
-    public function aprovar(int $emprestimoId, int $aprovadorId, ?string $motivo = null): Emprestimo
+    public function aprovar(int $emprestimoId, int $aprovadorId, ?string $motivo = null, ?\App\Models\User $aprovador = null): Emprestimo
     {
+        $aprovador = $aprovador ?? \App\Models\User::find($aprovadorId);
         // VALIDAÇÃO: Verificar se empréstimo está pendente
         $emprestimo = Emprestimo::with('liberacao')->findOrFail($emprestimoId);
-        
+
+        if ($aprovador && !$aprovador->isSuperAdmin()) {
+            $operacoesIds = $aprovador->getOperacoesIds();
+            if (empty($operacoesIds) || !in_array((int) $emprestimo->operacao_id, $operacoesIds, true)) {
+                throw ValidationException::withMessages([
+                    'emprestimo' => 'Você não tem permissão para aprovar empréstimos desta operação.',
+                ]);
+            }
+        }
+
         if ($emprestimo->status !== 'pendente') {
             $mensagem = match($emprestimo->status) {
                 'aprovado' => 'Este empréstimo já foi aprovado.',
@@ -98,11 +107,21 @@ class AprovacaoService
      * @param string $motivoRejeicao
      * @return Emprestimo
      */
-    public function rejeitar(int $emprestimoId, int $aprovadorId, string $motivoRejeicao): Emprestimo
+    public function rejeitar(int $emprestimoId, int $aprovadorId, string $motivoRejeicao, ?\App\Models\User $aprovador = null): Emprestimo
     {
+        $aprovador = $aprovador ?? \App\Models\User::find($aprovadorId);
         // VALIDAÇÃO: Verificar se empréstimo está pendente
         $emprestimo = Emprestimo::with('liberacao')->findOrFail($emprestimoId);
-        
+
+        if ($aprovador && !$aprovador->isSuperAdmin()) {
+            $operacoesIds = $aprovador->getOperacoesIds();
+            if (empty($operacoesIds) || !in_array((int) $emprestimo->operacao_id, $operacoesIds, true)) {
+                throw ValidationException::withMessages([
+                    'emprestimo' => 'Você não tem permissão para rejeitar empréstimos desta operação.',
+                ]);
+            }
+        }
+
         if ($emprestimo->status !== 'pendente') {
             $mensagem = match($emprestimo->status) {
                 'aprovado' => 'Não é possível rejeitar. Este empréstimo já foi aprovado. Se necessário, cancele a liberação primeiro.',

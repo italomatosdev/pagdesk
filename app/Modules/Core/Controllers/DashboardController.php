@@ -217,7 +217,7 @@ class DashboardController extends Controller
             ->whereHas('emprestimo', function ($q) {
                 $q->where('status', 'ativo'); // Apenas empréstimos ativos
             })
-            ->when(!$user->hasRole('administrador'), $aplicarFiltroOperacaoParcela)
+            ->when(!$user->isSuperAdmin(), $aplicarFiltroOperacaoParcela)
             ->count();
         $totalEmprestimos = Emprestimo::whereBetween('created_at', [$dateFrom, $dateTo])
             ->when(true, $aplicarFiltroOperacaoEmprestimo)
@@ -359,7 +359,7 @@ class DashboardController extends Controller
                 ->whereHas('emprestimo', function ($q) {
                     $q->where('status', 'ativo'); // Apenas empréstimos ativos
                 })
-                ->when(!$user->hasRole('administrador'), $aplicarFiltroOperacaoParcela)
+                ->when(!$user->isSuperAdmin(), $aplicarFiltroOperacaoParcela)
                 ->sum(DB::raw('valor - valor_pago')),
             'valor_total_a_receber' => $valorTotalAReceber,
             'valor_total_emprestado_a_receber' => $valorTotalEmprestadoAReceber,
