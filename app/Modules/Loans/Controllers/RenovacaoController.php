@@ -27,8 +27,8 @@ class RenovacaoController extends Controller
                   ->orWhereHas('renovacoes'); // Ou que têm renovações
             });
 
-        // Aplicar filtro de operações do usuário (exceto administradores)
-        if (!$user->hasRole('administrador')) {
+        // Restringir por operação: apenas Super Admin vê todas
+        if (!$user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
             if (!empty($operacoesIds)) {
                 $query->whereIn('operacao_id', $operacoesIds);
@@ -66,12 +66,12 @@ class RenovacaoController extends Controller
             $renovacoesPorCliente[$clienteId]['historico'] = $historico->unique('id')->values();
         }
 
-        // Filtrar operações disponíveis
-        if ($user->hasRole('administrador')) {
+        // Operações disponíveis no filtro (Super Admin = todas; demais = só as da operação)
+        if ($user->isSuperAdmin()) {
             $operacoes = \App\Modules\Core\Models\Operacao::where('ativo', true)->get();
         } else {
             $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds) 
+            $operacoes = !empty($operacoesIds)
                 ? \App\Modules\Core\Models\Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
                 : collect([]);
         }
@@ -87,6 +87,17 @@ class RenovacaoController extends Controller
         $cliente = Cliente::findOrFail($clienteId);
         $user = auth()->user();
 
+        // Mesmo critério do ClienteController::show: só ver se tem acesso ao cliente (via operação)
+        if (!$user->isSuperAdmin()) {
+            $operacoesIds = $user->getOperacoesIds();
+            if (empty($operacoesIds)) {
+                abort(403, 'Você não tem acesso a este cliente.');
+            }
+            if (!$cliente->operationClients()->whereIn('operacao_id', $operacoesIds)->exists()) {
+                abort(403, 'Você não tem acesso a este cliente.');
+            }
+        }
+
         // Buscar todos os empréstimos do cliente que são renovações ou têm renovações
         $query = Emprestimo::with(['operacao', 'consultor', 'emprestimoOrigem', 'renovacoes', 'parcelas'])
             ->where('cliente_id', $clienteId)
@@ -95,8 +106,8 @@ class RenovacaoController extends Controller
                   ->orWhereHas('renovacoes');
             });
 
-        // Aplicar filtro de operações
-        if (!$user->hasRole('administrador')) {
+        // Restringir por operação: apenas Super Admin vê todas
+        if (!$user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
             if (!empty($operacoesIds)) {
                 $query->whereIn('operacao_id', $operacoesIds);
