@@ -792,9 +792,16 @@ class EmprestimoController extends Controller
     {
         $user = auth()->user();
 
-        // Apenas gestores e administradores podem executar garantias
         if (!$user->hasAnyRole(['administrador', 'gestor'])) {
             abort(403, 'Apenas gestores e administradores podem executar garantias.');
+        }
+
+        $emprestimo = Emprestimo::findOrFail($id);
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+                abort(403, 'Sem acesso a esta operação.');
+            }
         }
 
         $request->validate([
