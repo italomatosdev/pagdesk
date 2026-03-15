@@ -38,17 +38,23 @@ class VendaController extends Controller
         $user = auth()->user();
         $query = Venda::with(['cliente', 'operacao', 'user', 'formasPagamento']);
 
-        if (!$user->hasRole('administrador')) {
-            $query->whereHas('operacao', function ($q) use ($user) {
-                $q->whereIn('id', $user->getOperacoesIds());
-            });
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (!empty($opsIds)) {
+                $query->whereIn('operacao_id', $opsIds);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
         }
 
         if ($request->filled('cliente_id')) {
             $query->where('cliente_id', $request->cliente_id);
         }
         if ($request->filled('operacao_id')) {
-            $query->where('operacao_id', $request->operacao_id);
+            $operacaoId = (int) $request->operacao_id;
+            if ($user->isSuperAdmin() || in_array($operacaoId, $user->getOperacoesIds(), true)) {
+                $query->where('operacao_id', $operacaoId);
+            }
         }
         if ($request->filled('data_inicio')) {
             $query->whereDate('data_venda', '>=', $request->data_inicio);
@@ -69,9 +75,13 @@ class VendaController extends Controller
 
         $vendas = $query->orderByDesc('data_venda')->orderByDesc('id')->paginate(20)->withQueryString();
 
-        $operacoes = Operacao::orderBy('nome')->get();
-        if (!$user->hasRole('administrador')) {
-            $operacoes = $operacoes->whereIn('id', $user->getOperacoesIds())->values();
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::orderBy('nome')->get();
+        } else {
+            $opsIds = $user->getOperacoesIds();
+            $operacoes = !empty($opsIds)
+                ? Operacao::whereIn('id', $opsIds)->orderBy('nome')->get()
+                : collect([]);
         }
 
         return view('vendas.index', compact('vendas', 'operacoes', 'stats'));
@@ -83,16 +93,22 @@ class VendaController extends Controller
     public function create(Request $request): View
     {
         $user = auth()->user();
-        $operacoes = Operacao::orderBy('nome')->get();
-        if (!$user->hasRole('administrador')) {
-            $operacoes = $operacoes->whereIn('id', $user->getOperacoesIds())->values();
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::orderBy('nome')->get();
+        } else {
+            $opsIds = $user->getOperacoesIds();
+            $operacoes = !empty($opsIds)
+                ? Operacao::whereIn('id', $opsIds)->orderBy('nome')->get()
+                : collect([]);
         }
-        // Produtos com estoque, vinculados a operações (filtrados por operação na tela)
+        // Produtos com estoque, vinculados a operações (filtrados por operação do usuário)
         $produtosQuery = Produto::where('estoque', '>', 0)->whereNotNull('operacao_id');
-        if (!$user->hasRole('administrador')) {
+        if (!$user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
             if (!empty($operacoesIds)) {
                 $produtosQuery->whereIn('operacao_id', $operacoesIds);
+            } else {
+                $produtosQuery->whereRaw('1 = 0');
             }
         }
         $produtos = $produtosQuery->orderBy('nome')->get();
@@ -141,8 +157,11 @@ class VendaController extends Controller
         ]);
 
         $user = auth()->user();
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($validated['operacao_id'])) {
-            return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $validated['operacao_id'], $opsIds, true)) {
+                return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
+            }
         }
 
         $itens = [];
@@ -220,8 +239,11 @@ class VendaController extends Controller
         ])->findOrFail($id);
 
         $user = auth()->user();
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($venda->operacao_id)) {
-            abort(403, 'Acesso negado a esta venda.');
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $venda->operacao_id, $opsIds, true)) {
+                abort(403, 'Acesso negado a esta venda.');
+            }
         }
 
         return view('vendas.show', compact('venda'));
@@ -234,8 +256,11 @@ class VendaController extends Controller
     {
         $vendaModel = Venda::findOrFail($venda);
         $user = auth()->user();
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($vendaModel->operacao_id)) {
-            abort(403, 'Acesso negado.');
+        if (!$user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || !in_array((int) $vendaModel->operacao_id, $opsIds, true)) {
+                abort(403, 'Acesso negado.');
+            }
         }
         $formaPagamento = $vendaModel->formasPagamento()->where('id', $forma)->firstOrFail();
         if (!$formaPagamento->comprovante_path) {
