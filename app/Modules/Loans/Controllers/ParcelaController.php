@@ -32,26 +32,23 @@ class ParcelaController extends Controller
             abort(403, 'Super Admin não pode acessar Cobranças do Dia.');
         }
         
+        $operacaoIds = $user->getOperacoesIds();
         $operacaoId = $request->input('operacao_id');
-        
-        // Validar se o usuário tem acesso à operação selecionada
-        if ($operacaoId && !$user->hasRole('administrador') && !$user->temAcessoOperacao($operacaoId)) {
-            $operacaoId = null; // Resetar se não tiver acesso
-        }
-        
-        $consultorId = $user->hasRole('consultor') ? $user->id : null;
-
-        $cobrancas = $this->parcelaService->cobrancasDoDia($operacaoId, $consultorId);
-        
-        // Filtrar operações disponíveis para o usuário
-        if ($user->hasRole('administrador')) {
-            $operacoes = Operacao::where('ativo', true)->get();
+        if ($operacaoId !== null && $operacaoId !== '') {
+            $operacaoId = (int) $operacaoId;
+            if (empty($operacaoIds) || !in_array($operacaoId, $operacaoIds, true)) {
+                $operacaoId = null;
+            }
         } else {
-            $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds) 
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
-                : collect([]);
+            $operacaoId = null;
         }
+
+        $consultorId = $user->hasRole('consultor') ? $user->id : null;
+        $cobrancas = $this->parcelaService->cobrancasDoDia($operacaoId, $consultorId, $operacaoIds);
+
+        $operacoes = !empty($operacaoIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacaoIds)->orderBy('nome')->get()
+            : collect([]);
 
         // Separar por status
         $vencendoHoje = $cobrancas->filter(function ($parcela) {
