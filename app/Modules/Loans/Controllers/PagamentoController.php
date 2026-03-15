@@ -273,7 +273,7 @@ class PagamentoController extends Controller
                             'url' => route('liberacoes.renovacao-abate'),
                             'dados' => ['solicitacao_id' => $solicitacao->id, 'emprestimo_id' => $emprestimo->id],
                         ]);
-                        return redirect()->route('pagamentos.create', ['parcela_id' => $parcela->id] + ($request->has('return_to') ? ['return_to' => $request->input('return_to')] : []))
+                        return redirect()->route('emprestimos.show', $emprestimo->id)
                             ->with('success', 'Solicitação de renovação com abate enviada para aprovação do gestor/administrador. Acompanhe em Liberações.');
                     }
                     

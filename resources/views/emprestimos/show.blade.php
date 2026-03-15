@@ -207,6 +207,12 @@
                                 <strong>Data de Início:</strong> 
                                 {{ $emprestimo->data_inicio->format('d/m/Y') }}
                             </div>
+                            @if($emprestimo->created_at)
+                                <div class="col-md-6 mb-3">
+                                    <strong>Criado em:</strong> 
+                                    {{ $emprestimo->created_at->format('d/m/Y H:i') }}
+                                </div>
+                            @endif
                             <div class="col-md-6 mb-3">
                                 <strong>Consultor:</strong> {{ $emprestimo->consultor->name }}
                             </div>
@@ -243,19 +249,40 @@
                         @php
                             $parcela = $emprestimo->parcelas->first();
                             $estaAtrasada = $parcela && $parcela->isAtrasada();
-                            $podeRenovar = $emprestimo->isAtivo() && 
-                                          $emprestimo->numero_parcelas === 1 && 
+                            $ehMensal = $emprestimo->frequencia === 'mensal';
+                            // Mensal: pode renovar antes do vencimento. Demais: só quando parcela atrasada. Não mostrar se já existe renovação com abate pendente.
+                            $podeRenovar = $emprestimo->isAtivo() &&
+                                          $emprestimo->numero_parcelas === 1 &&
                                           !$emprestimo->jurosJaForamPagos() &&
-                                          $estaAtrasada; // Apenas se estiver atrasada
+                                          ($estaAtrasada || $ehMensal) &&
+                                          empty($temRenovacaoAbatePendente);
                         @endphp
-                        @if($podeRenovar && $parcela)
+                        @if(!empty($temRenovacaoAbatePendente))
+                            <hr>
+                            <div class="alert alert-warning mb-3">
+                                <h6 class="alert-heading">
+                                    <i class="bx bx-time-five"></i> Renovação com abate pendente de aprovação
+                                </h6>
+                                <p class="mb-2">
+                                    Existe uma solicitação de renovação com abate (valor inferior ao principal) aguardando aprovação do gestor ou administrador.
+                                    Não é possível enviar outra renovação enquanto esta estiver pendente.
+                                </p>
+                                @if(auth()->user()->hasAnyRole(['gestor', 'administrador']))
+                                    <a href="{{ route('liberacoes.renovacao-abate') }}" class="btn btn-outline-warning btn-sm">
+                                        <i class="bx bx-list-ul"></i> Ver em Liberações
+                                    </a>
+                                @else
+                                    <span class="text-muted small">Aguarde a aprovação do gestor ou administrador.</span>
+                                @endif
+                            </div>
+                        @elseif($podeRenovar && $parcela)
                             <hr>
                             <div class="alert alert-info mb-3">
                                 <h6 class="alert-heading">
                                     <i class="bx bx-info-circle"></i> Renovação de Empréstimo Disponível
                                 </h6>
                                 <p class="mb-2">
-                                    Este empréstimo pode ser renovado. O cliente pagará apenas os <strong>juros do período</strong> 
+                                    Este empréstimo pode ser renovado. O cliente pagará apenas os <strong>juros do período</strong>
                                     e o valor principal será renovado com novo prazo.
                                 </p>
                                 <div class="row mb-2">
@@ -273,8 +300,57 @@
                         @elseif($emprestimo->isAtivo() && $emprestimo->numero_parcelas === 1 && $emprestimo->jurosJaForamPagos())
                             <hr>
                             <div class="alert alert-warning mb-0">
-                                <i class="bx bx-info-circle"></i> 
+                                <i class="bx bx-info-circle"></i>
                                 Os juros deste empréstimo já foram pagos. Não é necessário renovar.
+                            </div>
+                        @endif
+
+                        @if(isset($solicitacoesRenovacaoAbate) && $solicitacoesRenovacaoAbate->isNotEmpty())
+                            <hr>
+                            <div class="card mb-3">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0"><i class="bx bx-history"></i> Histórico de solicitações de renovação com abate</h6>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-bordered mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>Data</th>
+                                                    <th>Valor</th>
+                                                    <th>Status</th>
+                                                    <th>Resolução</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach($solicitacoesRenovacaoAbate as $sol)
+                                                    <tr>
+                                                        <td>{{ $sol->created_at ? $sol->created_at->format('d/m/Y H:i') : '—' }}</td>
+                                                        <td>R$ {{ number_format($sol->valor, 2, ',', '.') }}</td>
+                                                        <td>
+                                                            @if($sol->status === 'aguardando')
+                                                                <span class="badge bg-warning">Aguardando aprovação</span>
+                                                            @elseif($sol->status === 'aprovado')
+                                                                <span class="badge bg-success">Aprovado</span>
+                                                            @else
+                                                                <span class="badge bg-danger">Rejeitado</span>
+                                                            @endif
+                                                        </td>
+                                                        <td>
+                                                            @if($sol->status === 'aprovado' && $sol->aprovadoPor)
+                                                                Por {{ $sol->aprovadoPor->name ?? 'N/A' }} em {{ $sol->aprovado_em ? $sol->aprovado_em->format('d/m/Y H:i') : '—' }}
+                                                            @elseif($sol->status === 'rejeitado' && $sol->rejeitadoPor)
+                                                                Por {{ $sol->rejeitadoPor->name ?? 'N/A' }} em {{ $sol->rejeitado_em ? $sol->rejeitado_em->format('d/m/Y H:i') : '—' }}
+                                                            @else
+                                                                —
+                                                            @endif
+                                                        </td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         @endif
 
@@ -390,15 +466,8 @@
                             </div>
                         @endif
 
-                        <!-- Botão de Cancelamento (apenas para administradores) -->
+                        <!-- Botões de Cancelamento (cenário A: dois fluxos) -->
                         @php
-                            $podeCancelar = auth()->user()->hasRole('administrador') && 
-                                !$emprestimo->isCancelado() && 
-                                !$emprestimo->isFinalizado() &&
-                                !$emprestimo->isRenovacao() && // Não pode cancelar empréstimos renovados
-                                (!$emprestimo->liberacao || !$emprestimo->liberacao->isPagoAoCliente());
-                            
-                            // Verificar se há parcelas com pagamentos
                             $temParcelasPagas = false;
                             foreach ($emprestimo->parcelas as $parcela) {
                                 if ($parcela->valor_pago > 0 || $parcela->pagamentos->count() > 0) {
@@ -406,25 +475,45 @@
                                     break;
                                 }
                             }
-                            $podeCancelar = $podeCancelar && !$temParcelasPagas;
+                            // Cancelamento simples: só administrador, sem parcelas pagas, sem finalizado, sem pago ao cliente
+                            $podeCancelar = auth()->user()->hasRole('administrador') &&
+                                !$emprestimo->isCancelado() &&
+                                !$emprestimo->isFinalizado() &&
+                                !$emprestimo->isRenovacao() &&
+                                (!$emprestimo->liberacao || !$emprestimo->liberacao->isPagoAoCliente()) &&
+                                !$temParcelasPagas;
+                            // Cancelamento com desfazimento: gestor ou admin, quando já há pagamentos/finalizado/pago ao cliente
+                            $podeCancelarComDesfazimento = auth()->user()->hasAnyRole(['administrador', 'gestor']) &&
+                                !$emprestimo->isCancelado() &&
+                                !$emprestimo->isRenovacao() &&
+                                ($temParcelasPagas || $emprestimo->isFinalizado() || ($emprestimo->liberacao && $emprestimo->liberacao->isPagoAoCliente()));
                         @endphp
-                        @if($emprestimo->isRenovacao() && auth()->user()->hasRole('administrador'))
+                        @if($emprestimo->isRenovacao() && auth()->user()->hasAnyRole(['administrador', 'gestor']))
                             <hr>
                             <div class="alert alert-info mb-0">
-                                <i class="bx bx-info-circle"></i> 
-                                <strong>Empréstimo Renovado:</strong> Este empréstimo não pode ser cancelado, pois é uma renovação. 
-                                O empréstimo original já foi finalizado e o dinheiro foi pago ao cliente. 
+                                <i class="bx bx-info-circle"></i>
+                                <strong>Empréstimo Renovado:</strong> Este empréstimo não pode ser cancelado, pois é uma renovação.
+                                O empréstimo original já foi finalizado e o dinheiro foi pago ao cliente.
                                 As garantias foram transferidas e não podem ser revertidas automaticamente.
                             </div>
                         @endif
-                        @if($podeCancelar)
+                        @if($podeCancelar || $podeCancelarComDesfazimento)
                             <hr>
-                            <div class="d-flex justify-content-end">
-                                <button type="button" class="btn btn-danger" 
-                                        data-bs-toggle="modal" 
-                                        data-bs-target="#cancelarEmprestimoModal">
-                                    <i class="bx bx-x-circle"></i> Cancelar Empréstimo
-                                </button>
+                            <div class="d-flex justify-content-end flex-wrap gap-2">
+                                @if($podeCancelar)
+                                    <button type="button" class="btn btn-danger"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#cancelarEmprestimoModal">
+                                        <i class="bx bx-x-circle"></i> Cancelar Empréstimo
+                                    </button>
+                                @endif
+                                @if($podeCancelarComDesfazimento)
+                                    <button type="button" class="btn btn-outline-danger"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#cancelarEmprestimoComDesfazimentoModal">
+                                        <i class="bx bx-undo"></i> Cancelar e desfazer pagamentos
+                                    </button>
+                                @endif
                             </div>
                         @endif
                         
@@ -1994,7 +2083,7 @@
     </div>
     @endif
 
-    <!-- Modal de Cancelamento de Empréstimo -->
+    <!-- Modal de Cancelamento de Empréstimo (fluxo simples) -->
     @if($podeCancelar)
     <div class="modal fade" id="cancelarEmprestimoModal" tabindex="-1" aria-labelledby="cancelarEmprestimoModalLabel" aria-hidden="true">
         <div class="modal-dialog">
@@ -2020,7 +2109,7 @@
                         @if($emprestimo->liberacao && $emprestimo->liberacao->isLiberado())
                             <div class="alert alert-info">
                                 <i class="bx bx-info-circle"></i>
-                                <strong>Importante:</strong> O dinheiro já foi liberado para o consultor. 
+                                <strong>Importante:</strong> O dinheiro já foi liberado para o consultor.
                                 Ao cancelar, serão criadas movimentações de estorno para devolver o dinheiro ao gestor.
                             </div>
                         @endif
@@ -2028,10 +2117,10 @@
                             <label for="motivo_cancelamento" class="form-label">
                                 Motivo do Cancelamento <span class="text-danger">*</span>
                             </label>
-                            <textarea name="motivo_cancelamento" 
-                                      id="motivo_cancelamento" 
-                                      class="form-control @error('motivo_cancelamento') is-invalid @enderror" 
-                                      rows="4" 
+                            <textarea name="motivo_cancelamento"
+                                      id="motivo_cancelamento"
+                                      class="form-control @error('motivo_cancelamento') is-invalid @enderror"
+                                      rows="4"
                                       required
                                       minlength="10"
                                       maxlength="1000"
@@ -2046,6 +2135,62 @@
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                         <button type="submit" class="btn btn-danger">
                             <i class="bx bx-x-circle"></i> Confirmar Cancelamento
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    @endif
+
+    <!-- Modal Cancelar e desfazer pagamentos -->
+    @if($podeCancelarComDesfazimento)
+    <div class="modal fade" id="cancelarEmprestimoComDesfazimentoModal" tabindex="-1" aria-labelledby="cancelarEmprestimoComDesfazimentoModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form action="{{ route('emprestimos.cancelar-com-desfazimento', $emprestimo->id) }}" method="POST">
+                    @csrf
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title" id="cancelarEmprestimoComDesfazimentoModalLabel">
+                            <i class="bx bx-undo"></i> Cancelar e desfazer pagamentos
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-danger">
+                            <i class="bx bx-error-circle"></i>
+                            <strong>Atenção!</strong> Esta ação irá desfazer todos os pagamentos e movimentações de caixa deste empréstimo e marcar o empréstimo como cancelado. Não pode ser desfeita.
+                        </div>
+                        <div class="mb-3">
+                            <strong>Empréstimo:</strong> #{{ $emprestimo->id }}<br>
+                            <strong>Cliente:</strong> {{ $emprestimo->cliente->nome }}<br>
+                            <strong>Valor:</strong> R$ {{ number_format($emprestimo->valor_total, 2, ',', '.') }}
+                        </div>
+                        <p class="text-muted small mb-3">
+                            Serão desfeitos: movimentações de caixa vinculadas aos pagamentos, registros de pagamento, valores pagos nas parcelas. O empréstimo e a liberação ficarão com status cancelado.
+                        </p>
+                        <div class="mb-3">
+                            <label for="motivo_cancelamento_desfazimento" class="form-label">
+                                Motivo do Cancelamento <span class="text-danger">*</span>
+                            </label>
+                            <textarea name="motivo_cancelamento"
+                                      id="motivo_cancelamento_desfazimento"
+                                      class="form-control @error('motivo_cancelamento') is-invalid @enderror"
+                                      rows="4"
+                                      required
+                                      minlength="10"
+                                      maxlength="1000"
+                                      placeholder="Descreva o motivo (mínimo 10 caracteres)...">{{ old('motivo_cancelamento') }}</textarea>
+                            @error('motivo_cancelamento')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                            <small class="text-muted">Mínimo 10 caracteres, máximo 1000 caracteres.</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bx bx-undo"></i> Confirmar: desfazer tudo e cancelar
                         </button>
                     </div>
                 </form>

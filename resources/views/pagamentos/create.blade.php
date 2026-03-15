@@ -75,11 +75,12 @@
 
                             @php
                                 $emprestimo = $parcela ? $parcela->emprestimo : null;
-                                $podeRenovar = $emprestimo 
-                                    && $emprestimo->status === 'ativo' 
+                                $ehMensal = $emprestimo && $emprestimo->frequencia === 'mensal';
+                                // Mensal: pode renovar antes do vencimento. Demais frequências: só quando atrasada
+                                $podeRenovar = $emprestimo
+                                    && $emprestimo->status === 'ativo'
                                     && $emprestimo->numero_parcelas === 1
-                                    && $estaAtrasada; // Apenas se estiver atrasada
-                                    // Removido: && $emprestimo->frequencia === 'mensal' (aceita qualquer frequência)
+                                    && ($estaAtrasada || $ehMensal);
                                 
                                 if ($podeRenovar && !$emprestimo->relationLoaded('parcelas')) {
                                     $emprestimo->load('parcelas');

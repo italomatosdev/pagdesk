@@ -5,7 +5,9 @@ namespace App\Modules\Loans\Services;
 use App\Modules\Core\Models\OperationClient;
 use App\Modules\Core\Services\NotificacaoService;
 use App\Modules\Core\Traits\Auditable;
+use App\Modules\Cash\Models\CashLedgerEntry;
 use App\Modules\Loans\Models\Emprestimo;
+use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\Parcela;
 use App\Modules\Loans\Services\Strategies\LoanStrategyFactory;
 use Carbon\Carbon;
@@ -298,10 +300,11 @@ class EmprestimoService
                 ]);
             }
 
-            // Verificar se a parcela está atrasada
-            if (!$parcela->isAtrasada()) {
+            // Empréstimo mensal: pode renovar antes do vencimento (parcela pendente). Demais frequências: só quando atrasada.
+            $ehMensal = $emprestimo->frequencia === 'mensal';
+            if (!$ehMensal && !$parcela->isAtrasada()) {
                 throw ValidationException::withMessages([
-                    'emprestimo' => 'A renovação só é permitida quando a parcela está atrasada.',
+                    'emprestimo' => 'A renovação só é permitida quando a parcela está em vencimento ou atrasada.',
                 ]);
             }
 
@@ -1027,6 +1030,104 @@ class EmprestimoService
                     'tipo' => 'emprestimo_cancelado',
                     'titulo' => 'Empréstimo Cancelado',
                     'mensagem' => "O empréstimo #{$emprestimo->id} do cliente {$cliente->nome} foi cancelado. Motivo: {$motivoCancelamento}",
+                    'url' => route('emprestimos.show', $emprestimo->id),
+                    'dados' => ['emprestimo_id' => $emprestimo->id],
+                ]);
+            }
+
+            return $emprestimo->fresh();
+        });
+    }
+
+    /**
+     * Cancelar empréstimo com desfazimento de todos os pagamentos (gestor ou administrador).
+     * Desfaz: movimentações de caixa, pagamentos, zera parcelas, soft-delete parcelas, marca empréstimo e liberação como cancelados.
+     *
+     * @param int $emprestimoId
+     * @param int $userId
+     * @param string $motivoCancelamento
+     * @return Emprestimo
+     * @throws ValidationException
+     */
+    public function cancelarComDesfazimento(int $emprestimoId, int $userId, string $motivoCancelamento): Emprestimo
+    {
+        return DB::transaction(function () use ($emprestimoId, $userId, $motivoCancelamento) {
+            $emprestimo = Emprestimo::with(['liberacao', 'parcelas.pagamentos', 'garantias'])->findOrFail($emprestimoId);
+            $oldStatus = $emprestimo->status;
+
+            if ($emprestimo->isCancelado()) {
+                throw ValidationException::withMessages([
+                    'emprestimo' => 'Este empréstimo já está cancelado.',
+                ]);
+            }
+
+            if ($emprestimo->isRenovacao()) {
+                throw ValidationException::withMessages([
+                    'emprestimo' => 'Não é possível cancelar um empréstimo renovado.',
+                ]);
+            }
+
+            $parcelasComPagamento = $emprestimo->parcelas->filter(fn ($p) => $p->valor_pago > 0 || $p->pagamentos->isNotEmpty());
+            $pagamentoIds = $parcelasComPagamento->flatMap(fn ($p) => $p->pagamentos->pluck('id'))->unique()->filter()->values()->all();
+
+            // 1) Soft-delete das movimentações de caixa ligadas aos pagamentos
+            if (!empty($pagamentoIds)) {
+                CashLedgerEntry::whereIn('pagamento_id', $pagamentoIds)->delete();
+                Pagamento::whereIn('id', $pagamentoIds)->delete();
+            }
+
+            // 2) Zerar parcelas que tinham valor pago
+            Parcela::where('emprestimo_id', $emprestimoId)
+                ->where('valor_pago', '>', 0)
+                ->update([
+                    'valor_pago' => 0,
+                    'data_pagamento' => null,
+                    'status' => 'pendente',
+                    'dias_atraso' => 0,
+                ]);
+
+            // 3) Atualizar liberação para cancelado (se existir)
+            if ($emprestimo->liberacao) {
+                $emprestimo->liberacao->update(['status' => 'cancelado']);
+            }
+
+            // 4) Cancelar garantias ativas (empenho)
+            if ($emprestimo->isEmpenho() && $emprestimo->garantias->isNotEmpty()) {
+                foreach ($emprestimo->garantias as $garantia) {
+                    if ($garantia->isAtiva()) {
+                        $obs = ($garantia->observacoes ?? '') . "\n\n[CANCELADA EM " . Carbon::now()->format('d/m/Y H:i') . "]\nEmpréstimo #{$emprestimo->id} cancelado com desfazimento. Motivo: {$motivoCancelamento}";
+                        $garantia->update(['status' => 'cancelada', 'observacoes' => $obs]);
+                    }
+                }
+            }
+
+            // 5) Marcar empréstimo como cancelado
+            $emprestimo->update([
+                'status' => 'cancelado',
+                'aprovado_por' => $userId,
+                'aprovado_em' => now(),
+                'motivo_rejeicao' => $motivoCancelamento,
+            ]);
+
+            // 6) Soft-delete das parcelas do empréstimo
+            Parcela::where('emprestimo_id', $emprestimoId)->delete();
+
+            self::auditar(
+                'cancelar_emprestimo_com_desfazimento',
+                $emprestimo,
+                ['status' => $oldStatus],
+                ['status' => 'cancelado', 'motivo_rejeicao' => $motivoCancelamento],
+                "Empréstimo cancelado com desfazimento de pagamentos por gestor/administrador. Motivo: {$motivoCancelamento}"
+            );
+
+            $notificacaoService = app(NotificacaoService::class);
+            $cliente = $emprestimo->cliente;
+            if ($emprestimo->consultor_id) {
+                $notificacaoService->criar([
+                    'user_id' => $emprestimo->consultor_id,
+                    'tipo' => 'emprestimo_cancelado',
+                    'titulo' => 'Empréstimo Cancelado',
+                    'mensagem' => "O empréstimo #{$emprestimo->id} do cliente {$cliente->nome} foi cancelado (com desfazimento de pagamentos). Motivo: {$motivoCancelamento}",
                     'url' => route('emprestimos.show', $emprestimo->id),
                     'dados' => ['emprestimo_id' => $emprestimo->id],
                 ]);
