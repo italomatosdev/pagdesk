@@ -53,7 +53,7 @@
                             <i class="bx bx-transfer font-size-20 text-secondary me-3"></i>
                             <div>
                                 <h6 class="mb-1">Entradas e saídas por categoria</h6>
-                                <small class="text-muted">Fluxo de caixa por categoria. Filtros: período e escopo (caixa único ou por operação).</small>
+                                <small class="text-muted">Fluxo de caixa por categoria. Filtros: período e operação.</small>
                             </div>
                             <i class="bx bx-chevron-right ms-auto"></i>
                         </a>

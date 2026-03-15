@@ -21,7 +21,7 @@ class RelatorioController extends Controller
 
     /**
      * Consultores para os filtros: quando há operação selecionada, apenas os da operação.
-     * Sem operação: admin vê todos; gestor vê os das suas operações.
+     * Sem operação: Super Admin vê todos; demais vêem só consultores das suas operações.
      */
     private function getConsultoresParaRelatorio(?int $operacaoId, array $operacoesIds, $user): \Illuminate\Database\Eloquent\Collection
     {
@@ -32,7 +32,7 @@ class RelatorioController extends Controller
             $query->whereHas('operacoes', function ($q) use ($operacaoId) {
                 $q->where('operacoes.id', $operacaoId);
             });
-        } elseif (!$user->hasRole('administrador') && !empty($operacoesIds)) {
+        } elseif (!$user->isSuperAdmin() && !empty($operacoesIds)) {
             $query->whereHas('operacoes', function ($q) use ($operacoesIds) {
                 $q->whereIn('operacoes.id', $operacoesIds);
             });
@@ -138,23 +138,22 @@ class RelatorioController extends Controller
             $dateTo = $dateFrom->copy()->endOfDay();
         }
 
+        $operacoesIds = $user->isSuperAdmin()
+            ? Operacao::where('ativo', true)->pluck('id')->toArray()
+            : $user->getOperacoesIds();
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        $operacoesIds = $user->getOperacoesIds();
+        if ($operacaoId !== null && (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds, true))) {
+            $operacaoId = null;
+        }
         $consultoresIds = $request->input('consultor_id', []);
         if (!is_array($consultoresIds)) {
             $consultoresIds = $consultoresIds ? [$consultoresIds] : [];
         }
         $consultoresIds = array_filter(array_map('intval', $consultoresIds));
 
-        // Operações para o filtro
-        if ($user->hasRole('administrador')) {
-            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
-        } else {
-            $operacoes = !empty($operacoesIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
-                : collect([]);
-        }
-
+        $operacoes = !empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
         $consultores = $this->getConsultoresParaRelatorio($operacaoId, $operacoesIds, $user);
 
         $porDiaPorUsuario = [];
@@ -171,9 +170,7 @@ class RelatorioController extends Controller
                 ->whereBetween('data_pagamento', [$dateFrom, $dateTo])
                 ->whereIn('consultor_id', $consultoresIds);
 
-            if ($user->hasRole('administrador') && !$operacaoId && empty($operacoesIds)) {
-                // Admin sem operação: não aplica filtro de operação
-            } else {
+            if (!$user->isSuperAdmin() || $operacaoId) {
                 $query->whereHas('parcela.emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
                     if ($operacaoId) {
                         $q->where('operacao_id', $operacaoId);
@@ -255,8 +252,13 @@ class RelatorioController extends Controller
             : Carbon::today();
         $vencimentoDe = $request->input('vencimento_de') ? Carbon::parse($request->input('vencimento_de'))->startOfDay() : null;
         $vencimentoAte = $request->input('vencimento_ate') ? Carbon::parse($request->input('vencimento_ate'))->endOfDay() : null;
+        $operacoesIds = $user->isSuperAdmin()
+            ? Operacao::where('ativo', true)->pluck('id')->toArray()
+            : $user->getOperacoesIds();
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        $operacoesIds = $user->getOperacoesIds();
+        if ($operacaoId !== null && (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds, true))) {
+            $operacaoId = null;
+        }
         $consultoresIds = $request->input('consultor_id', []);
         if (!is_array($consultoresIds)) {
             $consultoresIds = $consultoresIds ? [$consultoresIds] : [];
@@ -265,14 +267,9 @@ class RelatorioController extends Controller
         $diasAtrasoMin = $request->input('dias_atraso_min') !== null && $request->input('dias_atraso_min') !== ''
             ? (int) $request->input('dias_atraso_min') : null;
 
-        if ($user->hasRole('administrador')) {
-            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
-        } else {
-            $operacoes = !empty($operacoesIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
-                : collect([]);
-        }
-
+        $operacoes = !empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
         $consultores = $this->getConsultoresParaRelatorio($operacaoId, $operacoesIds, $user);
 
         $query = Parcela::with(['emprestimo.operacao', 'emprestimo.cliente', 'emprestimo.consultor'])
@@ -281,8 +278,8 @@ class RelatorioController extends Controller
 
         $query->whereHas('emprestimo', function ($q) use ($operacaoId, $operacoesIds, $consultoresIds, $user) {
             $q->where('status', 'ativo');
-            if ($user->hasRole('administrador') && !$operacaoId && empty($operacoesIds)) {
-                // sem filtro de operação
+            if ($user->isSuperAdmin() && !$operacaoId) {
+                // Super Admin sem operação: sem filtro
             } else {
                 if ($operacaoId) {
                     $q->where('operacao_id', $operacaoId);
@@ -347,8 +344,13 @@ class RelatorioController extends Controller
             $dateTo = $dateFrom->copy()->endOfDay();
         }
 
+        $operacoesIds = $user->isSuperAdmin()
+            ? Operacao::where('ativo', true)->pluck('id')->toArray()
+            : $user->getOperacoesIds();
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        $operacoesIds = $user->getOperacoesIds();
+        if ($operacaoId !== null && (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds, true))) {
+            $operacaoId = null;
+        }
         $consultoresIds = $request->input('consultor_id', []);
         if (!is_array($consultoresIds)) {
             $consultoresIds = $consultoresIds ? [$consultoresIds] : [];
@@ -357,23 +359,16 @@ class RelatorioController extends Controller
         $frequencia = $request->input('frequencia');
         $tipoQuitacao = $request->input('tipo_quitacao');
 
-        if ($user->hasRole('administrador')) {
-            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
-        } else {
-            $operacoes = !empty($operacoesIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
-                : collect([]);
-        }
-
+        $operacoes = !empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
         $consultores = $this->getConsultoresParaRelatorio($operacaoId, $operacoesIds, $user);
 
         $query = Emprestimo::with(['cliente', 'operacao', 'consultor', 'parcelas'])
             ->withCount('renovacoes')
             ->where('status', 'finalizado');
 
-        if ($user->hasRole('administrador') && !$operacaoId && empty($operacoesIds)) {
-            // sem filtro de operação
-        } else {
+        if (!$user->isSuperAdmin() || $operacaoId) {
             if ($operacaoId) {
                 $query->where('operacao_id', $operacaoId);
             } elseif (!empty($operacoesIds)) {
@@ -442,17 +437,17 @@ class RelatorioController extends Controller
             $dateTo = $dateFrom->copy()->endOfDay();
         }
 
+        $operacoesIds = $user->isSuperAdmin()
+            ? Operacao::where('ativo', true)->pluck('id')->toArray()
+            : $user->getOperacoesIds();
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        $operacoesIds = $user->getOperacoesIds();
-
-        if ($user->hasRole('administrador')) {
-            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
-        } else {
-            $operacoes = !empty($operacoesIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
-                : collect([]);
+        if ($operacaoId !== null && (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds, true))) {
+            $operacaoId = null;
         }
 
+        $operacoes = !empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
         $consultores = $this->getConsultoresParaRelatorio($operacaoId, $operacoesIds, $user);
 
         $totaisPorConsultor = [];
@@ -468,9 +463,7 @@ class RelatorioController extends Controller
         $query = Pagamento::with(['consultor', 'parcela.emprestimo'])
             ->whereBetween('data_pagamento', [$dateFrom, $dateTo]);
 
-        if ($user->hasRole('administrador') && !$operacaoId && empty($operacoesIds)) {
-            // sem filtro de operação
-        } else {
+        if (!$user->isSuperAdmin() || $operacaoId) {
             $query->whereHas('parcela.emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
                 if ($operacaoId) {
                     $q->where('operacao_id', $operacaoId);
@@ -516,7 +509,7 @@ class RelatorioController extends Controller
 
     /**
      * Relatório: Entradas e saídas por categoria
-     * Filtros: período, escopo (caixa único ou por operação).
+     * Filtros: período e operação.
      */
     public function entradasSaidasPorCategoria(Request $request): View
     {
@@ -532,23 +525,22 @@ class RelatorioController extends Controller
             $dateTo = $dateFrom->copy()->endOfDay();
         }
 
+        $operacoesIds = $user->isSuperAdmin()
+            ? Operacao::where('ativo', true)->pluck('id')->toArray()
+            : $user->getOperacoesIds();
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        $operacoesIds = $user->getOperacoesIds();
-
-        if ($user->hasRole('administrador')) {
-            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
-        } else {
-            $operacoes = !empty($operacoesIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
-                : collect([]);
+        if ($operacaoId !== null && (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds, true))) {
+            $operacaoId = null;
         }
+
+        $operacoes = !empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
 
         $query = CashLedgerEntry::with('categoria')
             ->whereBetween('data_movimentacao', [$dateFrom, $dateTo]);
 
-        if ($user->hasRole('administrador') && !$operacaoId && empty($operacoesIds)) {
-            // Caixa único: todas as operações
-        } else {
+        if (!$user->isSuperAdmin() || $operacaoId) {
             if ($operacaoId) {
                 $query->where('operacao_id', $operacaoId);
             } elseif (!empty($operacoesIds)) {
@@ -614,8 +606,13 @@ class RelatorioController extends Controller
             $dateTo = $dateFrom->copy()->endOfDay();
         }
 
+        $operacoesIds = $user->isSuperAdmin()
+            ? Operacao::where('ativo', true)->pluck('id')->toArray()
+            : $user->getOperacoesIds();
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        $operacoesIds = $user->getOperacoesIds();
+        if ($operacaoId !== null && (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds, true))) {
+            $operacaoId = null;
+        }
         $consultoresIds = $request->input('consultor_id', []);
         if (!is_array($consultoresIds)) {
             $consultoresIds = $consultoresIds ? [$consultoresIds] : [];
@@ -624,22 +621,15 @@ class RelatorioController extends Controller
         $tipoEmprestimo = $request->input('tipo_emprestimo');
         $frequencia = $request->input('frequencia');
 
-        if ($user->hasRole('administrador')) {
-            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
-        } else {
-            $operacoes = !empty($operacoesIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
-                : collect([]);
-        }
-
+        $operacoes = !empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
         $consultores = $this->getConsultoresParaRelatorio($operacaoId, $operacoesIds, $user);
 
         $query = Emprestimo::with(['cliente', 'operacao', 'consultor', 'parcelas.pagamentos'])
             ->where('status', 'finalizado');
 
-        if ($user->hasRole('administrador') && !$operacaoId && empty($operacoesIds)) {
-            // sem filtro de operação
-        } else {
+        if (!$user->isSuperAdmin() || $operacaoId) {
             if ($operacaoId) {
                 $query->where('operacao_id', $operacaoId);
             } elseif (!empty($operacoesIds)) {
