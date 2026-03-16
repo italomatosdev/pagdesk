@@ -257,7 +257,7 @@ class CashController extends Controller
             $usuarios = User::with(['operacoes'])
                 ->whereHas('operacoes', function ($q) use ($operacoesIds) {
                     $q->whereIn('operacoes.id', $operacoesIds)
-                        ->whereIn('operacao_user.role', ['consultor', 'gestor']);
+                        ->whereIn('operacao_user.role', ['consultor', 'gestor', 'administrador']);
                 })
                 ->orderBy('name')
                 ->get();
@@ -346,8 +346,8 @@ class CashController extends Controller
 
         if (!empty($validated['consultor_id'])) {
             $consultor = User::findOrFail($validated['consultor_id']);
-            if (!$consultor->temAlgumPapelNaOperacao((int) $validated['operacao_id'], ['consultor', 'gestor'])) {
-                return back()->with('error', 'O usuário selecionado deve ser um consultor ou gestor nesta operação.')->withInput();
+            if (!$consultor->temAlgumPapelNaOperacao((int) $validated['operacao_id'], ['consultor', 'gestor', 'administrador'])) {
+                return back()->with('error', 'O usuário selecionado deve ser consultor, gestor ou administrador nesta operação.')->withInput();
             }
             $consultorOperacoes = $consultor->getOperacoesIds();
             if (empty(array_intersect($opsIds, $consultorOperacoes))) {
