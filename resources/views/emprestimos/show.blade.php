@@ -354,7 +354,7 @@
                             </div>
                         @endif
 
-                        <!-- Botão de Executar Garantia (apenas para gestores/administradores, tipo empenho, com parcela atrasada) -->
+                        <!-- Executar Garantia: gestores/administradores, tipo empenho ativo com garantia ativa (com ou sem parcela atrasada) -->
                         @php
                             $parcelaAtrasada = null;
                             foreach ($emprestimo->parcelas as $parcela) {
@@ -363,11 +363,9 @@
                                     break;
                                 }
                             }
-                            
                             $podeExecutarGarantia = ($podeExecutarGarantia ?? false) &&
                                 $emprestimo->isEmpenho() &&
                                 $emprestimo->isAtivo() &&
-                                $parcelaAtrasada &&
                                 $emprestimo->garantias->where('status', 'ativa')->count() > 0;
                         @endphp
                         @if($podeExecutarGarantia && $parcelaAtrasada)
@@ -1023,6 +1021,12 @@
                                                         <i class="{{ $garantia->categoria_icone }}"></i>
                                                         <strong>{{ $garantia->categoria_nome }}</strong>
                                                     </span>
+                                                    <div class="d-flex align-items-center gap-1">
+                                                    @if($garantia->status === 'ativa' && ($podeExecutarGarantia ?? false))
+                                                        <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#executarGarantiaModal{{ $garantia->id }}" title="Executar garantia (finalizar empréstimo)">
+                                                            <i class="bx bx-shield-x"></i> Executar
+                                                        </button>
+                                                    @endif
                                                     @if($podeEditarGarantias)
                                                     <div class="dropdown">
                                                         <button class="btn btn-sm btn-link text-muted" type="button" data-bs-toggle="dropdown">
@@ -1047,6 +1051,7 @@
                                                         </ul>
                                                     </div>
                                                     @endif
+                                                    </div>
                                                 </div>
                                                 <div class="card-body">
                                                     <p class="mb-2"><strong>{{ $garantia->descricao }}</strong></p>
