@@ -333,6 +333,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::post('/{id}/rejeitar', [App\Modules\Cash\Controllers\FechamentoCaixaController::class, 'rejeitar'])->name('rejeitar');
         Route::post('/{id}/anexar-comprovante', [App\Modules\Cash\Controllers\FechamentoCaixaController::class, 'anexarComprovante'])->name('anexar-comprovante');
         Route::post('/{id}/confirmar', [App\Modules\Cash\Controllers\FechamentoCaixaController::class, 'confirmarRecebimento'])->name('confirmar');
+        Route::post('/{id}/marcar-pago-consultor-bloqueado', [App\Modules\Cash\Controllers\FechamentoCaixaController::class, 'marcarComoPagoConsultorBloqueado'])->name('marcar-pago-consultor-bloqueado');
     });
 
     // Prestações de Contas (rotas legadas - redirecionam para nova tela)

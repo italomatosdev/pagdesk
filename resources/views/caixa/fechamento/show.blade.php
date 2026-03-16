@@ -320,6 +320,15 @@
                                         </button>
                                     </form>
                                 @endif
+
+                                @if($settlement->isAprovado() && $settlement->consultor && $settlement->consultor->isBloqueado() && !empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])))
+                                    <form action="{{ route('fechamento-caixa.marcar-pago-consultor-bloqueado', $settlement->id) }}" method="POST" class="d-inline" id="formMarcarPagoBloqueado">
+                                        @csrf
+                                        <button type="submit" class="btn btn-warning" id="btnMarcarPagoBloqueado" title="Consultor bloqueado não pode enviar comprovante. Marque como pago para encerrar o ciclo.">
+                                            <i class="bx bx-lock-open"></i> Marcar como pago (consultor bloqueado)
+                                        </button>
+                                    </form>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -410,6 +419,36 @@
                                 btnAprovar.disabled = true;
                                 btnAprovar.innerHTML = '<i class="bx bx-loader bx-spin"></i> Aprovando...';
                                 formAprovar.submit();
+                            }
+                        });
+                    });
+                }
+
+                // Formulário Marcar como pago (consultor bloqueado)
+                const formMarcarPagoBloqueado = document.getElementById('formMarcarPagoBloqueado');
+                if (formMarcarPagoBloqueado) {
+                    formMarcarPagoBloqueado.addEventListener('submit', function(e) {
+                        e.preventDefault();
+                        Swal.fire({
+                            title: 'Marcar como pago?',
+                            html: `
+                                <div class="text-start">
+                                    <p><strong>Consultor bloqueado</strong> não pode enviar comprovante.</p>
+                                    <p>Esta ação marcará a prestação como <strong>paga</strong> e gerará as movimentações de caixa. O ciclo será encerrado.</p>
+                                </div>
+                            `,
+                            icon: 'question',
+                            showCancelButton: true,
+                            confirmButtonColor: '#ffc107',
+                            cancelButtonColor: '#6c757d',
+                            confirmButtonText: '<i class="bx bx-check"></i> Sim, marcar como pago',
+                            cancelButtonText: 'Cancelar',
+                            reverseButtons: true
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                const btn = document.getElementById('btnMarcarPagoBloqueado');
+                                if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bx bx-loader bx-spin"></i> Processando...'; }
+                                formMarcarPagoBloqueado.submit();
                             }
                         });
                     });

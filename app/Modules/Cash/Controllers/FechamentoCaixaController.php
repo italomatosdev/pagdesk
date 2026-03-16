@@ -303,4 +303,32 @@ class FechamentoCaixaController extends Controller
             return back()->with('error', 'Erro: ' . $e->getMessage());
         }
     }
+
+    /**
+     * Marcar como pago quando o consultor está bloqueado (gestor/admin).
+     * O consultor bloqueado não pode enviar comprovante; o gestor encerra o ciclo marcando como pago.
+     */
+    public function marcarComoPagoConsultorBloqueado(Request $request, int $id): RedirectResponse
+    {
+        $user = auth()->user();
+        $settlement = Settlement::with('consultor')->findOrFail($id);
+        if (!$user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
+            abort(403, 'Apenas gestores e administradores podem marcar como pago.');
+        }
+
+        $validated = $request->validate([
+            'observacoes' => 'nullable|string|max:500',
+        ]);
+
+        try {
+            $this->settlementService->marcarComoPagoConsultorBloqueado($id, $user->id, $validated['observacoes'] ?? null);
+            return redirect()->route('fechamento-caixa.show', $id)
+                ->with('success', 'Marcado como pago. Movimentações de caixa geradas (consultor bloqueado).');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $msg = $e->validator->errors()->first('settlement') ?: $e->getMessage();
+            return back()->with('error', $msg);
+        } catch (\Exception $e) {
+            return back()->with('error', 'Erro: ' . $e->getMessage());
+        }
+    }
 }
