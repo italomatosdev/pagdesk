@@ -262,9 +262,10 @@ class EmprestimoService
         ?float $valorTotalPago = null,
         ?string $metodoPagamento = 'dinheiro',
         $dataPagamento = null,
-        bool $solicitacaoAprovada = false
+        bool $solicitacaoAprovada = false,
+        ?int $consultorId = null
     ): Emprestimo {
-        return DB::transaction(function () use ($emprestimoId, $registrarPagamentoAutomatico, $tipoJurosRenovacao, $taxaJurosManual, $valorJurosFixo, $valorTotalPago, $metodoPagamento, $dataPagamento, $solicitacaoAprovada) {
+        return DB::transaction(function () use ($emprestimoId, $registrarPagamentoAutomatico, $tipoJurosRenovacao, $taxaJurosManual, $valorJurosFixo, $valorTotalPago, $metodoPagamento, $dataPagamento, $solicitacaoAprovada, $consultorId) {
             $emprestimo = Emprestimo::with(['parcelas', 'garantias.anexos', 'operacao'])->findOrFail($emprestimoId);
 
             // Apenas empréstimos ativos podem ser renovados por este fluxo
@@ -335,7 +336,7 @@ class EmprestimoService
                 $pagamentoService = app(\App\Modules\Loans\Services\PagamentoService::class);
                 $pagamentoService->registrar([
                     'parcela_id' => $parcela->id,
-                    'consultor_id' => auth()->id(),
+                    'consultor_id' => $consultorId ?? auth()->id(),
                     'valor' => $valorTotalPago,
                     'metodo' => $metodoPagamento ?? 'dinheiro',
                     'data_pagamento' => $dataPagamentoObj,

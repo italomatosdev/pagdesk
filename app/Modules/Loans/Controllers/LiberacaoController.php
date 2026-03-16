@@ -771,7 +771,8 @@ class LiberacaoController extends Controller
                 (float) $solicitacao->valor,
                 $solicitacao->metodo,
                 $dataPagamento,
-                true
+                true,
+                $solicitacao->consultor_id
             );
             $solicitacao->update([
                 'status' => 'aprovado',
