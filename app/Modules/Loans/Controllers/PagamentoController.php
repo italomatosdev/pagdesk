@@ -111,7 +111,7 @@ class PagamentoController extends Controller
             }
         }
 
-        $validated['consultor_id'] = $user->id();
+        $validated['consultor_id'] = $user->id;
 
         // Se método é produto/objeto: operação deve permitir e processar itens (upload por item)
         if (($validated['metodo'] ?? '') === 'produto_objeto') {
