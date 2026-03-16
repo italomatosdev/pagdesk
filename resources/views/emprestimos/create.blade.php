@@ -26,7 +26,7 @@
                             </p>
                             <small class="text-muted">
                                 O empréstimo original será finalizado e um novo será criado com o saldo devedor.
-                                @if(!auth()->user()->hasAnyRole(['gestor', 'administrador']))
+                                @if(empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])))
                                     <br><strong>Nota:</strong> A negociação será enviada para aprovação do gestor/administrador.
                                 @endif
                             </small>
@@ -70,8 +70,10 @@
                             </div>
 
                             @php
-                                $ehApenasGestor = auth()->user()->hasRole('gestor') && !auth()->user()->hasRole('administrador');
-                                $ehGestorOuAdmin = auth()->user()->hasAnyRole(['administrador', 'gestor']);
+                                $opsGestor = auth()->user()->getOperacoesIdsOndeTemPapel(['gestor']);
+                                $opsAdmin = auth()->user()->getOperacoesIdsOndeTemPapel(['administrador']);
+                                $ehApenasGestor = !empty($opsGestor) && empty($opsAdmin);
+                                $ehGestorOuAdmin = !empty($opsGestor) || !empty($opsAdmin);
                             @endphp
                             <div id="consultor-responsavel-wrap" class="mb-3" style="display: {{ $ehGestorOuAdmin ? 'block' : 'none' }};">
                                 <label class="form-label">Consultor responsável <span class="text-danger">*</span></label>
@@ -100,7 +102,7 @@
                                         </label>
                                     </div>
                                     <small class="text-muted">
-                                        @if(auth()->user()->hasAnyRole(['administrador', 'gestor']))
+                                        @if($ehGestorOuAdmin)
                                             Use para cadastrar empréstimos já existentes (data no passado). Você pode vincular a um consultor da operação. Após criar, use "Registrar parcelas já pagas" na tela do empréstimo para marcar parcelas recebidas (com opção de gerar ou não caixa).
                                         @else
                                             Use para cadastrar empréstimos já existentes (data no passado). O empréstimo ficará vinculado a você e precisará do aceite de um gestor ou administrador para ser ativado.
@@ -111,7 +113,7 @@
                             <script>
                                 window.permiteRetroativoPorOperacao = @json($operacoes->pluck('permite_emprestimo_retroativo', 'id'));
                                 window.consultoresPorOperacao = @json($consultoresPorOperacao ?? []);
-                                window.ehGestorOuAdmin = @json(auth()->user()->hasAnyRole(['administrador', 'gestor']));
+                                window.ehGestorOuAdmin = @json($ehGestorOuAdmin ?? false);
                                 window.ehApenasGestor = @json($ehApenasGestor ?? false);
                             </script>
 
@@ -600,7 +602,7 @@
                             <div class="alert alert-warning">
                                 <i class="bx bx-info-circle"></i> 
                                 <strong>Atenção:</strong> Ao confirmar, o empréstimo #{{ $emprestimoOrigem->id }} será finalizado e um novo empréstimo será criado com as condições acima.
-                                @if(!auth()->user()->hasAnyRole(['gestor', 'administrador']))
+                                @if(empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])))
                                     A negociação ficará pendente de aprovação.
                                 @endif
                             </div>
@@ -618,7 +620,7 @@
                                 <button type="submit" class="btn btn-primary">
                                     @if($negociacao ?? false)
                                         <i class="bx bx-refresh"></i> 
-                                        {{ auth()->user()->hasAnyRole(['gestor', 'administrador']) ? 'Confirmar Negociação' : 'Solicitar Negociação' }}
+                                        {{ ($ehGestorOuAdmin ?? false) ? 'Confirmar Negociação' : 'Solicitar Negociação' }}
                                     @else
                                         <i class="bx bx-check"></i> Criar Empréstimo
                                     @endif

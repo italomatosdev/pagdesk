@@ -34,7 +34,7 @@
             @endif
 
             <!-- Card: Usuários com Saldo (apenas gestor/admin) -->
-            @if(auth()->user()->hasAnyRole(['gestor', 'administrador']) && $usuariosComSaldo->isNotEmpty())
+            @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])) && $usuariosComSaldo->isNotEmpty())
             <div class="card mb-3">
                 <div class="card-header bg-warning">
                     <h5 class="card-title mb-0">
@@ -149,7 +149,7 @@
                                     @endforeach
                                 </select>
                             </div>
-                            @if(auth()->user()->hasAnyRole(['administrador', 'gestor']))
+                            @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor'])))
                             <div class="col-md-3">
                                 <label class="form-label">Usuário</label>
                                 <select name="consultor_id" id="consultor-select" class="form-select">
@@ -257,7 +257,7 @@
                                                     </button>
                                                 @endif
                                                 
-                                                @if($f->status === 'enviado' && auth()->user()->hasAnyRole(['gestor', 'administrador']))
+                                                @if($f->status === 'enviado' && !empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])))
                                                     <form action="{{ route('fechamento-caixa.confirmar', $f->id) }}" method="POST" class="d-inline"
                                                           onsubmit="return confirmarRecebimento(event)">
                                                         @csrf
