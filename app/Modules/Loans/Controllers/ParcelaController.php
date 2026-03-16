@@ -43,7 +43,7 @@ class ParcelaController extends Controller
             $operacaoId = null;
         }
 
-        $consultorId = $user->hasRole('consultor') ? $user->id : null;
+        $consultorId = empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])) ? $user->id : null;
         $cobrancas = $this->parcelaService->cobrancasDoDia($operacaoId, $consultorId, $operacaoIds);
 
         $operacoes = !empty($operacaoIds)
@@ -86,8 +86,8 @@ class ParcelaController extends Controller
                 $q->where('status', 'ativo'); // Apenas empréstimos ativos
             });
 
-        // Aplicar filtro de operações do usuário (exceto administradores)
-        if (!$user->hasRole('administrador')) {
+        // Aplicar filtro de operações do usuário (só Super Admin vê todas)
+        if (!$user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
             if (!empty($operacoesIds)) {
                 $query->whereHas('emprestimo', function ($q) use ($operacoesIds) {
@@ -95,13 +95,12 @@ class ParcelaController extends Controller
                       ->where('status', 'ativo'); // Apenas empréstimos ativos
                 });
             } else {
-                // Se não tem operações vinculadas, retorna vazio
                 $query->whereRaw('1 = 0');
             }
         }
 
-        // Se for consultor, filtrar apenas suas parcelas
-        if ($user->hasRole('consultor')) {
+        // Se for apenas consultor (sem gestor/admin em nenhuma op), filtrar apenas suas parcelas
+        if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             $query->whereHas('emprestimo', function ($q) use ($user) {
                 $q->where('consultor_id', $user->id);
             });
@@ -117,8 +116,8 @@ class ParcelaController extends Controller
             }
         }
 
-        // Filtro por consultor (apenas admin/gestor)
-        if ($request->filled('consultor_id') && !$user->hasRole('consultor')) {
+        // Filtro por consultor (apenas quem tem gestor/admin em alguma op)
+        if ($request->filled('consultor_id') && !empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             $query->whereHas('emprestimo', function ($q) use ($request) {
                 $q->where('consultor_id', $request->consultor_id);
             });
@@ -143,17 +142,20 @@ class ParcelaController extends Controller
         $parcelas = $query->paginate(15)->withQueryString();
 
         // Dados para filtros - filtrar operações disponíveis para o usuário
-        if ($user->hasRole('administrador')) {
+        if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->get();
         } else {
             $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds) 
+            $operacoes = !empty($operacoesIds)
                 ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
                 : collect([]);
         }
-        $consultores = \App\Models\User::whereHas('roles', function ($q) {
-            $q->where('name', 'consultor');
-        })->get();
+        $operacoesIdsFiltro = $user->isSuperAdmin()
+            ? Operacao::where('ativo', true)->pluck('id')->toArray()
+            : $user->getOperacoesIds();
+        $consultores = empty($operacoesIdsFiltro)
+            ? collect([])
+            : \App\Models\User::whereHas('operacoes', fn ($q) => $q->whereIn('operacoes.id', $operacoesIdsFiltro)->where('operacao_user.role', 'consultor'))->orderBy('name')->get();
 
         return view('parcelas.atrasadas', compact('parcelas', 'operacoes', 'consultores'));
     }

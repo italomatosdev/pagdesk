@@ -25,9 +25,9 @@ class AprovacaoService
         $query = Emprestimo::with(['cliente', 'operacao', 'consultor', 'parcelas'])
             ->where('status', 'pendente');
 
-        // Aplicar filtro de operações do usuário (Super Admin vê todas; demais só das operações vinculadas)
+        // Aplicar filtro: Super Admin vê todas; demais só operações onde tem papel administrador
         if ($user && !$user->isSuperAdmin()) {
-            $operacoesIds = $user->getOperacoesIds();
+            $operacoesIds = $user->getOperacoesIdsOndeTemPapel(['administrador']);
             if (!empty($operacoesIds)) {
                 $query->whereIn('operacao_id', $operacoesIds);
             } else {
@@ -57,8 +57,7 @@ class AprovacaoService
         $emprestimo = Emprestimo::with('liberacao')->findOrFail($emprestimoId);
 
         if ($aprovador && !$aprovador->isSuperAdmin()) {
-            $operacoesIds = $aprovador->getOperacoesIds();
-            if (empty($operacoesIds) || !in_array((int) $emprestimo->operacao_id, $operacoesIds, true)) {
+            if (!$aprovador->temPapelNaOperacao($emprestimo->operacao_id, 'administrador')) {
                 throw ValidationException::withMessages([
                     'emprestimo' => 'Você não tem permissão para aprovar empréstimos desta operação.',
                 ]);

@@ -20,23 +20,23 @@ class RelatorioController extends Controller
     }
 
     /**
-     * Consultores para os filtros: quando há operação selecionada, apenas os da operação.
-     * Sem operação: Super Admin vê todos; demais vêem só consultores das suas operações.
+     * Usuários que podem ser responsáveis por empréstimo (consultor_id): consultor, gestor ou administrador na operação.
+     * Quando há operação selecionada: apenas os daquela operação. Sem operação: Super Admin vê todos; demais vêem das suas operações.
+     * Nas views, exibir "(Você)" para o usuário logado.
      */
     private function getConsultoresParaRelatorio(?int $operacaoId, array $operacoesIds, $user): \Illuminate\Database\Eloquent\Collection
     {
-        $query = \App\Models\User::whereHas('roles', function ($q) {
-            $q->where('name', 'consultor');
-        });
-        if ($operacaoId) {
-            $query->whereHas('operacoes', function ($q) use ($operacaoId) {
+        $papeisResponsavel = ['consultor', 'gestor', 'administrador'];
+
+        $query = \App\Models\User::whereHas('operacoes', function ($q) use ($operacaoId, $operacoesIds, $user, $papeisResponsavel) {
+            $q->whereIn('operacao_user.role', $papeisResponsavel);
+            if ($operacaoId) {
                 $q->where('operacoes.id', $operacaoId);
-            });
-        } elseif (!$user->isSuperAdmin() && !empty($operacoesIds)) {
-            $query->whereHas('operacoes', function ($q) use ($operacoesIds) {
+            } elseif (!$user->isSuperAdmin() && !empty($operacoesIds)) {
                 $q->whereIn('operacoes.id', $operacoesIds);
-            });
-        }
+            }
+        });
+
         return $query->orderBy('name')->get();
     }
 
@@ -128,7 +128,7 @@ class RelatorioController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasAnyRole(['administrador', 'gestor'])) {
+        if (empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
             abort(403, 'Acesso negado.');
         }
 
@@ -243,7 +243,7 @@ class RelatorioController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasAnyRole(['administrador', 'gestor'])) {
+        if (empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
             abort(403, 'Acesso negado.');
         }
 
@@ -334,7 +334,7 @@ class RelatorioController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasAnyRole(['administrador', 'gestor'])) {
+        if (empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
             abort(403, 'Acesso negado.');
         }
 
@@ -427,7 +427,7 @@ class RelatorioController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasAnyRole(['administrador', 'gestor'])) {
+        if (empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
             abort(403, 'Acesso negado.');
         }
 
@@ -454,7 +454,7 @@ class RelatorioController extends Controller
         foreach ($consultores as $c) {
             $totaisPorConsultor[$c->id] = [
                 'id' => $c->id,
-                'nome' => $c->name,
+                'nome' => $c->name . ($c->id === $user->id ? ' (Você)' : ''),
                 'valor_quitado' => 0,
                 'juros_recebidos' => 0,
             ];
@@ -515,7 +515,7 @@ class RelatorioController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasAnyRole(['administrador', 'gestor'])) {
+        if (empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
             abort(403, 'Acesso negado.');
         }
 
@@ -596,7 +596,7 @@ class RelatorioController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasAnyRole(['administrador', 'gestor'])) {
+        if (empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
             abort(403, 'Acesso negado.');
         }
 

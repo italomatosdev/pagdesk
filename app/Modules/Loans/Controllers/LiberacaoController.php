@@ -34,8 +34,8 @@ class LiberacaoController extends Controller
      */
     public function index(Request $request): View
     {
-        // Apenas gestor ou administrador
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
+        $user = auth()->user();
+        if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem ver liberações.');
         }
 
@@ -70,8 +70,9 @@ class LiberacaoController extends Controller
      */
     public function liberar(Request $request, int $id): RedirectResponse
     {
-        // Apenas gestor ou administrador
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
+        $user = auth()->user();
+        $liberacao = \App\Modules\Loans\Models\LiberacaoEmprestimo::with('emprestimo')->findOrFail($id);
+        if (!$user->temAlgumPapelNaOperacao($liberacao->emprestimo->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado.');
         }
 
@@ -109,7 +110,8 @@ class LiberacaoController extends Controller
      */
     public function liberarLote(Request $request): RedirectResponse
     {
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
+        $user = auth()->user();
+        if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado.');
         }
 
@@ -193,23 +195,20 @@ class LiberacaoController extends Controller
         ])->findOrFail($id);
 
         $user = auth()->user();
+        $operacaoId = $liberacao->emprestimo->operacao_id;
 
-        // Verificar permissões
-        if ($user->hasRole('consultor')) {
-            // Consultor só pode ver suas próprias liberações
-            if ($liberacao->consultor_id !== $user->id) {
-                abort(403, 'Acesso negado.');
-            }
-        } elseif ($user->hasAnyRole(['gestor', 'administrador'])) {
-            // Gestor e admin podem ver todas, mas validar acesso à operação
-            if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($liberacao->emprestimo->operacao_id)) {
-                abort(403, 'Acesso negado.');
-            }
+        if ($liberacao->consultor_id === $user->id) {
+            // Dono da liberação (consultor) pode ver
+        } elseif ($user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+            // Gestor ou admin na operação pode ver
         } else {
             abort(403, 'Acesso negado.');
         }
 
-        return view('liberacoes.show', compact('liberacao'));
+        $podeAprovarLiberacao = $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador']);
+        $podeConfirmarPagamentoCliente = $liberacao->consultor_id === $user->id;
+
+        return view('liberacoes.show', compact('liberacao', 'podeAprovarLiberacao', 'podeConfirmarPagamentoCliente'));
     }
 
     /**
@@ -257,11 +256,13 @@ class LiberacaoController extends Controller
 
     /**
      * Anexar comprovante de liberação depois (somente se ainda não tiver).
-     * Apenas gestor/administrador. Não permite editar/substituir comprovante existente.
+     * Apenas gestor/administrador na operação. Não permite editar/substituir comprovante existente.
      */
     public function anexarComprovanteLiberacao(Request $request, int $id): RedirectResponse
     {
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
+        $user = auth()->user();
+        $liberacao = \App\Modules\Loans\Models\LiberacaoEmprestimo::with('emprestimo')->findOrFail($id);
+        if (!$user->temAlgumPapelNaOperacao($liberacao->emprestimo->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado.');
         }
 
@@ -329,11 +330,10 @@ class LiberacaoController extends Controller
      */
     public function produtosObjetoRecebidos(Request $request): View
     {
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
+        $user = auth()->user();
+        if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado.');
         }
-
-        $user = auth()->user();
         $operacaoId = $request->input('operacao_id');
         $status = $request->input('status', 'todos'); // todos | aceito | pendente | rejeitado
         if ($operacaoId && !$user->isSuperAdmin()) {
@@ -389,11 +389,10 @@ class LiberacaoController extends Controller
      */
     public function pagamentosProdutoObjeto(Request $request): View
     {
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
+        $user = auth()->user();
+        if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem aceitar pagamentos em produto/objeto.');
         }
-
-        $user = auth()->user();
         $operacaoId = $request->input('operacao_id');
         if ($operacaoId && !$user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
@@ -438,17 +437,11 @@ class LiberacaoController extends Controller
      */
     public function aceitarPagamentoProdutoObjeto(int $id): RedirectResponse
     {
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
-            abort(403, 'Acesso negado.');
-        }
-
-        $pagamento = Pagamento::with('parcela.emprestimo')->findOrFail($id);
         $user = auth()->user();
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $pagamento->parcela->emprestimo->operacao_id, $opsIds, true)) {
-                abort(403, 'Sem acesso a esta operação.');
-            }
+        $pagamento = Pagamento::with('parcela.emprestimo')->findOrFail($id);
+        $operacaoId = $pagamento->parcela->emprestimo->operacao_id;
+        if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+            abort(403, 'Acesso negado.');
         }
 
         try {
@@ -468,17 +461,11 @@ class LiberacaoController extends Controller
      */
     public function rejeitarPagamentoProdutoObjeto(int $id): RedirectResponse
     {
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
-            abort(403, 'Acesso negado.');
-        }
-
-        $pagamento = Pagamento::with('parcela.emprestimo')->findOrFail($id);
         $user = auth()->user();
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $pagamento->parcela->emprestimo->operacao_id, $opsIds, true)) {
-                abort(403, 'Sem acesso a esta operação.');
-            }
+        $pagamento = Pagamento::with('parcela.emprestimo')->findOrFail($id);
+        $operacaoId = $pagamento->parcela->emprestimo->operacao_id;
+        if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+            abort(403, 'Acesso negado.');
         }
 
         try {
@@ -498,11 +485,10 @@ class LiberacaoController extends Controller
      */
     public function solicitacoesJurosParcial(Request $request): View
     {
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
+        $user = auth()->user();
+        if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem aprovar solicitações de juros parcial.');
         }
-
-        $user = auth()->user();
         $operacaoId = $request->input('operacao_id');
 
         if ($operacaoId && !$user->isSuperAdmin()) {
@@ -549,21 +535,14 @@ class LiberacaoController extends Controller
      */
     public function aprovarSolicitacaoJurosParcial(int $id): RedirectResponse
     {
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
-            abort(403, 'Acesso negado.');
-        }
-
+        $user = auth()->user();
         $solicitacao = SolicitacaoPagamentoJurosParcial::with('parcela.emprestimo')->findOrFail($id);
         if (!$solicitacao->isAguardando()) {
             return back()->with('error', 'Esta solicitação já foi processada.');
         }
-
-        $user = auth()->user();
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $solicitacao->parcela->emprestimo->operacao_id, $opsIds, true)) {
-                abort(403, 'Sem acesso a esta operação.');
-            }
+        $operacaoId = $solicitacao->parcela->emprestimo->operacao_id;
+        if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+            abort(403, 'Acesso negado.');
         }
 
         try {
@@ -588,21 +567,14 @@ class LiberacaoController extends Controller
      */
     public function rejeitarSolicitacaoJurosParcial(int $id): RedirectResponse
     {
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
-            abort(403, 'Acesso negado.');
-        }
-
+        $user = auth()->user();
         $solicitacao = SolicitacaoPagamentoJurosParcial::with('parcela.emprestimo')->findOrFail($id);
         if (!$solicitacao->isAguardando()) {
             return back()->with('error', 'Esta solicitação já foi processada.');
         }
-
-        $user = auth()->user();
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $solicitacao->parcela->emprestimo->operacao_id, $opsIds, true)) {
-                abort(403, 'Sem acesso a esta operação.');
-            }
+        $operacaoId = $solicitacao->parcela->emprestimo->operacao_id;
+        if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+            abort(403, 'Acesso negado.');
         }
 
         $solicitacao->update([
@@ -619,11 +591,10 @@ class LiberacaoController extends Controller
      */
     public function solicitacoesJurosContratoReduzido(Request $request): View
     {
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
+        $user = auth()->user();
+        if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem aprovar estas solicitações.');
         }
-
-        $user = auth()->user();
         $operacaoId = $request->input('operacao_id');
 
         if ($operacaoId && !$user->isSuperAdmin()) {
@@ -670,21 +641,14 @@ class LiberacaoController extends Controller
      */
     public function aprovarSolicitacaoJurosContratoReduzido(int $id): RedirectResponse
     {
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
-            abort(403, 'Acesso negado.');
-        }
-
+        $user = auth()->user();
         $solicitacao = SolicitacaoPagamentoJurosContratoReduzido::with('parcela.emprestimo')->findOrFail($id);
         if (!$solicitacao->isAguardando()) {
             return back()->with('error', 'Esta solicitação já foi processada.');
         }
-
-        $user = auth()->user();
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $solicitacao->parcela->emprestimo->operacao_id, $opsIds, true)) {
-                abort(403, 'Sem acesso a esta operação.');
-            }
+        $operacaoId = $solicitacao->parcela->emprestimo->operacao_id;
+        if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+            abort(403, 'Acesso negado.');
         }
 
         try {
@@ -709,21 +673,14 @@ class LiberacaoController extends Controller
      */
     public function rejeitarSolicitacaoJurosContratoReduzido(int $id): RedirectResponse
     {
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
-            abort(403, 'Acesso negado.');
-        }
-
+        $user = auth()->user();
         $solicitacao = SolicitacaoPagamentoJurosContratoReduzido::with('parcela.emprestimo')->findOrFail($id);
         if (!$solicitacao->isAguardando()) {
             return back()->with('error', 'Esta solicitação já foi processada.');
         }
-
-        $user = auth()->user();
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $solicitacao->parcela->emprestimo->operacao_id, $opsIds, true)) {
-                abort(403, 'Sem acesso a esta operação.');
-            }
+        $operacaoId = $solicitacao->parcela->emprestimo->operacao_id;
+        if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+            abort(403, 'Acesso negado.');
         }
 
         $solicitacao->update([
@@ -740,11 +697,10 @@ class LiberacaoController extends Controller
      */
     public function solicitacoesRenovacaoAbate(Request $request): View
     {
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
+        $user = auth()->user();
+        if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem aprovar estas solicitações.');
         }
-
-        $user = auth()->user();
         $operacaoId = $request->input('operacao_id');
 
         if ($operacaoId && !$user->isSuperAdmin()) {
@@ -791,21 +747,14 @@ class LiberacaoController extends Controller
      */
     public function aprovarSolicitacaoRenovacaoAbate(int $id): RedirectResponse
     {
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
-            abort(403, 'Acesso negado.');
-        }
-
+        $user = auth()->user();
         $solicitacao = SolicitacaoRenovacaoAbate::with('parcela.emprestimo')->findOrFail($id);
         if (!$solicitacao->isAguardando()) {
             return redirect()->route('liberacoes.renovacao-abate')->with('error', 'Esta solicitação já foi processada.');
         }
-
-        $user = auth()->user();
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $solicitacao->parcela->emprestimo->operacao_id, $opsIds, true)) {
-                abort(403, 'Sem acesso a esta operação.');
-            }
+        $operacaoId = $solicitacao->parcela->emprestimo->operacao_id;
+        if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+            abort(403, 'Acesso negado.');
         }
 
         try {
@@ -857,21 +806,14 @@ class LiberacaoController extends Controller
      */
     public function rejeitarSolicitacaoRenovacaoAbate(int $id): RedirectResponse
     {
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
-            abort(403, 'Acesso negado.');
-        }
-
+        $user = auth()->user();
         $solicitacao = SolicitacaoRenovacaoAbate::with('parcela.emprestimo')->findOrFail($id);
         if (!$solicitacao->isAguardando()) {
             return redirect()->route('liberacoes.renovacao-abate')->with('error', 'Esta solicitação já foi processada.');
         }
-
-        $user = auth()->user();
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $solicitacao->parcela->emprestimo->operacao_id, $opsIds, true)) {
-                abort(403, 'Sem acesso a esta operação.');
-            }
+        $operacaoId = $solicitacao->parcela->emprestimo->operacao_id;
+        if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+            abort(403, 'Acesso negado.');
         }
 
         $solicitacao->update([
@@ -902,11 +844,10 @@ class LiberacaoController extends Controller
      */
     public function negociacoes(Request $request): View
     {
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
+        $user = auth()->user();
+        if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem aprovar negociações.');
         }
-
-        $user = auth()->user();
         $operacaoId = $request->input('operacao_id');
 
         if ($operacaoId && !$user->isSuperAdmin()) {
@@ -954,21 +895,13 @@ class LiberacaoController extends Controller
      */
     public function aprovarNegociacao(Request $request, int $id): RedirectResponse
     {
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
-            abort(403, 'Acesso negado.');
-        }
-
+        $user = auth()->user();
         $solicitacao = SolicitacaoNegociacao::with('emprestimo')->findOrFail($id);
         if (!$solicitacao->isPendente()) {
             return redirect()->route('liberacoes.negociacoes')->with('error', 'Esta solicitação já foi processada.');
         }
-
-        $user = auth()->user();
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $solicitacao->operacao_id, $opsIds, true)) {
-                abort(403, 'Sem acesso a esta operação.');
-            }
+        if (!$user->temAlgumPapelNaOperacao($solicitacao->operacao_id, ['gestor', 'administrador'])) {
+            abort(403, 'Acesso negado.');
         }
 
         try {
@@ -992,21 +925,13 @@ class LiberacaoController extends Controller
      */
     public function rejeitarNegociacao(Request $request, int $id): RedirectResponse
     {
-        if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
-            abort(403, 'Acesso negado.');
-        }
-
+        $user = auth()->user();
         $solicitacao = SolicitacaoNegociacao::with('emprestimo')->findOrFail($id);
         if (!$solicitacao->isPendente()) {
             return redirect()->route('liberacoes.negociacoes')->with('error', 'Esta solicitação já foi processada.');
         }
-
-        $user = auth()->user();
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $solicitacao->operacao_id, $opsIds, true)) {
-                abort(403, 'Sem acesso a esta operação.');
-            }
+        if (!$user->temAlgumPapelNaOperacao($solicitacao->operacao_id, ['gestor', 'administrador'])) {
+            abort(403, 'Acesso negado.');
         }
 
         try {

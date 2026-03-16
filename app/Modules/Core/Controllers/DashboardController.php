@@ -67,15 +67,13 @@ class DashboardController extends Controller
 
         if ($user->isSuperAdmin()) {
             return $this->dashboardSuperAdmin($request);
-        } elseif ($user->hasRole('administrador')) {
-            return $this->dashboardAdmin($request);
-        } elseif ($user->hasRole('gestor')) {
-            return $this->dashboardGestor($request);
-        } elseif ($user->hasRole('consultor')) {
-            return $this->dashboardConsultor($request);
         }
-
-        // Fallback para usuários sem papel definido
+        if (!empty($user->getOperacoesIdsOndeTemPapel(['administrador']))) {
+            return $this->dashboardAdmin($request);
+        }
+        if (!empty($user->getOperacoesIdsOndeTemPapel(['gestor']))) {
+            return $this->dashboardGestor($request);
+        }
         return $this->dashboardConsultor($request);
     }
 
@@ -1104,9 +1102,8 @@ class DashboardController extends Controller
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
         [$dateFrom, $dateTo] = $this->getDateRangeFromRequest($request);
         
-        // Validar se o usuário tem acesso à operação selecionada
-        if ($operacaoId && !$user->hasRole('administrador') && !$user->temAcessoOperacao($operacaoId)) {
-            $operacaoId = null; // Resetar se não tiver acesso
+        if ($operacaoId && !$user->temAcessoOperacao($operacaoId)) {
+            $operacaoId = null;
         }
         
         // Filtrar operações disponíveis para o usuário (sempre apenas as vinculadas)

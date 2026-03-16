@@ -19,18 +19,9 @@ class UsuarioController extends Controller
     public function __construct(PermissionService $permissionService)
     {
         $this->middleware('auth');
-        // Administradores e gestores (exceto método buscar que é usado por gestores também)
         $this->middleware(function ($request, $next) {
-            // Método buscar() pode ser acessado por gestores e administradores
-            if ($request->route()->getActionMethod() === 'buscar') {
-                if (!auth()->user()->hasAnyRole(['administrador', 'gestor'])) {
-                    abort(403, 'Acesso negado.');
-                }
-            } else {
-                // Outros métodos: administradores e gestores
-                if (!auth()->user()->hasAnyRole(['administrador', 'gestor'])) {
-                    abort(403, 'Acesso negado. Apenas administradores e gestores podem gerenciar usuários.');
-                }
+            if (empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
+                abort(403, 'Acesso negado. Apenas administradores e gestores podem gerenciar usuários.');
             }
             return $next($request);
         });
@@ -78,8 +69,7 @@ class UsuarioController extends Controller
         }
 
         $roles = Role::orderBy('name')->get();
-        // Gestor não pode atribuir papel de administrador
-        if ($user->hasRole('gestor') && !$user->hasRole('administrador')) {
+        if (empty($user->getOperacoesIdsOndeTemPapel(['administrador']))) {
             $roles = $roles->filter(fn ($r) => $r->name !== 'administrador');
         }
         $operacoes = Operacao::whereIn('id', $operacoesIds)
@@ -116,9 +106,8 @@ class UsuarioController extends Controller
             'operacoes.*' => 'integer|exists:operacoes,id',
         ]);
 
-        // Gestor não pode criar usuário com papel de administrador
-        if ($user->hasRole('gestor') && !$user->hasRole('administrador') && in_array('administrador', $validated['roles'], true)) {
-            return back()->with('error', 'Gestores não podem atribuir o papel de administrador.')->withInput();
+        if (empty($user->getOperacoesIdsOndeTemPapel(['administrador'])) && in_array('administrador', $validated['roles'], true)) {
+            return back()->with('error', 'Apenas administradores podem atribuir o papel de administrador.')->withInput();
         }
 
         try {
@@ -139,7 +128,9 @@ class UsuarioController extends Controller
             $roleIds = Role::whereIn('name', $validated['roles'])->pluck('id')->toArray();
             $usuario->roles()->sync($roleIds);
 
-            $usuario->operacoes()->sync($operacoesIds);
+            $papelPadrao = $validated['roles'][0] ?? 'consultor';
+            $sync = array_fill_keys($operacoesIds, ['role' => $papelPadrao]);
+            $usuario->operacoes()->sync($sync);
 
             return redirect()->route('usuarios.show', $usuario->id)
                 ->with('success', 'Usuário criado com sucesso!');
@@ -167,8 +158,7 @@ class UsuarioController extends Controller
 
         $usuario = $query->findOrFail($id);
         $roles = Role::all();
-        // Gestor não pode atribuir papel de administrador
-        if ($user->hasRole('gestor') && !$user->hasRole('administrador')) {
+        if (empty($user->getOperacoesIdsOndeTemPapel(['administrador']))) {
             $roles = $roles->filter(fn ($r) => $r->name !== 'administrador');
         }
 
@@ -195,10 +185,9 @@ class UsuarioController extends Controller
             'role_name' => 'required|string|exists:roles,name',
         ]);
 
-        // Gestor não pode atribuir papel de administrador
         $user = auth()->user();
-        if ($user->hasRole('gestor') && !$user->hasRole('administrador') && $validated['role_name'] === 'administrador') {
-            return back()->with('error', 'Gestores não podem atribuir o papel de administrador.');
+        if (empty($user->getOperacoesIdsOndeTemPapel(['administrador'])) && $validated['role_name'] === 'administrador') {
+            return back()->with('error', 'Apenas administradores podem atribuir o papel de administrador.');
         }
 
         try {
@@ -274,9 +263,14 @@ class UsuarioController extends Controller
             if (!$user->isSuperAdmin() && !empty($operacoesIds)) {
                 $operacoesIds = array_values(array_intersect($operacoesIds, $operacoesPermitidas));
             }
-            
-            // Sincronizar operações (adiciona novas, remove as que não estão na lista)
-            $usuario->operacoes()->sync($operacoesIds);
+
+            $usuario->load('operacoes');
+            $papeisAtuais = $usuario->operacoes->pluck('pivot.role', 'id')->toArray();
+            $sync = [];
+            foreach ($operacoesIds as $opId) {
+                $sync[$opId] = ['role' => $papeisAtuais[$opId] ?? 'consultor'];
+            }
+            $usuario->operacoes()->sync($sync);
 
             return redirect()->route('usuarios.show', $id)
                 ->with('success', 'Operações atualizadas com sucesso!');
@@ -299,9 +293,8 @@ class UsuarioController extends Controller
 
         $user = auth()->user();
         
-        // Buscar apenas consultores e gestores (não administradores)
-        $query = User::whereHas('roles', function($q) {
-            $q->whereIn('name', ['consultor', 'gestor']);
+        $query = User::whereHas('operacoes', function ($q) {
+            $q->whereIn('operacao_user.role', ['consultor', 'gestor']);
         });
 
         // Filtrar por operações do usuário logado (administrador é da operação, não da empresa)
@@ -321,16 +314,16 @@ class UsuarioController extends Controller
               ->orWhere('email', 'like', "%{$termo}%");
         });
 
-        $usuarios = $query->with('roles')
+        $usuarios = $query->with('operacoes')
             ->orderBy('name')
             ->limit(20)
             ->get();
 
-        $results = $usuarios->map(function($usuario) {
-            $roles = $usuario->roles->pluck('name')->map(fn($role) => ucfirst($role))->implode(', ');
+        $results = $usuarios->map(function ($usuario) {
+            $papeis = $usuario->operacoes->pluck('pivot.role')->filter()->unique()->map(fn ($r) => ucfirst($r))->implode(', ');
             return [
                 'id' => $usuario->id,
-                'text' => $usuario->name . ' - ' . $usuario->email . ' (' . $roles . ')'
+                'text' => $usuario->name . ' - ' . $usuario->email . ($papeis ? ' (' . $papeis . ')' : '')
             ];
         });
 

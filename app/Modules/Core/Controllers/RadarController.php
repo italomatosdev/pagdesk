@@ -17,8 +17,9 @@ class RadarController extends Controller
     {
         $this->middleware('auth');
         $this->middleware(function ($request, $next) {
-            if (!auth()->user()->hasAnyRole(['administrador', 'gestor', 'consultor'])) {
-                abort(403, 'Acesso negado. Apenas administradores, gestores e consultores podem acessar o Radar.');
+            $user = auth()->user();
+            if (!$user->isSuperAdmin() && empty($user->getOperacoesIds())) {
+                abort(403, 'Acesso negado. Apenas usuários vinculados a uma operação podem acessar o Radar.');
             }
             return $next($request);
         });

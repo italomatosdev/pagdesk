@@ -334,7 +334,7 @@ class PagamentoController extends Controller
                 return back()->with('error', 'O valor do pagamento não pode ser menor que o principal (R$ ' . number_format($valorPrincipal, 2, ',', '.') . ').')->withInput();
             }
 
-            $isConsultor = auth()->user()->hasRole('consultor') && !auth()->user()->hasAnyRole(['gestor', 'administrador']);
+            $isConsultor = empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']));
             $isProdutoObjetoMetodo = ($validated['metodo'] ?? '') === \App\Modules\Loans\Models\Pagamento::METODO_PRODUTO_OBJETO;
             $isRenovacao = ($validated['tipo_juros'] ?? '') === 'renovacao';
             $isExecutarGarantia = ($validated['tipo_juros'] ?? '') === 'executar_garantia';

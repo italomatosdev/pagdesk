@@ -16,9 +16,9 @@ class AprovacaoController extends Controller
     public function __construct(AprovacaoService $aprovacaoService)
     {
         $this->middleware('auth');
-        // Apenas administradores podem acessar
+        // Apenas quem tem papel administrador em alguma operação pode acessar
         $this->middleware(function ($request, $next) {
-            if (!auth()->user()->hasRole('administrador')) {
+            if (empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador']))) {
                 abort(403, 'Acesso negado. Apenas administradores podem aprovar empréstimos.');
             }
             return $next($request);
@@ -44,11 +44,11 @@ class AprovacaoController extends Controller
 
         $pendentes = $this->aprovacaoService->listarPendentes($operacaoId, $user);
 
-        // Operações disponíveis no filtro: Super Admin vê todas; demais só as vinculadas
+        // Operações disponíveis no filtro: Super Admin vê todas; demais só onde tem papel administrador
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->get();
         } else {
-            $operacoesIds = $user->getOperacoesIds();
+            $operacoesIds = $user->getOperacoesIdsOndeTemPapel(['administrador']);
             $operacoes = !empty($operacoesIds)
                 ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
                 : collect([]);
