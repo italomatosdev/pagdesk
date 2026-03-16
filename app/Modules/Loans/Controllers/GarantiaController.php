@@ -22,24 +22,39 @@ class GarantiaController extends Controller
 
     /**
      * Listar todas as garantias (apenas das operações do usuário; Super Admin vê todas).
+     * Consultor vê apenas garantias dos empréstimos em que é o consultor; gestor/admin vê todas da operação.
      */
     public function index(Request $request)
     {
         $user = auth()->user();
         if ($user->isSuperAdmin()) {
             $operacoesIds = Operacao::where('ativo', true)->pluck('id')->toArray();
+            $emprestimoScope = fn ($q) => $q->whereIn('operacao_id', $operacoesIds);
         } else {
             $operacoesIds = $user->getOperacoesIds();
+            if (empty($operacoesIds)) {
+                $emprestimoScope = fn ($q) => $q->whereRaw('1 = 0');
+            } else {
+                $opsGestorAdmin = $user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']);
+                $opsConsultor = $user->getOperacoesIdsOndeTemPapel(['consultor']);
+                $opsSoConsultor = array_values(array_diff($opsConsultor, $opsGestorAdmin));
+                $emprestimoScope = function ($q) use ($opsGestorAdmin, $opsSoConsultor, $user) {
+                    $q->where(function ($q2) use ($opsGestorAdmin, $opsSoConsultor, $user) {
+                        if (!empty($opsGestorAdmin)) {
+                            $q2->whereIn('operacao_id', $opsGestorAdmin);
+                        }
+                        if (!empty($opsSoConsultor)) {
+                            $q2->orWhere(function ($q3) use ($opsSoConsultor, $user) {
+                                $q3->whereIn('operacao_id', $opsSoConsultor)->where('consultor_id', $user->id);
+                            });
+                        }
+                    });
+                };
+            }
         }
 
         $query = EmprestimoGarantia::with(['emprestimo.cliente', 'emprestimo.operacao', 'anexos'])
-            ->whereHas('emprestimo', function ($q) use ($operacoesIds) {
-                if (!empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
-                } else {
-                    $q->whereRaw('1 = 0');
-                }
-            });
+            ->whereHas('emprestimo', $emprestimoScope);
 
         // Filtros
         if ($request->filled('categoria')) {
@@ -66,6 +81,10 @@ class GarantiaController extends Controller
             $operacaoIdFiltro = (int) $operacaoIdFiltro;
             if (!empty($operacoesIds) && in_array($operacaoIdFiltro, $operacoesIds, true)) {
                 $query->whereHas('emprestimo', fn ($q) => $q->where('operacao_id', $operacaoIdFiltro));
+                // Consultor (sem gestor/admin nesta operação): apenas garantias dos seus empréstimos
+                if (!$user->temAlgumPapelNaOperacao($operacaoIdFiltro, ['gestor', 'administrador'])) {
+                    $query->whereHas('emprestimo', fn ($q) => $q->where('consultor_id', $user->id));
+                }
             }
         }
 
@@ -83,12 +102,8 @@ class GarantiaController extends Controller
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
             : collect([]);
 
-        $statsQuery = function ($q) use ($operacoesIds) {
-            if (!empty($operacoesIds)) {
-                $q->whereIn('operacao_id', $operacoesIds);
-            } else {
-                $q->whereRaw('1 = 0');
-            }
+        $statsQuery = function ($q) use ($emprestimoScope) {
+            $emprestimoScope($q);
             $q->where('status', '!=', 'cancelado');
         };
         $stats = [
