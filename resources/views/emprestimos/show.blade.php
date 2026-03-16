@@ -544,6 +544,13 @@
                                     <strong>Valor Liberado:</strong> 
                                     <span class="h6 text-primary">R$ {{ number_format($emprestimo->liberacao->valor_liberado, 2, ',', '.') }}</span>
                                 </div>
+                                @if($emprestimo->liberacao->status === 'aguardando' && auth()->user()->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['gestor', 'administrador']))
+                                    <div class="col-12 mb-3">
+                                        <button type="button" class="btn btn-success btn-lg w-100" data-bs-toggle="modal" data-bs-target="#modalLiberarDinheiroEmprestimo">
+                                            <i class="bx bx-transfer-alt"></i> Liberar dinheiro
+                                        </button>
+                                    </div>
+                                @endif
                                 @if($emprestimo->liberacao->consultor)
                                     <div class="col-md-6 mb-3">
                                         <strong>Consultor:</strong> {{ $emprestimo->liberacao->consultor->name }}
@@ -579,6 +586,43 @@
                                     </div>
                                 @endif
                             </div>
+
+                            @if($emprestimo->liberacao->status === 'aguardando' && auth()->user()->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['gestor', 'administrador']))
+                            <div class="modal fade" id="modalLiberarDinheiroEmprestimo" tabindex="-1" aria-labelledby="modalLiberarDinheiroEmprestimoLabel" aria-hidden="true">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <div class="modal-content">
+                                        <form action="{{ route('liberacoes.liberar', $emprestimo->liberacao->id) }}" method="POST" enctype="multipart/form-data">
+                                            @csrf
+                                            <input type="hidden" name="redirect_emprestimo_id" value="{{ $emprestimo->id }}">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title" id="modalLiberarDinheiroEmprestimoLabel">Liberar dinheiro</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <div class="alert alert-info">
+                                                    <strong>Valor:</strong> R$ {{ number_format($emprestimo->liberacao->valor_liberado, 2, ',', '.') }}<br>
+                                                    <strong>Consultor:</strong> {{ $emprestimo->liberacao->consultor->name ?? '-' }}<br>
+                                                    <strong>Cliente:</strong> {{ $emprestimo->cliente->nome ?? '-' }}
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Comprovante (opcional)</label>
+                                                    <input type="file" name="comprovante" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+                                                    <small class="text-muted">Formatos aceitos: PDF, JPG, PNG (máx. 2MB)</small>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Observações (opcional)</label>
+                                                    <textarea name="observacoes" class="form-control" rows="3" placeholder="Ex: Transferência realizada, comprovante anexado."></textarea>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                                <button type="submit" class="btn btn-success">Confirmar liberação</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            @endif
 
                             <!-- Botão para confirmar pagamento ao cliente -->
                             @if($emprestimo->liberacao->status === 'liberado' && 

@@ -95,6 +95,11 @@ class LiberacaoController extends Controller
                 $comprovantePath
             );
 
+            $redirectEmprestimoId = $request->input('redirect_emprestimo_id');
+            if ($redirectEmprestimoId && is_numeric($redirectEmprestimoId)) {
+                return redirect()->route('emprestimos.show', (int) $redirectEmprestimoId)
+                    ->with('success', 'Dinheiro liberado com sucesso!');
+            }
             return redirect()->route('liberacoes.index')
                 ->with('success', 'Dinheiro liberado com sucesso!');
         } catch (\Illuminate\Validation\ValidationException $e) {
