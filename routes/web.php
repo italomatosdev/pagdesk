@@ -33,11 +33,22 @@ Route::get('/health', App\Http\Controllers\HealthController::class)->name('healt
 Route::get('/health/live', [App\Http\Controllers\HealthController::class, 'live'])->name('health.live');
 Route::get('/health/ready', [App\Http\Controllers\HealthController::class, 'ready'])->name('health.ready');
 
+// Página de manutenção: se não estiver em manutenção, redireciona para o dashboard
+Route::get('/manutencao', function () {
+    if (!\Illuminate\Support\Facades\Cache::get(\App\Http\Middleware\CheckManutencaoSistema::CACHE_KEY, false)) {
+        return redirect()->route('dashboard.index');
+    }
+    return view('pages-maintenance');
+})->name('manutencao');
+
 // Rotas autenticadas (throttle.sensitive: 40 ações POST/PUT/PATCH/DELETE por minuto por usuário)
 Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
     
     // Super Admin - Gestão de Empresas e Usuários
     Route::prefix('super-admin')->name('super-admin.')->group(function () {
+        Route::get('/configuracoes', [App\Http\Controllers\SuperAdmin\ConfiguracoesSistemaController::class, 'index'])->name('configuracoes.index');
+        Route::post('/manutencao/toggle', [App\Http\Controllers\SuperAdmin\ManutencaoController::class, 'toggle'])->name('manutencao.toggle');
+
         // Usuários (todas as empresas)
         Route::prefix('usuarios')->name('usuarios.')->group(function () {
             Route::get('/', [App\Http\Controllers\SuperAdmin\UsuarioController::class, 'index'])->name('index');
