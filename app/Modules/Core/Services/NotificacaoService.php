@@ -83,26 +83,54 @@ class NotificacaoService
     }
 
     /**
-     * Criar notificação para usuários com uma role que tenham acesso à operação indicada.
-     * Super Admin recebe sempre; demais só se a operação estiver nas operações do usuário.
+     * Criar notificação para usuários que tenham o papel indicado **nessa** operação (operacao_user.role).
+     * Super Admin recebe sempre.
      *
-     * @param string $role
+     * @param string $role consultor|gestor|administrador
      * @param int $operacaoId
      * @param array $dados
      * @return void
      */
     public function criarParaRoleComOperacao(string $role, int $operacaoId, array $dados): void
     {
-        $users = User::with('operacoes')
-            ->whereHas('roles', fn ($q) => $q->where('name', $role))
-            ->get();
+        $userIds = DB::table('operacao_user')
+            ->where('operacao_id', $operacaoId)
+            ->where('role', $role)
+            ->pluck('user_id')
+            ->toArray();
 
-        $userIds = $users->filter(function (User $user) use ($operacaoId) {
-            if ($user->isSuperAdmin()) {
-                return true;
-            }
-            return in_array($operacaoId, $user->getOperacoesIds(), true);
-        })->pluck('id')->toArray();
+        $superAdminIds = User::where('is_super_admin', true)->pluck('id')->toArray();
+        $userIds = array_unique(array_merge($userIds, $superAdminIds));
+
+        if (!empty($userIds)) {
+            $dados['operacao_id'] = $operacaoId;
+            $this->criarParaMultiplos($userIds, $dados);
+        }
+    }
+
+    /**
+     * Criar notificação para gestores e administradores **da operação** (operacao_user.role in gestor, administrador).
+     * Super Admin recebe sempre. Útil para notificar "gestores da operação" sem duplicar.
+     *
+     * @param int $operacaoId
+     * @param array $dados
+     * @param array $excluirUserIds IDs de usuários a excluir (ex.: quem disparou a ação)
+     * @return void
+     */
+    public function criarParaGestoresDaOperacao(int $operacaoId, array $dados, array $excluirUserIds = []): void
+    {
+        $userIds = DB::table('operacao_user')
+            ->where('operacao_id', $operacaoId)
+            ->whereIn('role', ['gestor', 'administrador'])
+            ->pluck('user_id')
+            ->toArray();
+
+        $superAdminIds = User::where('is_super_admin', true)->pluck('id')->toArray();
+        $userIds = array_unique(array_merge($userIds, $superAdminIds));
+
+        if (!empty($excluirUserIds)) {
+            $userIds = array_values(array_diff($userIds, $excluirUserIds));
+        }
 
         if (!empty($userIds)) {
             $dados['operacao_id'] = $operacaoId;

@@ -275,26 +275,11 @@ class SettlementService
             'dados' => ['settlement_id' => $settlement->id],
         ];
 
-        // Gestores da operação específica
-        $gestoresIds = \App\Models\User::whereHas('roles', fn($q) => $q->where('name', 'gestor'))
-            ->whereHas('operacoes', fn($q) => $q->where('operacoes.id', $settlement->operacao_id))
-            ->where('id', '!=', $settlement->consultor_id)
-            ->pluck('id')
-            ->toArray();
-
-        if (!empty($gestoresIds)) {
-            $notificacaoService->criarParaMultiplos($gestoresIds, $dadosNotificacao);
-        }
-
-        // Todos os administradores (exceto o próprio consultor se for admin)
-        $adminsIds = \App\Models\User::whereHas('roles', fn($q) => $q->where('name', 'administrador'))
-            ->where('id', '!=', $settlement->consultor_id)
-            ->pluck('id')
-            ->toArray();
-
-        if (!empty($adminsIds)) {
-            $notificacaoService->criarParaMultiplos($adminsIds, $dadosNotificacao);
-        }
+        $notificacaoService->criarParaGestoresDaOperacao(
+            (int) $settlement->operacao_id,
+            $dadosNotificacao,
+            $settlement->consultor_id ? [(int) $settlement->consultor_id] : []
+        );
 
         return $settlement->fresh();
     }

@@ -154,8 +154,7 @@ class EmprestimoService
                     'mensagem' => 'Empréstimo #' . $emprestimo->id . ' (retroativo) criado por consultor aguardando sua aprovação.',
                     'url' => route('emprestimos.retroativo.pendentes'),
                 ];
-                $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, $dadosNotif);
-                $notificacaoService->criarParaRoleComOperacao('administrador', $operacaoId, $dadosNotif);
+                $notificacaoService->criarParaGestoresDaOperacao($operacaoId, $dadosNotif);
             }
 
             // Se aprovado, verificar se precisa criar liberação (retroativo não cria liberação)
