@@ -67,56 +67,63 @@
                             <hr class="my-4">
 
                             <div class="mb-3">
-                                <label class="form-label">Papéis (Roles) <span class="text-danger">*</span></label>
-                                <div class="row">
-                                    @foreach($roles as $role)
-                                        <div class="col-md-4 mb-2">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="roles[]"
-                                                       value="{{ $role->name }}" id="role_{{ $role->id }}"
-                                                       {{ in_array($role->name, old('roles', [])) ? 'checked' : '' }}>
-                                                <label class="form-check-label" for="role_{{ $role->id }}">
-                                                    {{ $role->display_name ?? ucfirst($role->name) }}
-                                                </label>
-                                            </div>
-                                        </div>
-                                    @endforeach
-                                </div>
-                                @error('roles')
-                                    <div class="text-danger small">{{ $message }}</div>
-                                @enderror
-                            </div>
-
-                            <hr class="my-4">
-
-                            <div class="mb-3">
-                                <label class="form-label">Operações</label>
-                                <small class="text-muted d-block mb-2">Selecione as operações que este usuário terá acesso (opcional)</small>
+                                <label class="form-label">Operações e papel</label>
+                                <small class="text-muted d-block mb-2">Marque as operações que este usuário terá acesso e escolha o papel em cada uma.</small>
                                 @if($operacoes->count() > 0)
-                                    <div class="row">
-                                        @foreach($operacoes as $operacao)
-                                            <div class="col-md-6 mb-2">
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" name="operacoes[]"
-                                                           value="{{ $operacao->id }}" id="operacao_{{ $operacao->id }}"
-                                                           {{ in_array($operacao->id, old('operacoes', [])) ? 'checked' : '' }}>
-                                                    <label class="form-check-label" for="operacao_{{ $operacao->id }}">
-                                                        {{ $operacao->nome }}
-                                                        @if($operacao->codigo)
-                                                            <span class="text-muted">({{ $operacao->codigo }})</span>
-                                                        @endif
-                                                    </label>
-                                                </div>
-                                            </div>
-                                        @endforeach
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-hover mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th style="width: 60px;">Vincular</th>
+                                                    <th>Operação</th>
+                                                    <th style="width: 180px;">Papel na operação</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach($operacoes as $operacao)
+                                                    @php
+                                                        $oldOps = old('operacoes', []);
+                                                        $oldRoles = old('operacao_role', []);
+                                                        $checked = in_array($operacao->id, $oldOps);
+                                                        $selectedRole = $oldRoles[$operacao->id] ?? 'consultor';
+                                                    @endphp
+                                                    <tr>
+                                                        <td>
+                                                            <div class="form-check">
+                                                                <input class="form-check-input row-operacao-check" type="checkbox" name="operacoes[]"
+                                                                       value="{{ $operacao->id }}" id="operacao_{{ $operacao->id }}"
+                                                                       {{ $checked ? 'checked' : '' }}
+                                                                       data-op-id="{{ $operacao->id }}">
+                                                                <label class="form-check-label" for="operacao_{{ $operacao->id }}">&nbsp;</label>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <label class="form-label mb-0" for="operacao_{{ $operacao->id }}">
+                                                                {{ $operacao->nome }}
+                                                                @if($operacao->codigo)
+                                                                    <span class="text-muted">({{ $operacao->codigo }})</span>
+                                                                @endif
+                                                            </label>
+                                                        </td>
+                                                        <td>
+                                                            <select name="operacao_role[{{ $operacao->id }}]" class="form-select form-select-sm row-operacao-role" data-op-id="{{ $operacao->id }}">
+                                                                <option value="consultor" {{ $selectedRole === 'consultor' ? 'selected' : '' }}>Consultor</option>
+                                                                <option value="gestor" {{ $selectedRole === 'gestor' ? 'selected' : '' }}>Gestor</option>
+                                                                <option value="administrador" {{ $selectedRole === 'administrador' ? 'selected' : '' }}>Administrador</option>
+                                                            </select>
+                                                        </td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
                                     </div>
                                 @else
-                                    <div class="alert alert-warning">
+                                    <div class="alert alert-warning mb-0">
                                         <i class="bx bx-info-circle"></i> Sua empresa ainda não possui operações cadastradas.
                                     </div>
                                 @endif
                                 @error('operacoes')
-                                    <div class="text-danger small">{{ $message }}</div>
+                                    <div class="text-danger small mt-1">{{ $message }}</div>
                                 @enderror
                             </div>
 
