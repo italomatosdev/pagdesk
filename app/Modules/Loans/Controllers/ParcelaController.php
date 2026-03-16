@@ -155,7 +155,7 @@ class ParcelaController extends Controller
             : $user->getOperacoesIds();
         $consultores = empty($operacoesIdsFiltro)
             ? collect([])
-            : \App\Models\User::whereHas('operacoes', fn ($q) => $q->whereIn('operacoes.id', $operacoesIdsFiltro)->where('operacao_user.role', 'consultor'))->orderBy('name')->get();
+            : \App\Models\User::where('ativo', true)->whereHas('operacoes', fn ($q) => $q->whereIn('operacoes.id', $operacoesIdsFiltro)->where('operacao_user.role', 'consultor'))->orderBy('name')->get();
 
         return view('parcelas.atrasadas', compact('parcelas', 'operacoes', 'consultores'));
     }

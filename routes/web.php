@@ -41,6 +41,13 @@ Route::get('/manutencao', function () {
     return view('pages-maintenance');
 })->name('manutencao');
 
+// Página exibida quando o usuário loga com conta bloqueada (ativo = false)
+Route::get('/conta-bloqueada', function () {
+    return view('pages-conta-bloqueada', [
+        'motivo' => session('motivo'),
+    ]);
+})->name('conta.bloqueada');
+
 // Rotas autenticadas (throttle.sensitive: 40 ações POST/PUT/PATCH/DELETE por minuto por usuário)
 Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
     

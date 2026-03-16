@@ -54,12 +54,12 @@ class UsuarioController extends Controller
             });
         }
 
-        // Filtro por status (ativo/inativo)
-        if ($request->filled('status')) {
-            if ($request->status === 'ativo') {
-                $query->whereNull('deleted_at');
-            } elseif ($request->status === 'inativo') {
-                $query->onlyTrashed();
+        // Filtro por status da conta (ativo/bloqueado)
+        if ($request->filled('ativo')) {
+            if ($request->ativo === '1') {
+                $query->where('ativo', true);
+            } elseif ($request->ativo === '0') {
+                $query->where('ativo', false);
             }
         }
 
@@ -71,9 +71,11 @@ class UsuarioController extends Controller
         // Buscar roles distintos
         $roles = Role::orderBy('name')->get();
 
-        // Estatísticas (usuários com pelo menos uma operação com esse papel)
+        // Estatísticas (usuários com pelo menos uma operação com esse papel; total inclui bloqueados)
         $stats = [
             'total' => User::where('is_super_admin', false)->count(),
+            'ativos' => User::where('is_super_admin', false)->where('ativo', true)->count(),
+            'bloqueados' => User::where('is_super_admin', false)->where('ativo', false)->count(),
             'administradores' => User::where('is_super_admin', false)->whereHas('operacoes', fn ($q) => $q->where('operacao_user.role', 'administrador'))->count(),
             'gestores' => User::where('is_super_admin', false)->whereHas('operacoes', fn ($q) => $q->where('operacao_user.role', 'gestor'))->count(),
             'consultores' => User::where('is_super_admin', false)->whereHas('operacoes', fn ($q) => $q->where('operacao_user.role', 'consultor'))->count(),
@@ -123,6 +125,8 @@ class UsuarioController extends Controller
             'operacoes.*' => 'integer|exists:operacoes,id',
             'operacao_role' => 'nullable|array',
             'operacao_role.*' => 'in:consultor,gestor,administrador',
+            'ativo' => 'nullable|boolean',
+            'motivo_bloqueio' => 'nullable|string|max:500',
         ]);
 
         try {
@@ -138,6 +142,8 @@ class UsuarioController extends Controller
             }
 
             $usuario->empresa_id = $validated['empresa_id'];
+            $usuario->ativo = $request->boolean('ativo');
+            $usuario->motivo_bloqueio = $request->filled('motivo_bloqueio') ? $request->input('motivo_bloqueio') : null;
             $usuario->save();
 
             $operacoesIds = $validated['operacoes'] ?? [];
