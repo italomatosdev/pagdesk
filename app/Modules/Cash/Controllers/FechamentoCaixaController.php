@@ -50,15 +50,15 @@ class FechamentoCaixaController extends Controller
         // Meu saldo na operação
         $meuSaldo = $this->cashService->calcularSaldo($user->id, $operacaoId);
 
-        // Usuários com saldo (para gestor/admin)
+        // Usuários com saldo (para gestor/admin na operação)
         $usuariosComSaldo = collect([]);
-        if ($user->hasAnyRole(['gestor', 'administrador'])) {
+        if ($operacaoId && $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
             $usuariosComSaldo = $this->settlementService->listarUsuariosComSaldo($operacaoId);
         }
 
         // Filtros para listagem
         $consultorId = null;
-        if ($user->hasAnyRole(['administrador', 'gestor'])) {
+        if (!empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
             $consultorIdInput = $request->input('consultor_id');
             $consultorId = $consultorIdInput ? (int) $consultorIdInput : null;
         } else {
@@ -100,15 +100,12 @@ class FechamentoCaixaController extends Controller
         $user = auth()->user();
 
         // Verificar permissões
-        if (!$user->hasAnyRole(['administrador', 'gestor'])) {
-            if ($settlement->consultor_id !== $user->id) {
-                abort(403, 'Acesso negado.');
-            }
+        if ($settlement->consultor_id === $user->id) {
+            // Dono pode ver
+        } elseif ($user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
+            // Gestor/admin na operação pode ver
         } else {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $settlement->operacao_id, $opsIds, true)) {
-                abort(403, 'Acesso negado.');
-            }
+            abort(403, 'Acesso negado.');
         }
 
         // Calcular valores do período
@@ -177,14 +174,11 @@ class FechamentoCaixaController extends Controller
 
         // Verificar permissões
         if ($usuarioId !== $user->id) {
-            // Fechando caixa de outro usuário - precisa ser gestor/admin
-            if (!$user->hasAnyRole(['gestor', 'administrador'])) {
+            if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
                 return back()->with('error', 'Você não tem permissão para fechar o caixa de outro usuário.');
             }
         }
-
-        $opsIds = $user->getOperacoesIds();
-        if (empty($opsIds) || !in_array($operacaoId, $opsIds, true)) {
+        if (!$user->temAcessoOperacao($operacaoId)) {
             return back()->with('error', 'Você não tem acesso a esta operação.');
         }
 
@@ -250,7 +244,8 @@ class FechamentoCaixaController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasAnyRole(['gestor', 'administrador'])) {
+        $settlement = Settlement::findOrFail($id);
+        if (!$user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Apenas gestores e administradores podem aprovar.');
         }
 
@@ -268,8 +263,8 @@ class FechamentoCaixaController extends Controller
     public function rejeitar(Request $request, int $id): RedirectResponse
     {
         $user = auth()->user();
-
-        if (!$user->hasAnyRole(['gestor', 'administrador'])) {
+        $settlement = Settlement::findOrFail($id);
+        if (!$user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Apenas gestores e administradores podem rejeitar.');
         }
 
@@ -291,8 +286,8 @@ class FechamentoCaixaController extends Controller
     public function confirmarRecebimento(Request $request, int $id): RedirectResponse
     {
         $user = auth()->user();
-
-        if (!$user->hasAnyRole(['gestor', 'administrador'])) {
+        $settlement = Settlement::findOrFail($id);
+        if (!$user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Apenas gestores e administradores podem confirmar recebimento.');
         }
 

@@ -46,7 +46,7 @@
                                 <i class="bx bx-time-five"></i>
                                 <strong>Empréstimo retroativo aguardando aceite.</strong>
                                 Este empréstimo foi criado por um consultor e precisa da aprovação de um gestor ou administrador para ser ativado.
-                                @if(auth()->user()->hasAnyRole(['administrador', 'gestor']))
+                                @if($podeVerAcoesGestorAdmin ?? false)
                                     <a href="{{ route('emprestimos.retroativo.pendentes') }}" class="alert-link ms-1">Ver pendentes e aprovar</a>
                                 @endif
                             </div>
@@ -267,7 +267,7 @@
                                     Existe uma solicitação de renovação com abate (valor inferior ao principal) aguardando aprovação do gestor ou administrador.
                                     Não é possível enviar outra renovação enquanto esta estiver pendente.
                                 </p>
-                                @if(auth()->user()->hasAnyRole(['gestor', 'administrador']))
+                                @if($podeVerAcoesGestorAdmin ?? false)
                                     <a href="{{ route('liberacoes.renovacao-abate') }}" class="btn btn-outline-warning btn-sm">
                                         <i class="bx bx-list-ul"></i> Ver em Liberações
                                     </a>
@@ -364,7 +364,7 @@
                                 }
                             }
                             
-                            $podeExecutarGarantia = auth()->user()->hasAnyRole(['administrador', 'gestor']) &&
+                            $podeExecutarGarantia = ($podeExecutarGarantia ?? false) &&
                                 $emprestimo->isEmpenho() &&
                                 $emprestimo->isAtivo() &&
                                 $parcelaAtrasada &&
@@ -390,7 +390,7 @@
                         @php
                             $parcelasAbertasQuitacao = $emprestimo->parcelas->filter(fn($p) => !in_array($p->status, ['paga', 'quitada_garantia']));
                             $podeQuitarCompleto = $emprestimo->isAtivo() && $parcelasAbertasQuitacao->isNotEmpty() &&
-                                (auth()->user()->hasAnyRole(['administrador', 'gestor']) || $emprestimo->consultor_id === auth()->id());
+                                (($podeVerAcoesGestorAdmin ?? false) || $emprestimo->consultor_id === auth()->id());
                             $ehDiaria = $emprestimo->frequencia === 'diaria';
                         @endphp
                         @if($podeQuitarCompleto)
@@ -475,20 +475,18 @@
                                     break;
                                 }
                             }
-                            // Cancelamento simples: só administrador, sem parcelas pagas, sem finalizado, sem pago ao cliente
-                            $podeCancelar = auth()->user()->hasRole('administrador') &&
+                            $podeCancelar = ($podeCancelar ?? false) &&
                                 !$emprestimo->isCancelado() &&
                                 !$emprestimo->isFinalizado() &&
                                 !$emprestimo->isRenovacao() &&
                                 (!$emprestimo->liberacao || !$emprestimo->liberacao->isPagoAoCliente()) &&
                                 !$temParcelasPagas;
-                            // Cancelamento com desfazimento: gestor ou admin, quando já há pagamentos/finalizado/pago ao cliente
-                            $podeCancelarComDesfazimento = auth()->user()->hasAnyRole(['administrador', 'gestor']) &&
+                            $podeCancelarComDesfazimento = ($podeCancelarComDesfazimento ?? false) &&
                                 !$emprestimo->isCancelado() &&
                                 !$emprestimo->isRenovacao() &&
                                 ($temParcelasPagas || $emprestimo->isFinalizado() || ($emprestimo->liberacao && $emprestimo->liberacao->isPagoAoCliente()));
                         @endphp
-                        @if($emprestimo->isRenovacao() && auth()->user()->hasAnyRole(['administrador', 'gestor']))
+                        @if($emprestimo->isRenovacao() && ($podeVerAcoesGestorAdmin ?? false))
                             <hr>
                             <div class="alert alert-info mb-0">
                                 <i class="bx bx-info-circle"></i>
@@ -628,7 +626,7 @@
                                 @else
                                     <div class="col-md-6 mb-3">
                                         <strong>Comprovante de Liberação:</strong><br>
-                                        @if(($emprestimo->liberacao->isLiberado() || $emprestimo->liberacao->isPagoAoCliente()) && auth()->user()->hasAnyRole(['gestor', 'administrador']))
+                                        @if(($emprestimo->liberacao->isLiberado() || $emprestimo->liberacao->isPagoAoCliente()) && ($podeAprovarLiberacao ?? false))
                                             <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalAnexarComprovanteLiberacao" title="Subir comprovante depois">
                                                 <i class="bx bx-upload"></i> Subir comprovante
                                             </button>
@@ -667,7 +665,7 @@
                                 @else
                                     <div class="col-md-6 mb-3">
                                         <strong>Comprovante de Pagamento ao Cliente:</strong><br>
-                                        @if($emprestimo->liberacao->isPagoAoCliente() && auth()->user()->hasRole('consultor') && $emprestimo->liberacao->consultor_id == auth()->id())
+                                        @if($emprestimo->liberacao->isPagoAoCliente() && ($podeConfirmarPagamentoCliente ?? false))
                                             <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalAnexarComprovantePagamentoCliente" title="Subir comprovante depois">
                                                 <i class="bx bx-upload"></i> Subir comprovante
                                             </button>
@@ -682,7 +680,7 @@
                 @endif
 
                 <!-- Modais: subir comprovante depois (apenas se ainda não tiver) -->
-                @if($emprestimo->liberacao && !$emprestimo->liberacao->hasComprovanteLiberacao() && ($emprestimo->liberacao->isLiberado() || $emprestimo->liberacao->isPagoAoCliente()) && auth()->user()->hasAnyRole(['gestor', 'administrador']))
+                @if($emprestimo->liberacao && !$emprestimo->liberacao->hasComprovanteLiberacao() && ($emprestimo->liberacao->isLiberado() || $emprestimo->liberacao->isPagoAoCliente()) && ($podeAprovarLiberacao ?? false))
                 <div class="modal fade" id="modalAnexarComprovanteLiberacao" tabindex="-1">
                     <div class="modal-dialog">
                         <div class="modal-content">
@@ -709,7 +707,7 @@
                     </div>
                 </div>
                 @endif
-                @if($emprestimo->liberacao && !$emprestimo->liberacao->hasComprovantePagamentoCliente() && $emprestimo->liberacao->isPagoAoCliente() && auth()->user()->hasRole('consultor') && $emprestimo->liberacao->consultor_id == auth()->id())
+                @if($emprestimo->liberacao && !$emprestimo->liberacao->hasComprovantePagamentoCliente() && $emprestimo->liberacao->isPagoAoCliente() && ($podeConfirmarPagamentoCliente ?? false))
                 <div class="modal fade" id="modalAnexarComprovantePagamentoCliente" tabindex="-1">
                     <div class="modal-dialog">
                         <div class="modal-content">
@@ -741,7 +739,7 @@
                 @php
                     $podeRegistrarParcelasRetroativo = $emprestimo->is_retroativo
                         && !$emprestimo->isAguardandoAceiteRetroativo()
-                        && (auth()->user()->hasAnyRole(['administrador', 'gestor']) || $emprestimo->consultor_id === auth()->id());
+                        && (($podeVerAcoesGestorAdmin ?? false) || $emprestimo->consultor_id === auth()->id());
                     // Apenas parcelas não pagas cujo vencimento já passou (ou é hoje) podem ser marcadas como "já pagas"
                     $parcelasNaoPagasRetroativo = $podeRegistrarParcelasRetroativo
                         ? $emprestimo->parcelas->reject(fn($p) => $p->isPaga())
@@ -1207,14 +1205,14 @@
                                                     <td class="text-nowrap">
                                                         <div class="d-flex flex-wrap gap-1 align-items-center">
                                                             {{-- Ações por status (fora do dropdown para não cortar) --}}
-                                                            @if($cheque->isAguardando() && auth()->user()->hasAnyRole(['administrador', 'gestor']))
+                                                            @if($cheque->isAguardando() && ($podeAcoesCheque ?? false))
                                                                 <button type="button" class="btn btn-sm btn-primary" 
                                                                         onclick="depositarCheque({{ $cheque->id }})"
                                                                         title="Marcar como depositado">
                                                                     <i class="bx bx-upload"></i>
                                                                 </button>
                                                             @endif
-                                                            @if($cheque->isDepositado() && auth()->user()->hasAnyRole(['administrador', 'gestor']))
+                                                            @if($cheque->isDepositado() && ($podeAcoesCheque ?? false))
                                                                 <button type="button" class="btn btn-sm btn-success" 
                                                                         onclick="compensarCheque({{ $cheque->id }})"
                                                                         title="Marcar como compensado">
@@ -1227,14 +1225,14 @@
                                                                 </button>
                                                             @endif
                                                             @if($cheque->isDevolvido())
-                                                                @if(auth()->user()->hasAnyRole(['administrador', 'gestor']))
+                                                                @if($podeAcoesCheque ?? false)
                                                                     <a href="{{ route('emprestimos.cheques.pagar', $cheque->id) }}" 
                                                                        class="btn btn-sm btn-success" 
                                                                        title="Registrar pagamento">
                                                                         <i class="bx bx-money"></i>
                                                                     </a>
                                                                 @endif
-                                                                @if(auth()->user()->hasAnyRole(['administrador', 'gestor']) || $emprestimo->consultor_id === auth()->id())
+                                                                @if(($podeAcoesCheque ?? false) || $emprestimo->consultor_id === auth()->id())
                                                                     <button type="button" class="btn btn-sm btn-info" 
                                                                             onclick="abrirModalSubstituirCheque({{ $cheque->id }})"
                                                                             title="Substituir por novo cheque">

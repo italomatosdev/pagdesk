@@ -22,7 +22,7 @@ class VendaController extends Controller
     {
         $this->middleware('auth');
         $this->middleware(function ($request, $next) {
-            if (!auth()->user()->hasAnyRole(['administrador', 'gestor'])) {
+            if (empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
                 abort(403, 'Acesso negado. Apenas administradores e gestores podem registrar vendas.');
             }
             return $next($request);

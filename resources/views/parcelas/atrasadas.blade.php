@@ -32,7 +32,7 @@
                                     </select>
                                 </div>
 
-                                @if(!auth()->user()->hasRole('consultor'))
+                                @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])))
                                 <div class="col-md-3">
                                     <label class="form-label">Consultor</label>
                                     <select name="consultor_id" class="form-select">

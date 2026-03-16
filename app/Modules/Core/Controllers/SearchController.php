@@ -85,8 +85,7 @@ class SearchController extends Controller
             }
         }
 
-        // Buscar usuários (apenas para administradores)
-        if ($user->hasRole('administrador') && ($tipoBusca === 'nome' || $tipoBusca === 'geral')) {
+        if (!empty($user->getOperacoesIdsOndeTemPapel(['administrador'])) && ($tipoBusca === 'nome' || $tipoBusca === 'geral')) {
             $usuarios = $this->buscarUsuarios($termo);
             foreach ($usuarios as $usuario) {
                 $results[] = [
@@ -179,8 +178,7 @@ class SearchController extends Controller
             });
         }
 
-        // Filtrar por operações do usuário (se não for admin)
-        if (!$user->hasRole('administrador')) {
+        if (!$user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
             if (!empty($operacoesIds)) {
                 $query->whereIn('operacao_id', $operacoesIds);
@@ -204,8 +202,7 @@ class SearchController extends Controller
               ->orWhere('codigo', 'like', "%{$termo}%");
         });
 
-        // Filtrar por operações do usuário (se não for admin)
-        if (!$user->hasRole('administrador')) {
+        if (!$user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
             if (!empty($operacoesIds)) {
                 $query->whereIn('id', $operacoesIds);

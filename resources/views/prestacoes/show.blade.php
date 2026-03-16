@@ -294,7 +294,7 @@
                             </a>
                             
                             <div class="d-flex gap-2 flex-wrap">
-                                @if($settlement->isPendente() && auth()->user()->hasAnyRole(['gestor', 'administrador']))
+                                @if($settlement->isPendente() && !empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])))
                                     <form action="{{ route('prestacoes.aprovar', $settlement->id) }}" method="POST" class="d-inline" id="formAprovar">
                                         @csrf
                                         <button type="submit" class="btn btn-success" id="btnAprovar">
@@ -312,7 +312,7 @@
                                     </button>
                                 @endif
                                 
-                                @if($settlement->isEnviado() && auth()->user()->hasAnyRole(['gestor', 'administrador']))
+                                @if($settlement->isEnviado() && !empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])))
                                     <form action="{{ route('prestacoes.confirmar-recebimento', $settlement->id) }}" method="POST" class="d-inline" id="formConfirmarRecebimento">
                                         @csrf
                                         <button type="submit" class="btn btn-success" id="btnConfirmarRecebimento">

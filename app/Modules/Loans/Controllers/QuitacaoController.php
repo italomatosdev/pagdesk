@@ -27,7 +27,7 @@ class QuitacaoController extends Controller
         $emprestimo = Emprestimo::with(['cliente', 'operacao', 'parcelas'])->findOrFail($id);
 
         $user = auth()->user();
-        if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
+        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             abort(403, 'Você não tem permissão para quitar este empréstimo.');
         }
         if (!$user->isSuperAdmin()) {
@@ -65,7 +65,7 @@ class QuitacaoController extends Controller
         $emprestimo = Emprestimo::findOrFail($request->input('emprestimo_id'));
 
         $user = auth()->user();
-        if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
+        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             abort(403, 'Você não tem permissão para quitar este empréstimo.');
         }
         if (!$user->isSuperAdmin()) {
@@ -159,7 +159,7 @@ class QuitacaoController extends Controller
     public function indexPendentes(Request $request): View
     {
         $user = auth()->user();
-        if (!$user->hasAnyRole(['gestor', 'administrador'])) {
+        if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Apenas gestores e administradores podem ver solicitações de quitação.');
         }
 
@@ -204,16 +204,9 @@ class QuitacaoController extends Controller
     public function aprovar(int $id): RedirectResponse
     {
         $user = auth()->user();
-        if (!$user->hasAnyRole(['gestor', 'administrador'])) {
-            abort(403, 'Apenas gestores e administradores podem aprovar solicitações de quitação.');
-        }
-
         $solicitacao = SolicitacaoQuitacao::with('emprestimo')->findOrFail($id);
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $solicitacao->emprestimo->operacao_id, $opsIds, true)) {
-                abort(403, 'Sem acesso a esta operação.');
-            }
+        if (!$user->temAlgumPapelNaOperacao($solicitacao->emprestimo->operacao_id, ['gestor', 'administrador'])) {
+            abort(403, 'Apenas gestores e administradores podem aprovar solicitações de quitação.');
         }
 
         try {
@@ -231,21 +224,14 @@ class QuitacaoController extends Controller
     public function rejeitar(Request $request, int $id): RedirectResponse
     {
         $user = auth()->user();
-        if (!$user->hasAnyRole(['gestor', 'administrador'])) {
+        $solicitacao = SolicitacaoQuitacao::with('emprestimo')->findOrFail($id);
+        if (!$user->temAlgumPapelNaOperacao($solicitacao->emprestimo->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Apenas gestores e administradores podem rejeitar solicitações de quitação.');
         }
 
         $validated = $request->validate([
             'motivo_rejeicao' => 'required|string|min:10|max:500',
         ]);
-
-        $solicitacao = SolicitacaoQuitacao::with('emprestimo')->findOrFail($id);
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $solicitacao->emprestimo->operacao_id, $opsIds, true)) {
-                abort(403, 'Sem acesso a esta operação.');
-            }
-        }
 
         try {
             $this->quitacaoService->rejeitarSolicitacao($solicitacao, $user->id, $validated['motivo_rejeicao']);

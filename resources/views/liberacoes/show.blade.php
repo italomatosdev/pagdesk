@@ -132,7 +132,7 @@
                             @else
                                 <div class="col-md-6 mb-3">
                                     <strong>Comprovante de Liberação:</strong><br>
-                                    @if(($liberacao->isLiberado() || $liberacao->isPagoAoCliente()) && auth()->user()->hasAnyRole(['gestor', 'administrador']))
+                                    @if(($liberacao->isLiberado() || $liberacao->isPagoAoCliente()) && ($podeAprovarLiberacao ?? false))
                                         <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalAnexarComprovanteLiberacao" title="Subir comprovante depois">
                                             <i class="bx bx-upload"></i> Subir comprovante
                                         </button>
@@ -171,7 +171,7 @@
                             @else
                                 <div class="col-md-6 mb-3">
                                     <strong>Comprovante de Pagamento ao Cliente:</strong><br>
-                                    @if($liberacao->isPagoAoCliente() && auth()->user()->hasRole('consultor') && $liberacao->consultor_id == auth()->id())
+                                    @if($liberacao->isPagoAoCliente() && ($podeConfirmarPagamentoCliente ?? false))
                                         <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalAnexarComprovantePagamentoCliente" title="Subir comprovante depois">
                                             <i class="bx bx-upload"></i> Subir comprovante
                                         </button>
@@ -241,7 +241,7 @@
                                 <i class="bx bx-arrow-back"></i> Voltar para Lista
                             </a>
 
-                            @if($liberacao->isAguardando() && auth()->user()->hasAnyRole(['gestor', 'administrador']))
+                            @if($liberacao->isAguardando() && ($podeAprovarLiberacao ?? false))
                                 <hr>
                                 <button type="button" class="btn btn-success" 
                                         data-bs-toggle="modal" 
@@ -250,7 +250,7 @@
                                 </button>
                             @endif
 
-                            @if($liberacao->isLiberado() && auth()->user()->hasRole('consultor') && $liberacao->consultor_id == auth()->id())
+                            @if($liberacao->isLiberado() && ($podeConfirmarPagamentoCliente ?? false))
                                 <hr>
                                 <button type="button" class="btn btn-primary" 
                                         data-bs-toggle="modal" 
@@ -304,7 +304,7 @@
         </div>
 
         <!-- Modal Liberar Dinheiro -->
-        @if($liberacao->isAguardando() && auth()->user()->hasAnyRole(['gestor', 'administrador']))
+        @if($liberacao->isAguardando() && ($podeAprovarLiberacao ?? false))
         <div class="modal fade" id="liberarModal" tabindex="-1">
             <div class="modal-dialog">
                 <div class="modal-content">
@@ -350,7 +350,7 @@
         @endif
 
         <!-- Modal Confirmar Pagamento ao Cliente -->
-        @if($liberacao->isLiberado() && auth()->user()->hasRole('consultor') && $liberacao->consultor_id == auth()->id())
+        @if($liberacao->isLiberado() && ($podeConfirmarPagamentoCliente ?? false))
         <div class="modal fade" id="confirmarPagamentoModal" tabindex="-1" aria-labelledby="confirmarPagamentoModalLabel" aria-hidden="true">
             <div class="modal-dialog">
                 <div class="modal-content">
@@ -399,7 +399,7 @@
         @endif
 
         <!-- Modal Anexar Comprovante de Liberação (depois) -->
-        @if(!$liberacao->hasComprovanteLiberacao() && ($liberacao->isLiberado() || $liberacao->isPagoAoCliente()) && auth()->user()->hasAnyRole(['gestor', 'administrador']))
+        @if(!$liberacao->hasComprovanteLiberacao() && ($liberacao->isLiberado() || $liberacao->isPagoAoCliente()) && ($podeAprovarLiberacao ?? false))
         <div class="modal fade" id="modalAnexarComprovanteLiberacao" tabindex="-1">
             <div class="modal-dialog">
                 <div class="modal-content">
@@ -427,7 +427,7 @@
         @endif
 
         <!-- Modal Anexar Comprovante de Pagamento ao Cliente (depois) -->
-        @if(!$liberacao->hasComprovantePagamentoCliente() && $liberacao->isPagoAoCliente() && auth()->user()->hasRole('consultor') && $liberacao->consultor_id == auth()->id())
+        @if(!$liberacao->hasComprovantePagamentoCliente() && $liberacao->isPagoAoCliente() && ($podeConfirmarPagamentoCliente ?? false))
         <div class="modal fade" id="modalAnexarComprovantePagamentoCliente" tabindex="-1">
             <div class="modal-dialog">
                 <div class="modal-content">

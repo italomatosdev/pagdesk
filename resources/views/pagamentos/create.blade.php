@@ -317,7 +317,7 @@
                                                     $podeExecutarGarantiaPagamento = $emprestimo && 
                                                         $emprestimo->isEmpenho() && 
                                                         $emprestimo->isAtivo() &&
-                                                        auth()->user()->hasAnyRole(['administrador', 'gestor']) &&
+                                                        auth()->user()->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) &&
                                                         $emprestimo->garantias->where('status', 'ativa')->count() > 0;
                                                     
                                                     if ($podeExecutarGarantiaPagamento && !$emprestimo->relationLoaded('garantias')) {

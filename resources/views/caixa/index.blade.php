@@ -22,7 +22,7 @@
                                     <div class="flex-grow-1">
                                         <p class="text-muted mb-2">Saldo Atual</p>
                                         <h4 class="mb-0 text-primary">R$ {{ number_format($saldo ?? 0, 2, ',', '.') }}</h4>
-                                        @if(auth()->user()->hasAnyRole(['administrador', 'gestor']) && $consultorId === null)
+                                        @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor'])) && $consultorId === null)
                                             <small class="text-muted">Todas as Movimentações{{ $operacaoId ? ' - ' . ($operacoes->firstWhere('id', $operacaoId)->nome ?? '') : '' }}</small>
                                         @elseif($consultorSelecionado)
                                             <small class="text-muted">{{ $consultorSelecionado->name }}{{ $operacaoId ? ' - ' . ($operacoes->firstWhere('id', $operacaoId)->nome ?? '') : '' }}</small>
@@ -115,7 +115,7 @@
                                     </select>
                                 </div>
                                 
-                                @if(auth()->user()->hasAnyRole(['administrador', 'gestor']))
+                                @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor'])))
                                 <div class="col-lg-4 col-md-6">
                                     <label class="form-label">
                                         <i class="bx bx-user text-muted me-1"></i> Consultor/Gestor
@@ -201,7 +201,7 @@
                     <div class="card-header">
                         <div class="d-flex align-items-center justify-content-between">
                             <h4 class="card-title mb-0">Movimentações</h4>
-                            @if(auth()->user()->hasAnyRole(['administrador', 'gestor']))
+                            @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor'])))
                                 <a href="{{ route('caixa.movimentacao.create') }}" class="btn btn-primary btn-sm">
                                     <i class="bx bx-plus"></i> Nova Movimentação Manual
                                 </a>

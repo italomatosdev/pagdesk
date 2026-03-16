@@ -117,7 +117,7 @@
                     </ul>
                 </li>
 
-                @if(auth()->user()->hasAnyRole(['administrador', 'gestor']))
+                @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor'])))
                 <li>
                     <a href="{{ route('vendas.index') }}">
                         <i class="bx bx-cart icon nav-icon"></i>
@@ -188,7 +188,7 @@
                         <li>
                             <a href="{{ route('fechamento-caixa.index') }}">
                                 Fechamento de Caixa
-                                @if(auth()->user()->hasAnyRole(['gestor', 'administrador']))
+                                @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])))
                                     @php
                                         $aguardandoConfirmacao = app(\App\Modules\Cash\Services\SettlementService::class)->contarAguardandoConfirmacao(auth()->user());
                                     @endphp
@@ -202,7 +202,7 @@
                 </li>
                 @endif
 
-                @if(auth()->user()->hasAnyRole(['gestor', 'administrador']))
+                @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])))
                 <li>
                     <a href="{{ route('produtos-recebidos.index') }}">
                         <i class="bx bx-package icon nav-icon"></i>
@@ -286,9 +286,9 @@
                 @endif
 
                 @php
-                    // Mostrar menu para consultores ou para qualquer usuário que tenha liberações como consultor
                     $temLiberacoesComoConsultor = \App\Modules\Loans\Models\LiberacaoEmprestimo::where('consultor_id', auth()->id())->exists();
-                    $mostrarMenuLiberacoes = auth()->user()->hasRole('consultor') || $temLiberacoesComoConsultor;
+                    $temPapelConsultorEmAlgumaOp = !empty(auth()->user()->getOperacoesIdsOndeTemPapel(['consultor']));
+                    $mostrarMenuLiberacoes = $temPapelConsultorEmAlgumaOp || $temLiberacoesComoConsultor;
                 @endphp
                 @if($mostrarMenuLiberacoes)
                 <li>
@@ -307,7 +307,7 @@
                 </li>
                 @endif
 
-                @if(auth()->user()->hasAnyRole(['administrador', 'gestor']))
+                @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor'])))
                 <li>
                     <a href="javascript: void(0);" class="has-arrow">
                         <i class="bx bx-file-blank icon nav-icon"></i>
@@ -324,7 +324,7 @@
                 </li>
                 @endif
 
-                @if(auth()->user()->hasRole('administrador'))
+                @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador'])))
                 <li>
                     <a href="{{ route('aprovacoes.index') }}">
                         <i class="bx bx-check-circle icon nav-icon"></i>
@@ -332,7 +332,7 @@
                         @php
                             $queryPendentes = \App\Modules\Loans\Models\Emprestimo::where('status', 'pendente');
                             if (!auth()->user()->isSuperAdmin()) {
-                                $opsAprov = auth()->user()->getOperacoesIds();
+                                $opsAprov = auth()->user()->getOperacoesIdsOndeTemPapel(['administrador']);
                                 if (!empty($opsAprov)) {
                                     $queryPendentes->whereIn('operacao_id', $opsAprov);
                                 } else {
@@ -348,7 +348,7 @@
                 </li>
                 @endif
 
-                @if(auth()->user()->hasAnyRole(['administrador', 'gestor']))
+                @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor'])))
                 <li>
                     <a href="javascript: void(0);" class="has-arrow">
                         <i class="bx bx-cog icon nav-icon"></i>
