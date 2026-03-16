@@ -100,23 +100,24 @@ class UsuarioController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
-            'roles' => 'required|array|min:1',
-            'roles.*' => 'exists:roles,name',
             'operacoes' => 'nullable|array',
             'operacoes.*' => 'integer|exists:operacoes,id',
+            'operacao_role' => 'nullable|array',
+            'operacao_role.*' => 'in:consultor,gestor,administrador',
         ]);
 
-        if (empty($user->getOperacoesIdsOndeTemPapel(['administrador'])) && in_array('administrador', $validated['roles'], true)) {
-            return back()->with('error', 'Apenas administradores podem atribuir o papel de administrador.')->withInput();
+        $operacoesIds = $validated['operacoes'] ?? [];
+        $operacaoRole = $request->input('operacao_role', []);
+        if (!empty($operacoesIds)) {
+            $operacoesIds = array_values(array_intersect($operacoesIds, $operacoesPermitidas));
+        }
+
+        $temAdministrador = !empty($operacoesIds) && in_array('administrador', array_map(fn ($id) => $operacaoRole[$id] ?? 'consultor', $operacoesIds), true);
+        if ($temAdministrador && empty($user->getOperacoesIdsOndeTemPapel(['administrador']))) {
+            return back()->with('error', 'Apenas administradores podem atribuir o papel de administrador em uma operação.')->withInput();
         }
 
         try {
-            // Validar que as operações são as que o administrador/gestor possui
-            $operacoesIds = $validated['operacoes'] ?? [];
-            if (!empty($operacoesIds)) {
-                $operacoesIds = array_values(array_intersect($operacoesIds, $operacoesPermitidas));
-            }
-
             $usuario = User::create([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
@@ -125,12 +126,15 @@ class UsuarioController extends Controller
                 'is_super_admin' => false,
             ]);
 
-            $roleIds = Role::whereIn('name', $validated['roles'])->pluck('id')->toArray();
-            $usuario->roles()->sync($roleIds);
-
-            $papelPadrao = $validated['roles'][0] ?? 'consultor';
-            $sync = array_fill_keys($operacoesIds, ['role' => $papelPadrao]);
+            $sync = [];
+            foreach ($operacoesIds as $opId) {
+                $sync[$opId] = ['role' => $operacaoRole[$opId] ?? 'consultor'];
+            }
             $usuario->operacoes()->sync($sync);
+
+            $papeisUnicos = array_unique(array_column($sync, 'role'));
+            $roleIds = Role::whereIn('name', $papeisUnicos)->pluck('id')->toArray();
+            $usuario->roles()->sync($roleIds);
 
             return redirect()->route('usuarios.show', $usuario->id)
                 ->with('success', 'Usuário criado com sucesso!');
@@ -242,6 +246,8 @@ class UsuarioController extends Controller
         $validated = $request->validate([
             'operacoes' => 'nullable|array',
             'operacoes.*' => 'integer|exists:operacoes,id',
+            'operacao_role' => 'nullable|array',
+            'operacao_role.*' => 'in:consultor,gestor,administrador',
         ]);
 
         try {
@@ -259,21 +265,29 @@ class UsuarioController extends Controller
 
             $usuario = $query->findOrFail($id);
             $operacoesIds = $validated['operacoes'] ?? [];
+            $operacaoRole = $request->input('operacao_role', []);
 
             if (!$user->isSuperAdmin() && !empty($operacoesIds)) {
                 $operacoesIds = array_values(array_intersect($operacoesIds, $operacoesPermitidas));
             }
 
-            $usuario->load('operacoes');
-            $papeisAtuais = $usuario->operacoes->pluck('pivot.role', 'id')->toArray();
+            $temAdministrador = !empty($operacoesIds) && in_array('administrador', array_map(fn ($opId) => $operacaoRole[$opId] ?? 'consultor', $operacoesIds), true);
+            if ($temAdministrador && empty($user->getOperacoesIdsOndeTemPapel(['administrador']))) {
+                return back()->with('error', 'Apenas administradores podem atribuir o papel de administrador em uma operação.');
+            }
+
             $sync = [];
             foreach ($operacoesIds as $opId) {
-                $sync[$opId] = ['role' => $papeisAtuais[$opId] ?? 'consultor'];
+                $sync[$opId] = ['role' => $operacaoRole[$opId] ?? 'consultor'];
             }
             $usuario->operacoes()->sync($sync);
 
+            $papeisUnicos = array_unique(array_column($sync, 'role'));
+            $roleIds = Role::whereIn('name', $papeisUnicos)->pluck('id')->toArray();
+            $usuario->roles()->sync($roleIds);
+
             return redirect()->route('usuarios.show', $id)
-                ->with('success', 'Operações atualizadas com sucesso!');
+                ->with('success', 'Operações e papéis atualizados com sucesso!');
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao atualizar operações: ' . $e->getMessage());
         }

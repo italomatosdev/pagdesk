@@ -38,10 +38,10 @@ class UsuarioController extends Controller
             $query->where('empresa_id', $request->empresa_id);
         }
 
-        // Filtro por papel (role)
-        if ($request->filled('role')) {
-            $query->whereHas('roles', function ($q) use ($request) {
-                $q->where('name', $request->role);
+        // Filtro por papel na operação (operacao_user.role)
+        if ($request->filled('role') && in_array($request->role, ['consultor', 'gestor', 'administrador'], true)) {
+            $query->whereHas('operacoes', function ($q) use ($request) {
+                $q->where('operacao_user.role', $request->role);
             });
         }
 
@@ -71,18 +71,12 @@ class UsuarioController extends Controller
         // Buscar roles distintos
         $roles = Role::orderBy('name')->get();
 
-        // Estatísticas
+        // Estatísticas (usuários com pelo menos uma operação com esse papel)
         $stats = [
             'total' => User::where('is_super_admin', false)->count(),
-            'administradores' => User::where('is_super_admin', false)->whereHas('roles', function ($q) {
-                $q->where('name', 'administrador');
-            })->count(),
-            'gestores' => User::where('is_super_admin', false)->whereHas('roles', function ($q) {
-                $q->where('name', 'gestor');
-            })->count(),
-            'consultores' => User::where('is_super_admin', false)->whereHas('roles', function ($q) {
-                $q->where('name', 'consultor');
-            })->count(),
+            'administradores' => User::where('is_super_admin', false)->whereHas('operacoes', fn ($q) => $q->where('operacao_user.role', 'administrador'))->count(),
+            'gestores' => User::where('is_super_admin', false)->whereHas('operacoes', fn ($q) => $q->where('operacao_user.role', 'gestor'))->count(),
+            'consultores' => User::where('is_super_admin', false)->whereHas('operacoes', fn ($q) => $q->where('operacao_user.role', 'consultor'))->count(),
         ];
 
         return view('super-admin.usuarios.index', compact('usuarios', 'empresas', 'roles', 'stats'));
@@ -125,46 +119,49 @@ class UsuarioController extends Controller
             'email' => 'required|string|email|max:255|unique:users,email,' . $id,
             'password' => 'nullable|string|min:8|confirmed',
             'empresa_id' => 'required|exists:empresas,id',
-            'roles' => 'required|array|min:1',
-            'roles.*' => 'exists:roles,name',
             'operacoes' => 'nullable|array',
             'operacoes.*' => 'integer|exists:operacoes,id',
+            'operacao_role' => 'nullable|array',
+            'operacao_role.*' => 'in:consultor,gestor,administrador',
         ]);
 
         try {
-            // Atualizar dados básicos
             $usuario->name = $validated['name'];
             $usuario->email = $validated['email'];
-            
-            // Atualizar senha apenas se informada
+
             if (!empty($validated['password'])) {
                 $usuario->password = Hash::make($validated['password']);
             }
 
-            // Se mudou de empresa, limpar operações antigas
             if ($usuario->empresa_id != $validated['empresa_id']) {
                 $usuario->operacoes()->detach();
             }
-            
+
             $usuario->empresa_id = $validated['empresa_id'];
             $usuario->save();
 
-            // Atualizar papéis
-            $roleIds = Role::whereIn('name', $validated['roles'])->pluck('id')->toArray();
-            $usuario->roles()->sync($roleIds);
+            $operacoesIds = $validated['operacoes'] ?? [];
+            $operacaoRole = $request->input('operacao_role', []);
 
-            // Atualizar operações (se informadas)
-            if (!empty($validated['operacoes'])) {
-                // Validar que as operações pertencem à empresa
+            if (!empty($operacoesIds)) {
                 $operacoesValidas = Operacao::withoutGlobalScopes()
                     ->where('empresa_id', $validated['empresa_id'])
-                    ->whereIn('id', $validated['operacoes'])
+                    ->whereIn('id', $operacoesIds)
                     ->pluck('id')
                     ->toArray();
-                
-                $usuario->operacoes()->sync($operacoesValidas);
+
+                $sync = [];
+                foreach ($operacoesValidas as $opId) {
+                    $sync[$opId] = ['role' => $operacaoRole[$opId] ?? 'consultor'];
+                }
+                $usuario->operacoes()->sync($sync);
+
+                $papeisUnicos = array_unique(array_column($sync, 'role'));
+                $roleIds = Role::whereIn('name', $papeisUnicos)->pluck('id')->toArray();
+                $usuario->roles()->sync($roleIds);
             } else {
                 $usuario->operacoes()->detach();
+                $usuario->roles()->sync([]);
             }
 
             return redirect()->route('super-admin.usuarios.show', $usuario->id)
