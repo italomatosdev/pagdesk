@@ -649,6 +649,7 @@ class EmprestimoController extends Controller
             'aprovacao.aprovador',
             'liberacao.consultor',
             'liberacao.gestor',
+            'liberacao.confirmadoPagamentoPor',
             'emprestimoOrigem',
             'renovacoes',
             'garantias.anexos', // Garantias para empréstimo tipo empenho

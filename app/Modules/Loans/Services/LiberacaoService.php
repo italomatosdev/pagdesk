@@ -314,8 +314,11 @@ class LiberacaoService
                 ]);
             }
 
-            // VALIDAÇÃO 2: Consultor deve ser o dono da liberação
-            if ($liberacao->consultor_id !== $consultorId) {
+            // VALIDAÇÃO 2: Quem confirma deve ser o consultor da liberação ou gestor/admin da operação (saída sempre no caixa do consultor)
+            $user = \App\Models\User::find($consultorId);
+            $podeConfirmar = ($liberacao->consultor_id === $consultorId)
+                || ($user && $user->temAlgumPapelNaOperacao((int) $emprestimo->operacao_id, ['gestor', 'administrador']));
+            if (!$podeConfirmar) {
                 throw ValidationException::withMessages([
                     'liberacao' => 'Você não tem permissão para confirmar esta liberação.'
                 ]);
@@ -335,10 +338,11 @@ class LiberacaoService
 
             $oldStatus = $liberacao->status;
 
-            // Atualizar liberação
+            // Atualizar liberação (registrar quem confirmou: consultor ou gestor/admin)
             $liberacao->update([
                 'status' => 'pago_ao_cliente',
                 'pago_ao_cliente_em' => now(),
+                'confirmado_pagamento_por_id' => $consultorId,
                 'observacoes_pagamento' => $observacoes,
                 'comprovante_pagamento_cliente' => $comprovantePath,
             ]);

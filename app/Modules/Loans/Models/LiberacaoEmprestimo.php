@@ -20,6 +20,7 @@ class LiberacaoEmprestimo extends Model
         'status',
         'liberado_em',
         'pago_ao_cliente_em',
+        'confirmado_pagamento_por_id',
         'observacoes_liberacao',
         'observacoes_pagamento',
         'comprovante_liberacao',
@@ -63,6 +64,14 @@ class LiberacaoEmprestimo extends Model
     public function gestor()
     {
         return $this->belongsTo(\App\Models\User::class, 'gestor_id');
+    }
+
+    /**
+     * Quem confirmou o pagamento ao cliente (consultor ou gestor/admin)
+     */
+    public function confirmadoPagamentoPor()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'confirmado_pagamento_por_id');
     }
 
     /**

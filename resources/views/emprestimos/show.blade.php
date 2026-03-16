@@ -569,8 +569,13 @@
                                 @endif
                                 @if($emprestimo->liberacao->pago_ao_cliente_em)
                                     <div class="col-md-6 mb-3">
-                                        <strong>Pago ao Cliente em:</strong> 
+                                        <strong>Pago ao Cliente em:</strong>
                                         {{ $emprestimo->liberacao->pago_ao_cliente_em->format('d/m/Y H:i') }}
+                                    </div>
+                                @endif
+                                @if($emprestimo->liberacao->confirmadoPagamentoPor)
+                                    <div class="col-md-6 mb-3">
+                                        <strong>Confirmado por:</strong> {{ $emprestimo->liberacao->confirmadoPagamentoPor->name }}
                                     </div>
                                 @endif
                                 @if($emprestimo->liberacao->observacoes_liberacao)
@@ -624,10 +629,14 @@
                             </div>
                             @endif
 
-                            <!-- Botão para confirmar pagamento ao cliente -->
-                            @if($emprestimo->liberacao->status === 'liberado' && 
-                                $emprestimo->status === 'aprovado' && 
-                                $emprestimo->liberacao->consultor_id == auth()->id())
+                            <!-- Botão para confirmar pagamento ao cliente (consultor ou gestor/admin) -->
+                            @php
+                                $podeConfirmarPagamentoCliente = $emprestimo->liberacao->status === 'liberado'
+                                    && $emprestimo->status === 'aprovado'
+                                    && ($emprestimo->liberacao->consultor_id == auth()->id() || auth()->user()->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['gestor', 'administrador']));
+                                $ehGestorAdminConfirmando = $podeConfirmarPagamentoCliente && $emprestimo->liberacao->consultor_id != auth()->id();
+                            @endphp
+                            @if($podeConfirmarPagamentoCliente)
                                 <div class="mb-3">
                                     <button type="button" class="btn btn-success btn-lg w-100" 
                                             data-bs-toggle="modal" 
@@ -2074,10 +2083,7 @@
                 @endif
 
     <!-- Modal Confirmar Pagamento ao Cliente -->
-    @if($emprestimo->liberacao && 
-        $emprestimo->liberacao->status === 'liberado' && 
-        $emprestimo->status === 'aprovado' && 
-        $emprestimo->liberacao->consultor_id == auth()->id())
+    @if($emprestimo->liberacao && $emprestimo->liberacao->status === 'liberado' && $emprestimo->status === 'aprovado' && $podeConfirmarPagamentoCliente ?? false)
     <div class="modal fade" id="confirmarPagamentoModal" tabindex="-1" aria-labelledby="confirmarPagamentoModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -2099,6 +2105,13 @@
                             <strong>Cliente:</strong> {{ $emprestimo->cliente->nome }}<br>
                             <strong>Empréstimo:</strong> #{{ $emprestimo->id }}
                         </div>
+                        @if($ehGestorAdminConfirmando ?? false)
+                        <div class="alert alert-secondary mb-3">
+                            <i class="bx bx-info-circle"></i>
+                            <strong>Você está confirmando como gestor/administrador.</strong><br>
+                            O valor será debitado do caixa do consultor <strong>{{ $emprestimo->liberacao->consultor->name ?? 'responsável' }}</strong>, pois o dinheiro foi liberado para ele.
+                        </div>
+                        @endif
                         <div class="mb-3">
                             <label class="form-label">Comprovante (opcional)</label>
                             <input type="file" name="comprovante" class="form-control" 

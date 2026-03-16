@@ -196,7 +196,8 @@ class LiberacaoController extends Controller
             'emprestimo.operacao',
             'emprestimo.consultor',
             'consultor',
-            'gestor'
+            'gestor',
+            'confirmadoPagamentoPor'
         ])->findOrFail($id);
 
         $user = auth()->user();
@@ -211,9 +212,11 @@ class LiberacaoController extends Controller
         }
 
         $podeAprovarLiberacao = $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador']);
-        $podeConfirmarPagamentoCliente = $liberacao->consultor_id === $user->id;
+        $podeConfirmarPagamentoCliente = ($liberacao->consultor_id === $user->id)
+            || $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador']);
+        $ehGestorAdminConfirmando = $podeConfirmarPagamentoCliente && $liberacao->consultor_id !== $user->id;
 
-        return view('liberacoes.show', compact('liberacao', 'podeAprovarLiberacao', 'podeConfirmarPagamentoCliente'));
+        return view('liberacoes.show', compact('liberacao', 'podeAprovarLiberacao', 'podeConfirmarPagamentoCliente', 'ehGestorAdminConfirmando'));
     }
 
     /**
