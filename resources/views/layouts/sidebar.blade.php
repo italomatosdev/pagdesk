@@ -53,6 +53,12 @@
                 @if(auth()->user()->isSuperAdmin())
                 <li class="menu-title" data-key="t-super-admin">Super Admin</li>
                 <li>
+                    <a href="{{ route('super-admin.configuracoes.index') }}">
+                        <i class="bx bx-cog icon nav-icon"></i>
+                        <span class="menu-item">Configurações do sistema</span>
+                    </a>
+                </li>
+                <li>
                     <a href="{{ route('super-admin.empresas.index') }}">
                         <i class="bx bx-building icon nav-icon"></i>
                         <span class="menu-item">Empresas</span>

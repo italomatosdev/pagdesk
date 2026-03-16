@@ -90,6 +90,16 @@
                                         @endforeach
                                     </select>
                                 </div>
+                                <div class="col-lg-2 col-md-6">
+                                    <label class="form-label">
+                                        <i class="bx bx-lock-alt text-muted me-1"></i> Status
+                                    </label>
+                                    <select name="ativo" class="form-select">
+                                        <option value="">Todos</option>
+                                        <option value="1" {{ request('ativo') === '1' ? 'selected' : '' }}>Ativos</option>
+                                        <option value="0" {{ request('ativo') === '0' ? 'selected' : '' }}>Bloqueados</option>
+                                    </select>
+                                </div>
                                 <div class="col-lg-3 col-md-6">
                                     <label class="form-label">
                                         <i class="bx bx-search text-muted me-1"></i> Buscar
@@ -122,6 +132,7 @@
                                         <th>Empresa</th>
                                         <th>Papéis</th>
                                         <th>Operações</th>
+                                        <th>Status</th>
                                         <th>Criado em</th>
                                         <th>Ações</th>
                                     </tr>
@@ -172,6 +183,11 @@
                                                 @endif
                                             </td>
                                             <td>
+                                                <span class="badge bg-{{ $usuario->isAtivo() ? 'success' : 'danger' }}">
+                                                    {{ $usuario->isAtivo() ? 'Ativo' : 'Bloqueado' }}
+                                                </span>
+                                            </td>
+                                            <td>
                                                 {{ $usuario->created_at->format('d/m/Y H:i') }}
                                             </td>
                                             <td>
@@ -189,7 +205,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="8" class="text-center py-4">
+                                            <td colspan="9" class="text-center py-4">
                                                 <i class="bx bx-user-x font-size-24 text-muted"></i>
                                                 <p class="text-muted mb-0 mt-2">Nenhum usuário encontrado.</p>
                                             </td>

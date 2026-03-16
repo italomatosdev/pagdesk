@@ -23,6 +23,8 @@ O **PagDesk** permite:
 - **Busca global:** clientes, empréstimos, etc.
 - **Recuperação de senha:** fluxo “Esqueci minha senha” e e-mails em português.
 
+- **Relatórios:** recebimento e juros por dia, parcelas atrasadas, quitações, juros e valores por quitação (filtro por tipo de quitação: todos / total / renovação), comissões, entradas e saídas por categoria. Acesso em `/relatorios`.
+
 Interface em **português (pt_BR)** em toda a aplicação.
 
 ---
@@ -212,10 +214,26 @@ sistema-cred/
 - **Empréstimos:** `/emprestimos/*`, liberações, cobranças, pagamentos (inclui tipo *Crediário* gerado pelas vendas).
 - **Caixa:** `/caixa`, `/prestacao-contas`.
 - **Aprovações:** `/aprovacoes`.
+- **Relatórios:** `/relatorios` (índice e relatórios: recebimento/juros por dia, parcelas atrasadas, quitações, juros por quitação, comissões, entradas e saídas).
 - **Health Checks:**
   - `GET /health` — status completo da aplicação
   - `GET /health/live` — liveness probe (aplicação viva?)
   - `GET /health/ready` — readiness probe (pronta para tráfego?)
+
+---
+
+## Sessão e Page Expired (419)
+
+A aplicação usa sessão web (Laravel). O tempo de vida da sessão é definido por **`SESSION_LIFETIME`** no `.env` (em minutos). O padrão é **120** (2 horas de inatividade). Quando a sessão expira, o token CSRF deixa de ser válido e o próximo envio de formulário (POST) resulta em **419 Page Expired**. Ajuste `SESSION_LIFETIME` no `.env` se quiser sessões mais longas (ex.: 480 = 8 h). O driver de sessão pode ser `file` ou `redis` (`SESSION_DRIVER`).
+
+---
+
+## Consultor: saída ou bloqueio
+
+Quando um consultor **sai** ou é **bloqueado**, empréstimos, cheques e garantias continuam vinculados ao usuário (consultor) no sistema. Duas abordagens possíveis:
+
+- **Reutilizar a conta (recomendado):** alterar nome, e-mail e senha do usuário do consultor que saiu para os dados do novo responsável. O novo colaborador passa a acessar a mesma conta; todos os registros (empréstimos, relatórios, etc.) seguem com o mesmo `consultor_id`. Simples e sem migração em massa. O histórico no sistema não distingue a pessoa física anterior da atual.
+- **Migrar dados para outro consultor:** futura funcionalidade para transferir em massa os vínculos (empréstimos, cheques, garantias) do consultor que saiu para outro usuário/consultor. Exige permissões restritas, confirmação e auditoria.
 
 ---
 

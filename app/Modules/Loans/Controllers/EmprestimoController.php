@@ -281,7 +281,8 @@ class EmprestimoController extends Controller
             // Consultores por operação (gestor/admin escolhem o consultor; opção "Nome (Você)" ao final)
             $consultoresPorOperacao = [];
             foreach ($operacoes as $op) {
-                $lista = \App\Models\User::whereHas('operacoes', fn ($q) => $q->where('operacoes.id', $op->id)->where('operacao_user.role', 'consultor'))
+                $lista = \App\Models\User::where('ativo', true)
+                    ->whereHas('operacoes', fn ($q) => $q->where('operacoes.id', $op->id)->where('operacao_user.role', 'consultor'))
                     ->orderBy('name')
                     ->get(['id', 'name'])
                     ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])

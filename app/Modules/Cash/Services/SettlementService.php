@@ -364,6 +364,83 @@ class SettlementService
     }
 
     /**
+     * Marcar como pago quando o consultor está bloqueado (gestor/admin marca sem envio de comprovante pelo consultor).
+     * Só disponível para fechamentos em status 'aprovado' cujo consultor está inativo (bloqueado).
+     *
+     * @param int $settlementId
+     * @param int $gestorId
+     * @param string|null $observacoes
+     * @return Settlement
+     */
+    public function marcarComoPagoConsultorBloqueado(int $settlementId, int $gestorId, ?string $observacoes = null): Settlement
+    {
+        return DB::transaction(function () use ($settlementId, $gestorId, $observacoes) {
+            $settlement = Settlement::with(['consultor', 'operacao'])->findOrFail($settlementId);
+
+            if ($settlement->status !== 'aprovado') {
+                throw ValidationException::withMessages([
+                    'settlement' => 'Apenas prestações aprovadas podem ser marcadas como pago (consultor bloqueado). Status atual: ' . $settlement->status
+                ]);
+            }
+
+            if ($settlement->consultor && $settlement->consultor->isAtivo()) {
+                throw ValidationException::withMessages([
+                    'settlement' => 'Esta ação só é permitida quando o consultor está bloqueado. O consultor pode anexar o comprovante normalmente.'
+                ]);
+            }
+
+            $oldStatus = $settlement->status;
+
+            $settlement->update([
+                'status' => 'concluido',
+                'recebido_por' => $gestorId,
+                'recebido_em' => now(),
+                'observacoes' => $observacoes ?? $settlement->observacoes,
+            ]);
+
+            $cashService = app(\App\Modules\Cash\Services\CashService::class);
+            $consultorNome = $settlement->consultor?->name ?? 'Consultor';
+
+            // 1. Saída do caixa do consultor (sem comprovante - consultor bloqueado não enviou)
+            $cashService->registrarMovimentacao([
+                'operacao_id' => $settlement->operacao_id,
+                'consultor_id' => $settlement->consultor_id,
+                'tipo' => 'saida',
+                'origem' => 'automatica',
+                'valor' => $settlement->valor_total,
+                'data_movimentacao' => now(),
+                'descricao' => "Prestação de contas - Período {$settlement->data_inicio->format('d/m/Y')} a {$settlement->data_fim->format('d/m/Y')} (marcado como pago - consultor bloqueado)",
+                'referencia_tipo' => 'settlement',
+                'referencia_id' => $settlement->id,
+                'comprovante_path' => null,
+            ]);
+
+            // 2. Entrada no caixa do gestor
+            $cashService->registrarMovimentacao([
+                'operacao_id' => $settlement->operacao_id,
+                'consultor_id' => $gestorId,
+                'tipo' => 'entrada',
+                'origem' => 'automatica',
+                'valor' => $settlement->valor_total,
+                'data_movimentacao' => now(),
+                'descricao' => "Recebimento de prestação de contas - {$consultorNome} - Período {$settlement->data_inicio->format('d/m/Y')} a {$settlement->data_fim->format('d/m/Y')} (consultor bloqueado)",
+                'referencia_tipo' => 'settlement',
+                'referencia_id' => $settlement->id,
+                'comprovante_path' => null,
+            ]);
+
+            self::auditar(
+                'marcar_pago_consultor_bloqueado_settlement',
+                $settlement,
+                ['status' => $oldStatus],
+                ['status' => 'concluido', 'recebido_por' => $gestorId]
+            );
+
+            return $settlement->fresh();
+        });
+    }
+
+    /**
      * Rejeitar prestação de contas (Gestor ou Administrador)
      *
      * @param int $settlementId

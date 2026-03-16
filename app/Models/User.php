@@ -27,6 +27,8 @@ class User extends Authenticatable
         'operacao_id', // Operação principal do usuário (opcional)
         'empresa_id', // Empresa do usuário (obrigatório, exceto super admin)
         'is_super_admin', // Indica se é super admin do sistema
+        'ativo', // false = conta bloqueada (não loga, não recebe atribuições novas; ainda aparece em listas/relatórios e em caixa)
+        'motivo_bloqueio', // Motivo opcional quando ativo = false
     ];
 
     /**
@@ -47,6 +49,7 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'ativo' => 'boolean',
     ];
 
     /**
@@ -275,6 +278,22 @@ class User extends Authenticatable
     public function isSuperAdmin(): bool
     {
         return (bool) $this->is_super_admin;
+    }
+
+    /**
+     * Verificar se a conta está ativa (não bloqueada).
+     */
+    public function isAtivo(): bool
+    {
+        return $this->ativo !== false;
+    }
+
+    /**
+     * Verificar se a conta está bloqueada (inativa).
+     */
+    public function isBloqueado(): bool
+    {
+        return $this->ativo === false;
     }
 
     /**

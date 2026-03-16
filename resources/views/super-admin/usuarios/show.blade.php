@@ -45,6 +45,16 @@
 
                         <hr>
 
+                        <div class="mb-3">
+                            <p class="text-muted mb-1">Status da conta</p>
+                            <span class="badge bg-{{ $usuario->isAtivo() ? 'success' : 'danger' }}">
+                                {{ $usuario->isAtivo() ? 'Ativo' : 'Bloqueado' }}
+                            </span>
+                            @if($usuario->isBloqueado() && !empty($usuario->motivo_bloqueio))
+                                <p class="small text-muted mt-2 mb-0"><strong>Motivo:</strong> {{ $usuario->motivo_bloqueio }}</p>
+                            @endif
+                        </div>
+
                         <div class="row text-start">
                             <div class="col-6">
                                 <p class="text-muted mb-1">Criado em</p>
@@ -207,6 +217,23 @@
                                 @error('operacoes')
                                     <div class="text-danger small mt-1">{{ $message }}</div>
                                 @enderror
+                            </div>
+
+                            <hr>
+
+                            <h6 class="mb-2">Bloquear / Desbloquear conta</h6>
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="ativo" id="ativo" value="1"
+                                           {{ old('ativo', $usuario->isAtivo()) ? 'checked' : '' }}>
+                                    <label class="form-check-label" for="ativo">Usuário ativo (pode acessar o sistema)</label>
+                                </div>
+                                <small class="text-muted">Desmarque para bloquear: o usuário não poderá fazer login e não aparecerá em seleções de novos empréstimos. Ainda aparecerá em listas, relatórios e em Caixa (movimentação manual / fechamento).</small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Motivo do bloqueio (opcional)</label>
+                                <textarea name="motivo_bloqueio" class="form-control" rows="2" placeholder="Ex.: Afastamento, desligamento...">{{ old('motivo_bloqueio', $usuario->motivo_bloqueio) }}</textarea>
+                                <small class="text-muted">Exibido para o usuário na tela de conta bloqueada.</small>
                             </div>
 
                             <hr>

@@ -74,4 +74,19 @@ class LoginController extends Controller
             $this->username() => [Lang::get('auth.throttle', ['seconds' => $seconds], 'pt_BR')],
         ])->status(Response::HTTP_TOO_MANY_REQUESTS);
     }
+
+    /**
+     * Após login bem-sucedido: se a conta estiver bloqueada (inativa), desloga e redireciona para a página de conta bloqueada.
+     */
+    protected function authenticated(Request $request, $user)
+    {
+        if (!$user->isAtivo()) {
+            auth()->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            return redirect()->route('conta.bloqueada')->with('motivo', $user->motivo_bloqueio);
+        }
+
+        return redirect()->intended($this->redirectPath());
+    }
 }
