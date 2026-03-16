@@ -36,6 +36,17 @@ Apenas **Super Admin** pode alterar o status da conta de outros usuários.
 - **Listas e relatórios:** continua aparecendo (histórico, quem fez o quê, etc.).
 - **Caixa / financeiro:** **continua disponível** nas listas de usuários para movimentação manual e fechamento de caixa, para que um gestor/admin possa, por exemplo, fazer uma movimentação em nome dele ou fechar o caixa dele e encerrar o ciclo.
 
+### Fechamento de caixa (prestação de contas) — consultor bloqueado
+
+Quando um fechamento de caixa está em status **Aprovado** e o consultor (dono do caixa) está **bloqueado**, ele não consegue acessar o sistema para anexar o comprovante de envio. Nesse caso:
+
+- O **gestor ou administrador** da operação pode **marcar como pago** diretamente na tela do fechamento.
+- Aparece o botão **"Marcar como pago (consultor bloqueado)"** apenas quando: status do fechamento é **Aprovado**, o consultor está **bloqueado** e o usuário logado é gestor ou administrador na operação.
+- Ao marcar como pago, o sistema atualiza o fechamento para **Concluído** e gera as movimentações de caixa (saída do consultor, entrada do gestor), **sem exigir comprovante**. O ciclo do caixa do consultor bloqueado é encerrado.
+
+**Rota:** `POST /fechamento-caixa/{id}/marcar-pago-consultor-bloqueado` (nome: `fechamento-caixa.marcar-pago-consultor-bloqueado`).  
+**Service:** `SettlementService::marcarComoPagoConsultorBloqueado()`.
+
 ---
 
 ## Página de conta bloqueada
@@ -74,6 +85,7 @@ Exibe a mensagem “Sua conta está bloqueada” e, se houver, o **motivo** info
 | Registro do middleware | `app/Http/Kernel.php` — grupo `web` |
 | Selectors só ativos (criações) | `app/Modules/Loans/Controllers/EmprestimoController.php`, `ParcelaController.php` (consultores) |
 | Caixa (inclui bloqueados) | Listas de usuários em `app/Modules/Cash/Controllers/` **não** filtram por `ativo` |
+| Fechamento: marcar como pago (consultor bloqueado) | `app/Modules/Cash/Services/SettlementService.php` — `marcarComoPagoConsultorBloqueado()`; `FechamentoCaixaController::marcarComoPagoConsultorBloqueado()`; view `caixa/fechamento/show.blade.php` |
 
 ---
 
@@ -98,4 +110,5 @@ Exibe a mensagem “Sua conta está bloqueada” e, se houver, o **motivo** info
 |------|--------|
 | Bloquear (Super Admin) | Desmarca “Usuário ativo”, opcionalmente preenche motivo. Usuário deixa de acessar o sistema e não aparece em seleções de novas atribuições; continua em listas, relatórios e em Caixa. |
 | Desbloquear | Marca “Usuário ativo” e salva. Usuário volta a poder logar e a aparecer em seleções. |
+| Fechamento com consultor bloqueado | Gestor/admin pode marcar o fechamento (status Aprovado) como pago na tela do fechamento, sem comprovante; movimentações de caixa são geradas e o ciclo é encerrado. |
 | Deploy em produção | Migration com `ativo` default `true` → todos os usuários existentes permanecem ativos. |
