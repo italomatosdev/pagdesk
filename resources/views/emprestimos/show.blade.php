@@ -1006,7 +1006,7 @@
                                 <i class="bx bx-shield-quarter"></i> 
                                 Garantias do Empenho ({{ $emprestimo->garantias->count() }})
                             </h4>
-                            @if(!$emprestimo->isFinalizado())
+                            @if($podeEditarGarantias)
                             <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modalAdicionarGarantia">
                                 <i class="bx bx-plus"></i> Adicionar Garantia
                             </button>
@@ -1023,7 +1023,7 @@
                                                         <i class="{{ $garantia->categoria_icone }}"></i>
                                                         <strong>{{ $garantia->categoria_nome }}</strong>
                                                     </span>
-                                                    @if(!$emprestimo->isFinalizado())
+                                                    @if($podeEditarGarantias)
                                                     <div class="dropdown">
                                                         <button class="btn btn-sm btn-link text-muted" type="button" data-bs-toggle="dropdown">
                                                             <i class="bx bx-dots-vertical-rounded"></i>
@@ -1099,7 +1099,7 @@
                                                                                 <small class="d-block text-truncate">{{ $anexo->nome_arquivo }}</small>
                                                                             </a>
                                                                         @endif
-                                                                        @if(!$emprestimo->isFinalizado())
+                                                                        @if($podeEditarGarantias)
                                                                         <form action="{{ route('emprestimos.garantias.anexos.destroy', $anexo->id) }}" 
                                                                               method="POST" 
                                                                               class="position-absolute top-0 end-0 form-excluir-anexo">
@@ -1117,7 +1117,7 @@
                                                     @endif
 
                                                     <!-- Upload de novos anexos -->
-                                                    @if(!$emprestimo->isFinalizado())
+                                                    @if($podeEditarGarantias)
                                                     <hr>
                                                     <form action="{{ route('emprestimos.garantias.anexos.upload', $garantia->id) }}" 
                                                           method="POST" 
@@ -1156,7 +1156,7 @@
                                 <div class="alert alert-warning mb-0">
                                     <i class="bx bx-error"></i>
                                     <strong>Atenção:</strong> Este empréstimo do tipo Empenho ainda não possui garantias cadastradas.
-                                    @if(!$emprestimo->isFinalizado())
+                                    @if($podeEditarGarantias)
                                     <button type="button" class="btn btn-warning btn-sm ms-2" data-bs-toggle="modal" data-bs-target="#modalAdicionarGarantia">
                                         <i class="bx bx-plus"></i> Adicionar Garantia
                                     </button>

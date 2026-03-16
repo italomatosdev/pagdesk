@@ -145,7 +145,7 @@ class GarantiaController extends Controller
      */
     public function store(Request $request, int $emprestimoId): RedirectResponse
     {
-        $emprestimo = Emprestimo::findOrFail($emprestimoId);
+        $emprestimo = Emprestimo::with('liberacao')->findOrFail($emprestimoId);
 
         // Verificar se é tipo empenho
         if (!$emprestimo->isEmpenho()) {
@@ -155,6 +155,10 @@ class GarantiaController extends Controller
         // Verificar se empréstimo está finalizado
         if ($emprestimo->isFinalizado()) {
             return back()->with('error', 'Não é possível adicionar garantias a empréstimos finalizados.');
+        }
+        // Após liberação do dinheiro, não é possível adicionar novas garantias
+        if ($emprestimo->foiLiberado()) {
+            return back()->with('error', 'Não é possível adicionar garantias após a liberação do empréstimo.');
         }
 
         $user = auth()->user();
@@ -217,12 +221,16 @@ class GarantiaController extends Controller
      */
     public function update(Request $request, int $garantiaId): RedirectResponse
     {
-        $garantia = EmprestimoGarantia::with('emprestimo')->findOrFail($garantiaId);
+        $garantia = EmprestimoGarantia::with('emprestimo.liberacao')->findOrFail($garantiaId);
         $emprestimo = $garantia->emprestimo;
 
         // Verificar se empréstimo está finalizado
         if ($emprestimo->isFinalizado()) {
             return back()->with('error', 'Não é possível editar garantias de empréstimos finalizados.');
+        }
+        // Após liberação do dinheiro, garantias não podem mais ser editadas
+        if ($emprestimo->foiLiberado()) {
+            return back()->with('error', 'Não é possível editar garantias após a liberação do empréstimo.');
         }
 
         $user = auth()->user();
@@ -282,12 +290,16 @@ class GarantiaController extends Controller
      */
     public function destroy(int $garantiaId): RedirectResponse
     {
-        $garantia = EmprestimoGarantia::with(['emprestimo', 'anexos'])->findOrFail($garantiaId);
+        $garantia = EmprestimoGarantia::with(['emprestimo.liberacao', 'anexos'])->findOrFail($garantiaId);
         $emprestimo = $garantia->emprestimo;
 
         // Verificar se empréstimo está finalizado
         if ($emprestimo->isFinalizado()) {
             return back()->with('error', 'Não é possível excluir garantias de empréstimos finalizados.');
+        }
+        // Após liberação do dinheiro, garantias não podem mais ser excluídas
+        if ($emprestimo->foiLiberado()) {
+            return back()->with('error', 'Não é possível excluir garantias após a liberação do empréstimo.');
         }
 
         $user = auth()->user();
@@ -316,12 +328,16 @@ class GarantiaController extends Controller
      */
     public function destroyAnexo(int $anexoId): RedirectResponse
     {
-        $anexo = EmprestimoGarantiaAnexo::with('garantia.emprestimo')->findOrFail($anexoId);
+        $anexo = EmprestimoGarantiaAnexo::with('garantia.emprestimo.liberacao')->findOrFail($anexoId);
         $emprestimo = $anexo->garantia->emprestimo;
 
         // Verificar se empréstimo está finalizado
         if ($emprestimo->isFinalizado()) {
             return back()->with('error', 'Não é possível excluir anexos de garantias de empréstimos finalizados.');
+        }
+        // Após liberação do dinheiro, anexos de garantia não podem mais ser excluídos
+        if ($emprestimo->foiLiberado()) {
+            return back()->with('error', 'Não é possível excluir anexos de garantias após a liberação do empréstimo.');
         }
 
         $user = auth()->user();
@@ -349,7 +365,7 @@ class GarantiaController extends Controller
      */
     public function uploadAnexo(Request $request, int $garantiaId)
     {
-        $garantia = EmprestimoGarantia::with('emprestimo')->findOrFail($garantiaId);
+        $garantia = EmprestimoGarantia::with('emprestimo.liberacao')->findOrFail($garantiaId);
         $emprestimo = $garantia->emprestimo;
 
         // Verificar se empréstimo está finalizado
@@ -358,6 +374,13 @@ class GarantiaController extends Controller
                 return response()->json(['error' => 'Não é possível adicionar anexos a garantias de empréstimos finalizados.'], 403);
             }
             return back()->with('error', 'Não é possível adicionar anexos a garantias de empréstimos finalizados.');
+        }
+        // Após liberação do dinheiro, não é possível adicionar anexos à garantia
+        if ($emprestimo->foiLiberado()) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['error' => 'Não é possível adicionar anexos a garantias após a liberação do empréstimo.'], 403);
+            }
+            return back()->with('error', 'Não é possível adicionar anexos a garantias após a liberação do empréstimo.');
         }
 
         $user = auth()->user();

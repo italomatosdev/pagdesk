@@ -328,6 +328,19 @@ class Emprestimo extends Model
     }
 
     /**
+     * Verificar se o dinheiro já foi liberado (gestor liberou e/ou foi pago ao cliente).
+     * Após liberado, garantias não podem mais ser editadas nem excluídas (apenas empenho).
+     */
+    public function foiLiberado(): bool
+    {
+        if (!$this->relationLoaded('liberacao')) {
+            $this->load('liberacao');
+        }
+        $lib = $this->liberacao;
+        return $lib && ($lib->isLiberado() || $lib->isPagoAoCliente());
+    }
+
+    /**
      * Verificar se está cancelado
      */
     public function isCancelado(): bool
