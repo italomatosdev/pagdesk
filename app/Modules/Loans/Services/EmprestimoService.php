@@ -6,6 +6,7 @@ use App\Modules\Core\Models\OperationClient;
 use App\Modules\Core\Services\NotificacaoService;
 use App\Modules\Core\Traits\Auditable;
 use App\Modules\Cash\Models\CashLedgerEntry;
+use App\Models\User;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\Parcela;
@@ -1256,25 +1257,19 @@ class EmprestimoService
                 ]);
             }
 
-            // VALIDAÇÃO 5: Deve haver pelo menos uma parcela atrasada
-            $temParcelaAtrasada = $emprestimo->parcelas->contains(function ($parcela) {
-                return $parcela->isAtrasada();
-            });
-
-            if (!$temParcelaAtrasada) {
-                throw ValidationException::withMessages([
-                    'parcela' => 'A garantia só pode ser executada quando há parcelas atrasadas.'
-                ]);
-            }
+            // Permite executar mesmo sem parcela atrasada (ex.: cliente decide não pagar antes do vencimento)
 
             $oldStatusGarantia = $garantia->status;
             $oldStatusEmprestimo = $emprestimo->status;
+
+            $executor = User::find($executorId);
+            $executorTexto = $executor ? $executor->name . ' (ID ' . $executorId . ')' : 'ID ' . $executorId;
 
             // Executar garantia
             $garantia->update([
                 'status' => 'executada',
                 'data_execucao' => Carbon::now(),
-                'observacoes' => ($garantia->observacoes ?? '') . "\n\n[EXECUTADA EM " . Carbon::now()->format('d/m/Y H:i') . "]\nExecutor: ID {$executorId}\nMotivo: {$observacoes}",
+                'observacoes' => ($garantia->observacoes ?? '') . "\n\n[EXECUTADA EM " . Carbon::now()->format('d/m/Y H:i') . "]\nExecutor: {$executorTexto}\nMotivo: {$observacoes}",
             ]);
 
             // Marcar todas as parcelas NÃO PAGAS como quitadas por garantia

@@ -80,6 +80,11 @@
                                     <strong>Pago ao cliente em:</strong> {{ $liberacao->pago_ao_cliente_em->format('d/m/Y H:i') }}
                                 </div>
                             @endif
+                            @if($liberacao->confirmadoPagamentoPor)
+                                <div class="col-md-6 mb-3">
+                                    <strong>Confirmado por:</strong> {{ $liberacao->confirmadoPagamentoPor->name }}
+                                </div>
+                            @endif
                             @if($liberacao->observacoes_liberacao)
                                 <div class="col-12 mb-3">
                                     <strong>Observações da Liberação:</strong><br>
@@ -376,6 +381,13 @@
                                        value="{{ $liberacao->emprestimo->cliente->nome }}" 
                                        readonly>
                             </div>
+                            @if($ehGestorAdminConfirmando ?? false)
+                            <div class="alert alert-secondary mb-3">
+                                <i class="bx bx-info-circle"></i>
+                                <strong>Você está confirmando como gestor/administrador.</strong><br>
+                                O valor será debitado do caixa do consultor <strong>{{ $liberacao->consultor->name ?? 'responsável' }}</strong>, pois o dinheiro foi liberado para ele.
+                            </div>
+                            @endif
                             <div class="mb-3">
                                 <label class="form-label">Observações (Opcional)</label>
                                 <textarea name="observacoes" class="form-control" rows="3" 

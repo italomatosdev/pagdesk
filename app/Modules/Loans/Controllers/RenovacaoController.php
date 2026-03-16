@@ -27,13 +27,26 @@ class RenovacaoController extends Controller
                   ->orWhereHas('renovacoes'); // Ou que têm renovações
             });
 
-        // Restringir por operação: apenas Super Admin vê todas
+        // Restringir por operação: Super Admin vê todas; gestor/admin vê todas da op.; consultor só as suas
         if (!$user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
-            if (!empty($operacoesIds)) {
-                $query->whereIn('operacao_id', $operacoesIds);
-            } else {
+            if (empty($operacoesIds)) {
                 $query->whereRaw('1 = 0');
+            } else {
+                $opsGestorAdmin = $user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']);
+                $opsConsultor = $user->getOperacoesIdsOndeTemPapel(['consultor']);
+                $opsSoConsultor = array_values(array_diff($opsConsultor, $opsGestorAdmin));
+
+                $query->where(function ($q) use ($opsGestorAdmin, $opsSoConsultor, $user) {
+                    if (!empty($opsGestorAdmin)) {
+                        $q->whereIn('operacao_id', $opsGestorAdmin);
+                    }
+                    if (!empty($opsSoConsultor)) {
+                        $q->orWhere(function ($q2) use ($opsSoConsultor, $user) {
+                            $q2->whereIn('operacao_id', $opsSoConsultor)->where('consultor_id', $user->id);
+                        });
+                    }
+                });
             }
         }
 
@@ -54,6 +67,10 @@ class RenovacaoController extends Controller
         if ($request->filled('operacao_id')) {
             if ($user->temAcessoOperacao($request->operacao_id)) {
                 $query->where('operacao_id', $request->operacao_id);
+                // Consultor (sem gestor/admin nesta operação): apenas renovações dos seus empréstimos
+                if (!$user->temAlgumPapelNaOperacao((int) $request->operacao_id, ['gestor', 'administrador'])) {
+                    $query->where('consultor_id', $user->id);
+                }
             }
         }
 

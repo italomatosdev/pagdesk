@@ -23,7 +23,7 @@ class ChequeController extends Controller
     }
 
     /**
-     * Listar cheques (visão geral)
+     * Listar cheques (visão geral). Consultor vê apenas cheques dos seus empréstimos; gestor/admin vê todos da operação.
      */
     public function index(Request $request): View
     {
@@ -32,20 +32,41 @@ class ChequeController extends Controller
             ->orderBy('data_vencimento')
             ->orderBy('id');
 
-        if (!$user->isSuperAdmin()) {
+        if ($user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
-            if (!empty($opsIds)) {
-                $query->whereHas('emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
+            $emprestimoScope = fn ($q) => $q->whereIn('operacao_id', Operacao::where('ativo', true)->pluck('id')->toArray());
+        } else {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds)) {
+                $emprestimoScope = fn ($q) => $q->whereRaw('1 = 0');
             } else {
-                $query->whereRaw('1 = 0');
+                $opsGestorAdmin = $user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']);
+                $opsConsultor = $user->getOperacoesIdsOndeTemPapel(['consultor']);
+                $opsSoConsultor = array_values(array_diff($opsConsultor, $opsGestorAdmin));
+                $emprestimoScope = function ($q) use ($opsGestorAdmin, $opsSoConsultor, $user) {
+                    $q->where(function ($q2) use ($opsGestorAdmin, $opsSoConsultor, $user) {
+                        if (!empty($opsGestorAdmin)) {
+                            $q2->whereIn('operacao_id', $opsGestorAdmin);
+                        }
+                        if (!empty($opsSoConsultor)) {
+                            $q2->orWhere(function ($q3) use ($opsSoConsultor, $user) {
+                                $q3->whereIn('operacao_id', $opsSoConsultor)->where('consultor_id', $user->id);
+                            });
+                        }
+                    });
+                };
             }
         }
+        $query->whereHas('emprestimo', $emprestimoScope);
 
         $operacaoId = $request->input('operacao_id');
         if ($operacaoId !== null && $operacaoId !== '') {
             $operacaoId = (int) $operacaoId;
-            if ($user->isSuperAdmin() || in_array($operacaoId, $user->getOperacoesIds(), true)) {
+            if ($user->isSuperAdmin() || in_array($operacaoId, $opsIds ?? $user->getOperacoesIds(), true)) {
                 $query->whereHas('emprestimo', fn ($q) => $q->where('operacao_id', $operacaoId));
+                if (!$user->isSuperAdmin() && !$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+                    $query->whereHas('emprestimo', fn ($q) => $q->where('consultor_id', $user->id));
+                }
             }
         }
 
@@ -71,14 +92,9 @@ class ChequeController extends Controller
         $totais = (clone $query)->reorder()->selectRaw('COUNT(*) as total, COALESCE(SUM(valor_cheque), 0) as valor_bruto, COALESCE(SUM(valor_liquido), 0) as valor_liquido')->first();
         $cheques = $query->paginate(20)->withQueryString();
 
-        if ($user->isSuperAdmin()) {
-            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
-        } else {
-            $opsIds = $user->getOperacoesIds();
-            $operacoes = !empty($opsIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
-                : collect([]);
-        }
+        $operacoes = $user->isSuperAdmin()
+            ? Operacao::where('ativo', true)->orderBy('nome')->get()
+            : (!empty($opsIds) ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get() : collect([]));
 
         $titulo = 'Cheques';
 
@@ -99,20 +115,41 @@ class ChequeController extends Controller
             ->orderBy('data_vencimento')
             ->orderBy('id');
 
-        if (!$user->isSuperAdmin()) {
+        if ($user->isSuperAdmin()) {
+            $operacoesIds = Operacao::where('ativo', true)->pluck('id')->toArray();
+            $emprestimoScope = fn ($q) => $q->whereIn('operacao_id', $operacoesIds);
+        } else {
             $opsIds = $user->getOperacoesIds();
-            if (!empty($opsIds)) {
-                $query->whereHas('emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
+            if (empty($opsIds)) {
+                $emprestimoScope = fn ($q) => $q->whereRaw('1 = 0');
             } else {
-                $query->whereRaw('1 = 0');
+                $opsGestorAdmin = $user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']);
+                $opsConsultor = $user->getOperacoesIdsOndeTemPapel(['consultor']);
+                $opsSoConsultor = array_values(array_diff($opsConsultor, $opsGestorAdmin));
+                $emprestimoScope = function ($q) use ($opsGestorAdmin, $opsSoConsultor, $user) {
+                    $q->where(function ($q2) use ($opsGestorAdmin, $opsSoConsultor, $user) {
+                        if (!empty($opsGestorAdmin)) {
+                            $q2->whereIn('operacao_id', $opsGestorAdmin);
+                        }
+                        if (!empty($opsSoConsultor)) {
+                            $q2->orWhere(function ($q3) use ($opsSoConsultor, $user) {
+                                $q3->whereIn('operacao_id', $opsSoConsultor)->where('consultor_id', $user->id);
+                            });
+                        }
+                    });
+                };
             }
         }
+        $query->whereHas('emprestimo', $emprestimoScope);
 
         $operacaoId = $request->input('operacao_id');
         if ($operacaoId !== null && $operacaoId !== '') {
             $operacaoId = (int) $operacaoId;
-            if ($user->isSuperAdmin() || in_array($operacaoId, $user->getOperacoesIds(), true)) {
+            if ($user->isSuperAdmin() || in_array($operacaoId, $opsIds ?? $user->getOperacoesIds(), true)) {
                 $query->whereHas('emprestimo', fn ($q) => $q->where('operacao_id', $operacaoId));
+                if (!$user->isSuperAdmin() && !$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+                    $query->whereHas('emprestimo', fn ($q) => $q->where('consultor_id', $user->id));
+                }
             }
         }
 

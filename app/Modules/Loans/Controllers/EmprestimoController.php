@@ -649,6 +649,7 @@ class EmprestimoController extends Controller
             'aprovacao.aprovador',
             'liberacao.consultor',
             'liberacao.gestor',
+            'liberacao.confirmadoPagamentoPor',
             'emprestimoOrigem',
             'renovacoes',
             'garantias.anexos', // Garantias para empréstimo tipo empenho
@@ -679,6 +680,8 @@ class EmprestimoController extends Controller
         $podeConfirmarPagamentoCliente = $emprestimo->liberacao && $emprestimo->liberacao->consultor_id === $user->id;
         $podeAprovarLiberacao = $podeVerAcoesGestorAdmin;
         $podeAcoesCheque = $podeVerAcoesGestorAdmin;
+        // Garantias só podem ser editadas/excluídas antes da liberação e se empréstimo não finalizado (apenas empenho)
+        $podeEditarGarantias = $emprestimo->isEmpenho() && !$emprestimo->isFinalizado() && !$emprestimo->foiLiberado();
 
         return view('emprestimos.show', compact(
             'emprestimo',
@@ -692,7 +695,8 @@ class EmprestimoController extends Controller
             'podeCancelarComDesfazimento',
             'podeConfirmarPagamentoCliente',
             'podeAprovarLiberacao',
-            'podeAcoesCheque'
+            'podeAcoesCheque',
+            'podeEditarGarantias'
         ));
     }
 

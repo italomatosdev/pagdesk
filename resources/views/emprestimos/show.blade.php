@@ -354,7 +354,7 @@
                             </div>
                         @endif
 
-                        <!-- Botão de Executar Garantia (apenas para gestores/administradores, tipo empenho, com parcela atrasada) -->
+                        <!-- Executar Garantia: gestores/administradores, tipo empenho ativo com garantia ativa (com ou sem parcela atrasada) -->
                         @php
                             $parcelaAtrasada = null;
                             foreach ($emprestimo->parcelas as $parcela) {
@@ -363,11 +363,9 @@
                                     break;
                                 }
                             }
-                            
                             $podeExecutarGarantia = ($podeExecutarGarantia ?? false) &&
                                 $emprestimo->isEmpenho() &&
                                 $emprestimo->isAtivo() &&
-                                $parcelaAtrasada &&
                                 $emprestimo->garantias->where('status', 'ativa')->count() > 0;
                         @endphp
                         @if($podeExecutarGarantia && $parcelaAtrasada)
@@ -544,6 +542,13 @@
                                     <strong>Valor Liberado:</strong> 
                                     <span class="h6 text-primary">R$ {{ number_format($emprestimo->liberacao->valor_liberado, 2, ',', '.') }}</span>
                                 </div>
+                                @if($emprestimo->liberacao->status === 'aguardando' && auth()->user()->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['gestor', 'administrador']))
+                                    <div class="col-12 mb-3">
+                                        <button type="button" class="btn btn-success btn-lg w-100" data-bs-toggle="modal" data-bs-target="#modalLiberarDinheiroEmprestimo">
+                                            <i class="bx bx-transfer-alt"></i> Liberar dinheiro
+                                        </button>
+                                    </div>
+                                @endif
                                 @if($emprestimo->liberacao->consultor)
                                     <div class="col-md-6 mb-3">
                                         <strong>Consultor:</strong> {{ $emprestimo->liberacao->consultor->name }}
@@ -562,8 +567,13 @@
                                 @endif
                                 @if($emprestimo->liberacao->pago_ao_cliente_em)
                                     <div class="col-md-6 mb-3">
-                                        <strong>Pago ao Cliente em:</strong> 
+                                        <strong>Pago ao Cliente em:</strong>
                                         {{ $emprestimo->liberacao->pago_ao_cliente_em->format('d/m/Y H:i') }}
+                                    </div>
+                                @endif
+                                @if($emprestimo->liberacao->confirmadoPagamentoPor)
+                                    <div class="col-md-6 mb-3">
+                                        <strong>Confirmado por:</strong> {{ $emprestimo->liberacao->confirmadoPagamentoPor->name }}
                                     </div>
                                 @endif
                                 @if($emprestimo->liberacao->observacoes_liberacao)
@@ -580,10 +590,51 @@
                                 @endif
                             </div>
 
-                            <!-- Botão para confirmar pagamento ao cliente -->
-                            @if($emprestimo->liberacao->status === 'liberado' && 
-                                $emprestimo->status === 'aprovado' && 
-                                $emprestimo->liberacao->consultor_id == auth()->id())
+                            @if($emprestimo->liberacao->status === 'aguardando' && auth()->user()->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['gestor', 'administrador']))
+                            <div class="modal fade" id="modalLiberarDinheiroEmprestimo" tabindex="-1" aria-labelledby="modalLiberarDinheiroEmprestimoLabel" aria-hidden="true">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <div class="modal-content">
+                                        <form action="{{ route('liberacoes.liberar', $emprestimo->liberacao->id) }}" method="POST" enctype="multipart/form-data">
+                                            @csrf
+                                            <input type="hidden" name="redirect_emprestimo_id" value="{{ $emprestimo->id }}">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title" id="modalLiberarDinheiroEmprestimoLabel">Liberar dinheiro</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <div class="alert alert-info">
+                                                    <strong>Valor:</strong> R$ {{ number_format($emprestimo->liberacao->valor_liberado, 2, ',', '.') }}<br>
+                                                    <strong>Consultor:</strong> {{ $emprestimo->liberacao->consultor->name ?? '-' }}<br>
+                                                    <strong>Cliente:</strong> {{ $emprestimo->cliente->nome ?? '-' }}
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Comprovante (opcional)</label>
+                                                    <input type="file" name="comprovante" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+                                                    <small class="text-muted">Formatos aceitos: PDF, JPG, PNG (máx. 2MB)</small>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Observações (opcional)</label>
+                                                    <textarea name="observacoes" class="form-control" rows="3" placeholder="Ex: Transferência realizada, comprovante anexado."></textarea>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                                <button type="submit" class="btn btn-success">Confirmar liberação</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            @endif
+
+                            <!-- Botão para confirmar pagamento ao cliente (consultor ou gestor/admin) -->
+                            @php
+                                $podeConfirmarPagamentoCliente = $emprestimo->liberacao->status === 'liberado'
+                                    && $emprestimo->status === 'aprovado'
+                                    && ($emprestimo->liberacao->consultor_id == auth()->id() || auth()->user()->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['gestor', 'administrador']));
+                                $ehGestorAdminConfirmando = $podeConfirmarPagamentoCliente && $emprestimo->liberacao->consultor_id != auth()->id();
+                            @endphp
+                            @if($podeConfirmarPagamentoCliente)
                                 <div class="mb-3">
                                     <button type="button" class="btn btn-success btn-lg w-100" 
                                             data-bs-toggle="modal" 
@@ -953,7 +1004,7 @@
                                 <i class="bx bx-shield-quarter"></i> 
                                 Garantias do Empenho ({{ $emprestimo->garantias->count() }})
                             </h4>
-                            @if(!$emprestimo->isFinalizado())
+                            @if($podeEditarGarantias)
                             <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modalAdicionarGarantia">
                                 <i class="bx bx-plus"></i> Adicionar Garantia
                             </button>
@@ -970,7 +1021,13 @@
                                                         <i class="{{ $garantia->categoria_icone }}"></i>
                                                         <strong>{{ $garantia->categoria_nome }}</strong>
                                                     </span>
-                                                    @if(!$emprestimo->isFinalizado())
+                                                    <div class="d-flex align-items-center gap-1">
+                                                    @if($garantia->status === 'ativa' && ($podeExecutarGarantia ?? false))
+                                                        <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#executarGarantiaModal{{ $garantia->id }}" title="Executar garantia (finalizar empréstimo)">
+                                                            <i class="bx bx-shield-x"></i> Executar
+                                                        </button>
+                                                    @endif
+                                                    @if($podeEditarGarantias)
                                                     <div class="dropdown">
                                                         <button class="btn btn-sm btn-link text-muted" type="button" data-bs-toggle="dropdown">
                                                             <i class="bx bx-dots-vertical-rounded"></i>
@@ -994,6 +1051,7 @@
                                                         </ul>
                                                     </div>
                                                     @endif
+                                                    </div>
                                                 </div>
                                                 <div class="card-body">
                                                     <p class="mb-2"><strong>{{ $garantia->descricao }}</strong></p>
@@ -1046,7 +1104,7 @@
                                                                                 <small class="d-block text-truncate">{{ $anexo->nome_arquivo }}</small>
                                                                             </a>
                                                                         @endif
-                                                                        @if(!$emprestimo->isFinalizado())
+                                                                        @if($podeEditarGarantias)
                                                                         <form action="{{ route('emprestimos.garantias.anexos.destroy', $anexo->id) }}" 
                                                                               method="POST" 
                                                                               class="position-absolute top-0 end-0 form-excluir-anexo">
@@ -1064,7 +1122,7 @@
                                                     @endif
 
                                                     <!-- Upload de novos anexos -->
-                                                    @if(!$emprestimo->isFinalizado())
+                                                    @if($podeEditarGarantias)
                                                     <hr>
                                                     <form action="{{ route('emprestimos.garantias.anexos.upload', $garantia->id) }}" 
                                                           method="POST" 
@@ -1103,7 +1161,7 @@
                                 <div class="alert alert-warning mb-0">
                                     <i class="bx bx-error"></i>
                                     <strong>Atenção:</strong> Este empréstimo do tipo Empenho ainda não possui garantias cadastradas.
-                                    @if(!$emprestimo->isFinalizado())
+                                    @if($podeEditarGarantias)
                                     <button type="button" class="btn btn-warning btn-sm ms-2" data-bs-toggle="modal" data-bs-target="#modalAdicionarGarantia">
                                         <i class="bx bx-plus"></i> Adicionar Garantia
                                     </button>
@@ -2030,10 +2088,7 @@
                 @endif
 
     <!-- Modal Confirmar Pagamento ao Cliente -->
-    @if($emprestimo->liberacao && 
-        $emprestimo->liberacao->status === 'liberado' && 
-        $emprestimo->status === 'aprovado' && 
-        $emprestimo->liberacao->consultor_id == auth()->id())
+    @if($emprestimo->liberacao && $emprestimo->liberacao->status === 'liberado' && $emprestimo->status === 'aprovado' && $podeConfirmarPagamentoCliente ?? false)
     <div class="modal fade" id="confirmarPagamentoModal" tabindex="-1" aria-labelledby="confirmarPagamentoModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -2055,6 +2110,13 @@
                             <strong>Cliente:</strong> {{ $emprestimo->cliente->nome }}<br>
                             <strong>Empréstimo:</strong> #{{ $emprestimo->id }}
                         </div>
+                        @if($ehGestorAdminConfirmando ?? false)
+                        <div class="alert alert-secondary mb-3">
+                            <i class="bx bx-info-circle"></i>
+                            <strong>Você está confirmando como gestor/administrador.</strong><br>
+                            O valor será debitado do caixa do consultor <strong>{{ $emprestimo->liberacao->consultor->name ?? 'responsável' }}</strong>, pois o dinheiro foi liberado para ele.
+                        </div>
+                        @endif
                         <div class="mb-3">
                             <label class="form-label">Comprovante (opcional)</label>
                             <input type="file" name="comprovante" class="form-control" 

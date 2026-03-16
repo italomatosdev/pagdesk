@@ -180,11 +180,8 @@ class PagamentoController extends Controller
                 if (!$emprestimo->isAtivo()) {
                     return back()->with('error', 'Apenas empréstimos ativos podem ter garantias executadas.')->withInput();
                 }
-                
-                if (!$parcela->isAtrasada()) {
-                    return back()->with('error', 'A garantia só pode ser executada quando há parcelas atrasadas.')->withInput();
-                }
-                
+                // Permite executar garantia mesmo sem parcela atrasada (cliente pode desistir de pagar antes)
+
                 $garantiasAtivas = $emprestimo->garantias->where('status', 'ativa');
                 if ($garantiasAtivas->count() === 0) {
                     return back()->with('error', 'Não há garantias ativas para executar.')->withInput();
