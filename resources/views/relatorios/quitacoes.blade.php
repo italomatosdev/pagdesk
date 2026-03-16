@@ -60,7 +60,7 @@
                                 <label class="form-label">Consultores</label>
                                 <select name="consultor_id[]" class="form-select" id="consultores-select" multiple title="Vazio = todos">
                                     @foreach($consultores as $c)
-                                        <option value="{{ $c->id }}" {{ in_array($c->id, $consultoresIds) ? 'selected' : '' }}>{{ $c->name }}</option>
+                                        <option value="{{ $c->id }}" {{ in_array($c->id, $consultoresIds) ? 'selected' : '' }}>{{ $c->id === auth()->id() ? $c->name . ' (Você)' : $c->name }}</option>
                                     @endforeach
                                 </select>
                             </div>
