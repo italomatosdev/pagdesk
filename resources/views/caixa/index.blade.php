@@ -22,7 +22,9 @@
                                     <div class="flex-grow-1">
                                         <p class="text-muted mb-2">Saldo Atual</p>
                                         <h4 class="mb-0 text-primary">R$ {{ number_format($saldo ?? 0, 2, ',', '.') }}</h4>
-                                        @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor'])) && $consultorId === null)
+                                        @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor'])) && ($consultorIdVal ?? '') === 'operacao')
+                                            <small class="text-muted"><i class="bx bx-building"></i> Caixa da Operação{{ $operacaoId ? ' - ' . ($operacoes->firstWhere('id', $operacaoId)->nome ?? '') : '' }}</small>
+                                        @elseif(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor'])) && ($consultorIdVal ?? '') === '')
                                             <small class="text-muted">Todas as Movimentações{{ $operacaoId ? ' - ' . ($operacoes->firstWhere('id', $operacaoId)->nome ?? '') : '' }}</small>
                                         @elseif($consultorSelecionado)
                                             <small class="text-muted">{{ $consultorSelecionado->name }}{{ $operacaoId ? ' - ' . ($operacoes->firstWhere('id', $operacaoId)->nome ?? '') : '' }}</small>
@@ -104,7 +106,7 @@
                                     <label class="form-label">
                                         <i class="bx bx-building text-muted me-1"></i> Operação
                                     </label>
-                                    <select name="operacao_id" class="form-select">
+                                    <select name="operacao_id" id="operacao-id-select" class="form-select">
                                         <option value="">Todas as operações</option>
                                         @foreach($operacoes as $operacao)
                                             <option value="{{ $operacao->id }}" 
@@ -118,20 +120,18 @@
                                 @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor'])))
                                 <div class="col-lg-4 col-md-6">
                                     <label class="form-label">
-                                        <i class="bx bx-user text-muted me-1"></i> Consultor/Gestor
+                                        <i class="bx bx-user text-muted me-1"></i> Consultor / Caixa
                                     </label>
                                     <select name="consultor_id" id="consultor-select" class="form-select">
-                                        <option value="" {{ $consultorId === null ? 'selected' : '' }}>Todas as movimentações</option>
-                                        @if(isset($consultorSelecionado) && $consultorSelecionado)
-                                            @php
-                                                $roles = $consultorSelecionado->roles->pluck('name')->map(fn($r) => ucfirst($r))->implode(', ');
-                                            @endphp
-                                            <option value="{{ $consultorSelecionado->id }}" selected>
-                                                {{ $consultorSelecionado->name }} - {{ $consultorSelecionado->email }} ({{ $roles }})
-                                            </option>
+                                        <option value="" {{ ($consultorIdVal ?? '') === '' ? 'selected' : '' }}>Todas as movimentações</option>
+                                        <option value="operacao" {{ ($consultorIdVal ?? '') === 'operacao' ? 'selected' : '' }}>Caixa da operação</option>
+                                        @if($operacaoId && !empty($usuariosPorOperacao[$operacaoId] ?? []))
+                                            @foreach($usuariosPorOperacao[$operacaoId] as $u)
+                                                <option value="{{ $u['id'] }}" {{ ($consultorIdVal ?? '') === (string)$u['id'] ? 'selected' : '' }}>{{ $u['name'] }}</option>
+                                            @endforeach
                                         @endif
                                     </select>
-                                    <small class="text-muted">Busque um usuário específico ou deixe em branco</small>
+                                    <small class="text-muted">Filtro por operação: usuários da operação selecionada (consultor, gestor, administrador)</small>
                                 </div>
                                 @endif
                                 
@@ -335,66 +335,41 @@
     @section('scripts')
         <script>
             document.addEventListener('DOMContentLoaded', function() {
-                // Verificar se já há um consultor selecionado
+                const operacaoSelect = document.getElementById('operacao-id-select');
                 const consultorSelect = document.getElementById('consultor-select');
-                if (!consultorSelect) return; // Se não existe o campo (consultor não tem acesso), sair
-                
-                const consultorJaSelecionado = consultorSelect.options.length > 0 && consultorSelect.options[0].value;
-                
-                // Configuração do Select2
-                const select2Config = {
-                    theme: 'bootstrap-5',
-                    placeholder: 'Selecione "Caixa da Operação" ou busque um usuário...',
-                    allowClear: true,
-                    minimumInputLength: 2,
-                    language: {
-                        inputTooShort: function() {
-                            return 'Digite pelo menos 2 caracteres para buscar';
-                        },
-                        noResults: function() {
-                            return 'Nenhum usuário encontrado';
-                        },
-                        searching: function() {
-                            return 'Buscando...';
-                        }
-                    },
-                    ajax: {
-                        url: '{{ route("usuarios.api.buscar") }}',
-                        dataType: 'json',
-                        delay: 250,
-                        data: function (params) {
-                            return {
-                                q: params.term, // termo de busca
-                                page: params.page || 1
-                            };
-                        },
-                        processResults: function (data, params) {
-                            params.page = params.page || 1;
-                            return {
-                                results: data.results,
-                                pagination: {
-                                    more: (params.page * 20) < data.total_count
-                                }
-                            };
-                        },
-                        cache: true
+                if (!consultorSelect || !operacaoSelect) return;
+
+                const usuariosPorOperacao = @json($usuariosPorOperacao ?? []);
+
+                function preencherConsultorSelect(operacaoId) {
+                    const valorAtual = consultorSelect.value;
+                    consultorSelect.innerHTML = '';
+                    const optTodas = document.createElement('option');
+                    optTodas.value = '';
+                    optTodas.textContent = 'Todas as movimentações';
+                    consultorSelect.appendChild(optTodas);
+                    const optOperacao = document.createElement('option');
+                    optOperacao.value = 'operacao';
+                    optOperacao.textContent = 'Caixa da operação';
+                    consultorSelect.appendChild(optOperacao);
+
+                    const usuarios = operacaoId && usuariosPorOperacao[operacaoId] ? usuariosPorOperacao[operacaoId] : [];
+                    usuarios.forEach(function(u) {
+                        const opt = document.createElement('option');
+                        opt.value = u.id;
+                        opt.textContent = u.name;
+                        consultorSelect.appendChild(opt);
+                    });
+
+                    if (valorAtual === '' || valorAtual === 'operacao' || usuarios.some(function(u) { return String(u.id) === valorAtual; })) {
+                        consultorSelect.value = valorAtual;
+                    } else {
+                        consultorSelect.value = '';
                     }
-                };
-                
-                // Se já há um consultor selecionado, não precisa de minimumInputLength
-                if (consultorJaSelecionado) {
-                    select2Config.minimumInputLength = 0;
                 }
-                
-                // Inicializar Select2 para busca de consultores/gestores
-                $('#consultor-select').select2(select2Config);
-                
-                // Permitir selecionar a opção "Caixa da Operação" (valor vazio)
-                $('#consultor-select').on('select2:select', function(e) {
-                    // Se selecionar a opção vazia, garantir que está selecionada
-                    if (e.params.data.id === '') {
-                        $(this).val('').trigger('change');
-                    }
+
+                operacaoSelect.addEventListener('change', function() {
+                    preencherConsultorSelect(this.value ? parseInt(this.value, 10) : null);
                 });
             });
         </script>

@@ -172,25 +172,27 @@ class CashService
     /**
      * Calcular total de entradas com filtros
      *
-     * @param int|null $consultorId Se null, inclui todas (caixa da operação + usuários)
+     * @param int|null $consultorId Se null, inclui todas (caixa da operação + usuários), a menos que $apenasCaixaOperacao seja true
      * @param int|null $operacaoId
      * @param string|null $dataInicio
      * @param string|null $dataFim
+     * @param bool $apenasCaixaOperacao Se true, filtra apenas movimentações com consultor_id NULL (caixa da operação)
      * @return float
      */
     public function calcularTotalEntradas(
         ?int $consultorId = null,
         ?int $operacaoId = null,
         ?string $dataInicio = null,
-        ?string $dataFim = null
+        ?string $dataFim = null,
+        bool $apenasCaixaOperacao = false
     ): float {
         $query = CashLedgerEntry::where('tipo', 'entrada');
 
-        // Se consultorId for especificado, filtrar por ele (incluindo NULL se for caixa da operação)
-        if ($consultorId !== null) {
+        if ($apenasCaixaOperacao) {
+            $query->whereNull('consultor_id');
+        } elseif ($consultorId !== null) {
             $query->where('consultor_id', $consultorId);
         }
-        // Se for null, não filtra por consultor_id (inclui todos: NULL e não-NULL)
 
         if ($operacaoId) {
             $query->where('operacao_id', $operacaoId);
@@ -210,25 +212,27 @@ class CashService
     /**
      * Calcular total de saídas com filtros
      *
-     * @param int|null $consultorId Se null, inclui todas (caixa da operação + usuários)
+     * @param int|null $consultorId Se null, inclui todas (caixa da operação + usuários), a menos que $apenasCaixaOperacao seja true
      * @param int|null $operacaoId
      * @param string|null $dataInicio
      * @param string|null $dataFim
+     * @param bool $apenasCaixaOperacao Se true, filtra apenas movimentações com consultor_id NULL (caixa da operação)
      * @return float
      */
     public function calcularTotalSaidas(
         ?int $consultorId = null,
         ?int $operacaoId = null,
         ?string $dataInicio = null,
-        ?string $dataFim = null
+        ?string $dataFim = null,
+        bool $apenasCaixaOperacao = false
     ): float {
         $query = CashLedgerEntry::where('tipo', 'saida');
 
-        // Se consultorId for especificado, filtrar por ele (incluindo NULL se for caixa da operação)
-        if ($consultorId !== null) {
+        if ($apenasCaixaOperacao) {
+            $query->whereNull('consultor_id');
+        } elseif ($consultorId !== null) {
             $query->where('consultor_id', $consultorId);
         }
-        // Se for null, não filtra por consultor_id (inclui todos: NULL e não-NULL)
 
         if ($operacaoId) {
             $query->where('operacao_id', $operacaoId);

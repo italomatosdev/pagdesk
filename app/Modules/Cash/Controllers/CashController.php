@@ -37,10 +37,18 @@ class CashController extends Controller
         }
         
         $consultorId = $user->id;
-        
+        $apenasCaixaOperacao = false;
+
         if (!empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
             $consultorIdInput = $request->input('consultor_id');
-            $consultorId = $consultorIdInput ? (int) $consultorIdInput : null;
+            if ($consultorIdInput === 'operacao') {
+                $apenasCaixaOperacao = true;
+                $consultorId = null;
+            } elseif ($consultorIdInput !== null && $consultorIdInput !== '') {
+                $consultorId = (int) $consultorIdInput;
+            } else {
+                $consultorId = null;
+            }
         }
 
         $operacoesIds = $user->getOperacoesIds();
@@ -59,9 +67,11 @@ class CashController extends Controller
         } else {
             $query->whereRaw('1 = 0');
         }
-        
+
         if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             $query->where('consultor_id', $consultorId);
+        } elseif ($apenasCaixaOperacao) {
+            $query->whereNull('consultor_id');
         } elseif ($consultorId !== null) {
             $query->where('consultor_id', $consultorId);
         }
@@ -96,7 +106,16 @@ class CashController extends Controller
         if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             $saldo = $this->cashService->calcularSaldo($user->id, $operacaoId ?? 0);
         } elseif (!empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
-            if ($consultorId !== null) {
+            if ($apenasCaixaOperacao) {
+                if ($operacaoId) {
+                    $saldo = $this->cashService->calcularSaldoOperacao($operacaoId);
+                } else {
+                    $saldo = 0;
+                    foreach ($operacoesIds as $opId) {
+                        $saldo += $this->cashService->calcularSaldoOperacao($opId);
+                    }
+                }
+            } elseif ($consultorId !== null) {
                 $saldo = $this->cashService->calcularSaldo($consultorId, $operacaoId ?? 0);
             } else {
                 if (!$operacaoId && !empty($operacoesIds)) {
@@ -116,7 +135,7 @@ class CashController extends Controller
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
             : collect([]);
 
-        if (!empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])) && $consultorId === null) {
+        if (!empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])) && $consultorId === null && !$apenasCaixaOperacao) {
             if (!$operacaoId && !empty($operacoesIds)) {
                 $totalEntradas = 0;
                 $totalSaidas = 0;
@@ -131,6 +150,21 @@ class CashController extends Controller
                 $totalSaidas = $this->cashService->calcularTotalSaidas(null, $operacaoId, $dataInicio, $dataFim);
                 $saldoInicial = $this->cashService->calcularSaldoInicial(null, $operacaoId, $dataInicio, false);
             }
+        } elseif ($apenasCaixaOperacao) {
+            if (!$operacaoId && !empty($operacoesIds)) {
+                $totalEntradas = 0;
+                $totalSaidas = 0;
+                $saldoInicial = 0;
+                foreach ($operacoesIds as $opId) {
+                    $totalEntradas += $this->cashService->calcularTotalEntradas(null, $opId, $dataInicio, $dataFim, true);
+                    $totalSaidas += $this->cashService->calcularTotalSaidas(null, $opId, $dataInicio, $dataFim, true);
+                    $saldoInicial += $this->cashService->calcularSaldoInicial(null, $opId, $dataInicio, true);
+                }
+            } else {
+                $totalEntradas = $this->cashService->calcularTotalEntradas(null, $operacaoId, $dataInicio, $dataFim, true);
+                $totalSaidas = $this->cashService->calcularTotalSaidas(null, $operacaoId, $dataInicio, $dataFim, true);
+                $saldoInicial = $this->cashService->calcularSaldoInicial(null, $operacaoId, $dataInicio, true);
+            }
         } else {
             // Consultor específico ou consultor logado
             $totalEntradas = $this->cashService->calcularTotalEntradas($consultorId, $operacaoId, $dataInicio, $dataFim);
@@ -139,10 +173,26 @@ class CashController extends Controller
         }
         $diferencaPeriodo = $totalEntradas - $totalSaidas;
 
-        // Buscar dados do consultor selecionado (se houver) para pré-seleção no Select2
-        $consultorSelecionado = null;
-        if ($consultorId) {
-            $consultorSelecionado = User::with('roles')->find($consultorId);
+        // Valor do filtro Consultor/Caixa para o select: "", "operacao" ou id do usuário
+        $consultorIdVal = $apenasCaixaOperacao ? 'operacao' : ($consultorId !== null ? (string) $consultorId : '');
+        $consultorSelecionado = $consultorId ? User::find($consultorId) : null;
+
+        // Usuários por operação (consultor, gestor, administrador) para o select
+        $usuariosPorOperacao = [];
+        if (!empty($operacoesIds)) {
+            $usuarios = User::with('operacoes')
+                ->whereHas('operacoes', function ($q) use ($operacoesIds) {
+                    $q->whereIn('operacoes.id', $operacoesIds)
+                        ->whereIn('operacao_user.role', ['consultor', 'gestor', 'administrador']);
+                })
+                ->orderBy('name')
+                ->get();
+            foreach ($operacoes as $op) {
+                $usuariosPorOperacao[$op->id] = $usuarios->filter(fn ($u) => $u->operacoes->contains('id', $op->id))
+                    ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])
+                    ->values()
+                    ->all();
+            }
         }
 
         // Carregar liberações referenciadas para exibir comprovante na coluna (movimentações automáticas sem comprovante próprio)
@@ -170,7 +220,9 @@ class CashController extends Controller
             'operacoes',
             'operacaoId',
             'consultorId',
+            'consultorIdVal',
             'consultorSelecionado',
+            'usuariosPorOperacao',
             'totalEntradas',
             'totalSaidas',
             'saldoInicial',
