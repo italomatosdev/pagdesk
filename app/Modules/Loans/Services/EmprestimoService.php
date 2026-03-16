@@ -561,11 +561,9 @@ class EmprestimoService
             $amortizacao = $parcelaFixa - $juros;
             $saldoDevedor = $saldoDevedor - $amortizacao;
 
-            // Ajuste na última parcela para garantir que saldo seja zero
-            if ($i === $emprestimo->numero_parcelas) {
+            // Ajuste na última parcela: forçar saldo zero (comparação com (int) evita falha quando numero_parcelas vem como string do DB)
+            if ($i === (int) $emprestimo->numero_parcelas) {
                 $saldoDevedor = 0;
-                // Recalcular amortização para última parcela
-                $amortizacao = $parcelaFixa - $juros;
             }
 
             // Calcular data de vencimento baseado na frequência
