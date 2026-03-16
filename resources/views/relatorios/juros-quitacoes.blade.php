@@ -55,6 +55,14 @@
                                     @endforeach
                                 </select>
                             </div>
+                            <div class="col-6 col-sm-4 col-md-2">
+                                <label class="form-label">Tipo de quitação</label>
+                                <select name="tipo_quitacao" class="form-select">
+                                    <option value="" {{ ($tipoQuitacao === null || $tipoQuitacao === '') ? 'selected' : '' }}>Todos</option>
+                                    <option value="total" {{ $tipoQuitacao === 'total' ? 'selected' : '' }}>Quitação total</option>
+                                    <option value="renovacao" {{ $tipoQuitacao === 'renovacao' ? 'selected' : '' }}>Quitado por renovação</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="row g-3 align-items-end mt-2">
                             <div class="col-12 col-sm-6 col-md-4">

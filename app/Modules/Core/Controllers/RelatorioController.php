@@ -620,6 +620,7 @@ class RelatorioController extends Controller
         $consultoresIds = array_filter(array_map('intval', $consultoresIds));
         $tipoEmprestimo = $request->input('tipo_emprestimo');
         $frequencia = $request->input('frequencia');
+        $tipoQuitacao = $request->input('tipo_quitacao');
 
         $operacoes = !empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
@@ -645,6 +646,12 @@ class RelatorioController extends Controller
 
         if ($frequencia !== null && $frequencia !== '') {
             $query->where('frequencia', $frequencia);
+        }
+
+        if ($tipoQuitacao === 'total') {
+            $query->whereDoesntHave('renovacoes');
+        } elseif ($tipoQuitacao === 'renovacao') {
+            $query->whereHas('renovacoes');
         }
 
         if (count($consultoresIds) > 0) {
@@ -734,6 +741,7 @@ class RelatorioController extends Controller
             'consultoresIds',
             'tipoEmprestimo',
             'frequencia',
+            'tipoQuitacao',
             'emprestimos',
             'totais',
             'tipoLabels',
