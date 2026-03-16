@@ -33,55 +33,66 @@
                     </div>
                 </div>
 
-                <!-- Operações -->
+                <!-- Operações e papel -->
                 <div class="card mt-3">
                     <div class="card-header">
-                        <h4 class="card-title mb-0">Operações do Usuário</h4>
+                        <h4 class="card-title mb-0">Operações e papel</h4>
                     </div>
                     <div class="card-body">
-                        <div class="mb-3">
-                            <h6>Operações Atuais:</h6>
-                            @forelse($usuario->operacoes as $operacao)
-                                <span class="badge bg-primary me-2 mb-2">
-                                    {{ $operacao->nome }}
-                                </span>
-                            @empty
-                                <p class="text-muted">Nenhuma operação vinculada.</p>
-                            @endforelse
-                        </div>
-
-                        <hr>
-
-                        <div>
-                            <h6>Vincular a Operações:</h6>
-                            <form action="{{ route('usuarios.atualizar-operacoes', $usuario->id) }}" method="POST" class="form-atualizar-operacoes">
-                                @csrf
-                                <div class="row">
-                                    @forelse($operacoes as $operacao)
-                                        <div class="col-md-4 mb-2">
-                                            <div class="form-check">
-                                                <input class="form-check-input" 
-                                                       type="checkbox" 
-                                                       name="operacoes[]" 
-                                                       value="{{ $operacao->id }}" 
-                                                       id="operacao_{{ $operacao->id }}"
-                                                       {{ $usuario->operacoes->contains($operacao->id) ? 'checked' : '' }}>
-                                                <label class="form-check-label" for="operacao_{{ $operacao->id }}">
-                                                    {{ $operacao->nome }}
-                                                </label>
-                                            </div>
-                                        </div>
-                                    @empty
-                                        <p class="text-muted">Nenhuma operação disponível.</p>
-                                    @endforelse
+                        @php
+                            $papelPorOperacao = $usuario->operacoes->pluck('pivot.role', 'id')->map(fn ($r) => $r ?? 'consultor')->toArray();
+                        @endphp
+                        <form action="{{ route('usuarios.atualizar-operacoes', $usuario->id) }}" method="POST" class="form-atualizar-operacoes">
+                            @csrf
+                            @if($operacoes->count() > 0)
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 60px;">Vinculado</th>
+                                                <th>Operação</th>
+                                                <th style="width: 180px;">Papel na operação</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($operacoes as $operacao)
+                                                @php
+                                                    $vinculado = $usuario->operacoes->contains($operacao->id);
+                                                    $papel = $papelPorOperacao[$operacao->id] ?? 'consultor';
+                                                @endphp
+                                                <tr>
+                                                    <td>
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" name="operacoes[]"
+                                                                   value="{{ $operacao->id }}" id="operacao_show_{{ $operacao->id }}"
+                                                                   {{ $vinculado ? 'checked' : '' }}>
+                                                            <label class="form-check-label" for="operacao_show_{{ $operacao->id }}">&nbsp;</label>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <label class="form-label mb-0" for="operacao_show_{{ $operacao->id }}">{{ $operacao->nome }}</label>
+                                                    </td>
+                                                    <td>
+                                                        <select name="operacao_role[{{ $operacao->id }}]" class="form-select form-select-sm">
+                                                            <option value="consultor" {{ $papel === 'consultor' ? 'selected' : '' }}>Consultor</option>
+                                                            <option value="gestor" {{ $papel === 'gestor' ? 'selected' : '' }}>Gestor</option>
+                                                            <option value="administrador" {{ $papel === 'administrador' ? 'selected' : '' }}>Administrador</option>
+                                                        </select>
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
                                 </div>
                                 <div class="mt-3">
                                     <button type="submit" class="btn btn-primary">
-                                        <i class="bx bx-save"></i> Salvar Operações
+                                        <i class="bx bx-save"></i> Salvar Operações e Papéis
                                     </button>
                                 </div>
-                            </form>
-                        </div>
+                            @else
+                                <p class="text-muted mb-0">Nenhuma operação disponível.</p>
+                            @endif
+                        </form>
                     </div>
                 </div>
 

@@ -34,28 +34,25 @@ class SettlementController extends Controller
         
         $consultorId = $user->id;
         
-        // Se for admin ou gestor, pode ver de outros consultores ou todos
-        if ($user->hasAnyRole(['administrador', 'gestor'])) {
+        // Se tiver gestor/admin em alguma op, pode ver de outros consultores ou todos
+        if (!empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
             $consultorIdInput = $request->input('consultor_id');
-            // Se não especificar ou for vazio, mostra todos (null)
             $consultorId = $consultorIdInput ? (int) $consultorIdInput : null;
         }
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
         $status = $request->input('status');
-        
-        // Validar se o usuário tem acesso à operação selecionada
-        if ($operacaoId && !$user->hasRole('administrador') && !$user->temAcessoOperacao($operacaoId)) {
-            $operacaoId = null; // Resetar se não tiver acesso
+
+        if ($operacaoId && !$user->temAcessoOperacao($operacaoId)) {
+            $operacaoId = null;
         }
-        
+
         $settlements = $this->settlementService->listar($consultorId, $operacaoId, $status, $user);
-        
-        // Filtrar operações disponíveis para o usuário
-        if ($user->hasRole('administrador')) {
+
+        if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->get();
         } else {
             $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds) 
+            $operacoes = !empty($operacoesIds)
                 ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
                 : collect([]);
         }
@@ -77,17 +74,11 @@ class SettlementController extends Controller
         $settlement = Settlement::with(['operacao', 'consultor', 'criador', 'conferidor', 'recebedor'])->findOrFail($id);
         $user = auth()->user();
 
-        // Verificar permissões
-        if (!$user->hasRole('administrador') && !$user->hasRole('gestor')) {
-            // Se for consultor, só pode ver as próprias prestações
-            if ($settlement->consultor_id !== $user->id) {
-                abort(403, 'Acesso negado.');
-            }
-        } else {
-            // Gestor/Admin só pode ver prestações das operações que tem acesso
-            if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($settlement->operacao_id)) {
-                abort(403, 'Acesso negado.');
-            }
+        if (!$user->temAcessoOperacao($settlement->operacao_id)) {
+            abort(403, 'Acesso negado.');
+        }
+        if ($settlement->consultor_id !== $user->id && !$user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
+            abort(403, 'Acesso negado.');
         }
 
         // Instanciar CashService para cálculos
@@ -156,16 +147,15 @@ class SettlementController extends Controller
             abort(403, 'Super Admin não pode criar Prestação de Contas.');
         }
         
-        // Filtrar operações disponíveis para o usuário
-        if ($user->hasRole('administrador')) {
+        if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->get();
         } else {
             $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds) 
+            $operacoes = !empty($operacoesIds)
                 ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
                 : collect([]);
         }
-        
+
         return view('prestacoes.create', compact('operacoes'));
     }
 
@@ -191,12 +181,10 @@ class SettlementController extends Controller
         $user = auth()->user();
         $consultorId = $user->id;
 
-        // Validar se o usuário tem acesso à operação selecionada
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($validated['operacao_id'])) {
+        if (!$user->temAcessoOperacao($validated['operacao_id'])) {
             return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
         }
 
-        // Buscar operação
         $operacao = Operacao::findOrFail($validated['operacao_id']);
 
         // Instanciar CashService para cálculos
@@ -275,8 +263,7 @@ class SettlementController extends Controller
 
         $validated['consultor_id'] = $user->id;
 
-        // Validar se o usuário tem acesso à operação selecionada
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($validated['operacao_id'])) {
+        if (!$user->temAcessoOperacao($validated['operacao_id'])) {
             return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
         }
 
@@ -296,8 +283,8 @@ class SettlementController extends Controller
     {
         $user = auth()->user();
         
-        // Apenas gestores e administradores podem aprovar
-        if (!$user->hasAnyRole(['gestor', 'administrador'])) {
+        $settlement = Settlement::findOrFail($id);
+        if (!$user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem aprovar prestações de contas.');
         }
 
@@ -321,8 +308,8 @@ class SettlementController extends Controller
     {
         $user = auth()->user();
         
-        // Apenas gestores e administradores podem rejeitar
-        if (!$user->hasAnyRole(['gestor', 'administrador'])) {
+        $settlement = Settlement::findOrFail($id);
+        if (!$user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem rejeitar prestações de contas.');
         }
 
@@ -386,8 +373,8 @@ class SettlementController extends Controller
     {
         $user = auth()->user();
         
-        // Apenas gestores e administradores podem confirmar recebimento
-        if (!$user->hasAnyRole(['gestor', 'administrador'])) {
+        $settlement = Settlement::findOrFail($id);
+        if (!$user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem confirmar recebimento.');
         }
 
@@ -414,29 +401,26 @@ class SettlementController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasAnyRole(['gestor', 'administrador'])) {
+        if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem fechar caixa.');
         }
 
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
 
-        // Filtrar operações disponíveis para o usuário
-        if ($user->hasRole('administrador')) {
+        if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
         } else {
             $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds) 
+            $operacoes = !empty($operacoesIds)
                 ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
                 : collect([]);
         }
 
-        // Se não selecionou operação, usa a primeira disponível
         if (!$operacaoId && $operacoes->isNotEmpty()) {
             $operacaoId = $operacoes->first()->id;
         }
 
-        // Validar se o usuário tem acesso à operação selecionada
-        if ($operacaoId && !$user->hasRole('administrador') && !$user->temAcessoOperacao($operacaoId)) {
+        if ($operacaoId && !$user->temAcessoOperacao($operacaoId)) {
             $operacaoId = $operacoes->first()?->id;
         }
 
@@ -455,7 +439,7 @@ class SettlementController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasAnyRole(['gestor', 'administrador'])) {
+        if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem fechar caixa.');
         }
 
@@ -465,8 +449,7 @@ class SettlementController extends Controller
             'observacoes' => 'nullable|string|max:500',
         ]);
 
-        // Validar se o usuário tem acesso à operação
-        if (!$user->hasRole('administrador') && !$user->temAcessoOperacao($validated['operacao_id'])) {
+        if (!$user->temAcessoOperacao($validated['operacao_id'])) {
             return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
         }
 

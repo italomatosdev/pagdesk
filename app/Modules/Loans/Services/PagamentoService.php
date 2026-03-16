@@ -77,9 +77,9 @@ class PagamentoService
                 ]);
             }
 
-            // VALIDAÇÃO 4: Verificar se o consultor é o dono do empréstimo (ou admin/gestor)
+            // VALIDAÇÃO 4: Verificar se o consultor é o dono do empréstimo (ou admin/gestor na operação)
             $user = auth()->user();
-            if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
+            if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
                 throw ValidationException::withMessages([
                     'permissao' => 'Você não tem permissão para registrar pagamento deste empréstimo.'
                 ]);
@@ -272,7 +272,7 @@ class PagamentoService
             }
 
             $user = auth()->user();
-            if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
+            if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
                 throw ValidationException::withMessages([
                     'permissao' => 'Você não tem permissão para quitar este empréstimo.',
                 ]);
@@ -388,7 +388,7 @@ class PagamentoService
             }
 
             $user = auth()->user();
-            if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
+            if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
                 throw ValidationException::withMessages([
                     'permissao' => 'Você não tem permissão para registrar pagamento neste empréstimo.',
                 ]);

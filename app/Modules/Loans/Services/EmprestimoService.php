@@ -154,8 +154,7 @@ class EmprestimoService
                     'mensagem' => 'Empréstimo #' . $emprestimo->id . ' (retroativo) criado por consultor aguardando sua aprovação.',
                     'url' => route('emprestimos.retroativo.pendentes'),
                 ];
-                $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, $dadosNotif);
-                $notificacaoService->criarParaRoleComOperacao('administrador', $operacaoId, $dadosNotif);
+                $notificacaoService->criarParaGestoresDaOperacao($operacaoId, $dadosNotif);
             }
 
             // Se aprovado, verificar se precisa criar liberação (retroativo não cria liberação)
@@ -263,9 +262,10 @@ class EmprestimoService
         ?float $valorTotalPago = null,
         ?string $metodoPagamento = 'dinheiro',
         $dataPagamento = null,
-        bool $solicitacaoAprovada = false
+        bool $solicitacaoAprovada = false,
+        ?int $consultorId = null
     ): Emprestimo {
-        return DB::transaction(function () use ($emprestimoId, $registrarPagamentoAutomatico, $tipoJurosRenovacao, $taxaJurosManual, $valorJurosFixo, $valorTotalPago, $metodoPagamento, $dataPagamento, $solicitacaoAprovada) {
+        return DB::transaction(function () use ($emprestimoId, $registrarPagamentoAutomatico, $tipoJurosRenovacao, $taxaJurosManual, $valorJurosFixo, $valorTotalPago, $metodoPagamento, $dataPagamento, $solicitacaoAprovada, $consultorId) {
             $emprestimo = Emprestimo::with(['parcelas', 'garantias.anexos', 'operacao'])->findOrFail($emprestimoId);
 
             // Apenas empréstimos ativos podem ser renovados por este fluxo
@@ -336,7 +336,7 @@ class EmprestimoService
                 $pagamentoService = app(\App\Modules\Loans\Services\PagamentoService::class);
                 $pagamentoService->registrar([
                     'parcela_id' => $parcela->id,
-                    'consultor_id' => auth()->id(),
+                    'consultor_id' => $consultorId ?? auth()->id(),
                     'valor' => $valorTotalPago,
                     'metodo' => $metodoPagamento ?? 'dinheiro',
                     'data_pagamento' => $dataPagamentoObj,
@@ -561,11 +561,9 @@ class EmprestimoService
             $amortizacao = $parcelaFixa - $juros;
             $saldoDevedor = $saldoDevedor - $amortizacao;
 
-            // Ajuste na última parcela para garantir que saldo seja zero
-            if ($i === $emprestimo->numero_parcelas) {
+            // Ajuste na última parcela: forçar saldo zero (comparação com (int) evita falha quando numero_parcelas vem como string do DB)
+            if ($i === (int) $emprestimo->numero_parcelas) {
                 $saldoDevedor = 0;
-                // Recalcular amortização para última parcela
-                $amortizacao = $parcelaFixa - $juros;
             }
 
             // Calcular data de vencimento baseado na frequência

@@ -53,8 +53,7 @@ class KanbanService
     {
         $items = collect([]);
 
-        // Empréstimos pendentes (apenas Admin)
-        if ($user->hasRole('administrador')) {
+        if (!empty($user->getOperacoesIdsOndeTemPapel(['administrador']))) {
             $emprestimos = Emprestimo::with(['cliente', 'consultor', 'operacao'])
                 ->where('status', 'pendente')
                 ->whereDoesntHave('aprovacao')
@@ -82,8 +81,7 @@ class KanbanService
             }
         }
 
-        // Prestações pendentes (Gestor e Admin)
-        if ($user->hasAnyRole(['gestor', 'administrador'])) {
+        if (!empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             $prestacoes = Settlement::with(['consultor', 'operacao'])
                 ->where('status', 'pendente')
                 ->when(true, function ($query) use ($aplicarFiltroOperacao) {
@@ -122,8 +120,7 @@ class KanbanService
     {
         $items = collect([]);
 
-        // Liberações aguardando (Gestor e Admin)
-        if ($user->hasAnyRole(['gestor', 'administrador'])) {
+        if (!empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             $liberacoes = LiberacaoEmprestimo::with(['emprestimo.cliente', 'consultor', 'emprestimo.operacao'])
                 ->where('status', 'aguardando')
                 ->when(true, function ($query) use ($aplicarFiltroOperacao) {
@@ -149,8 +146,7 @@ class KanbanService
             }
         }
 
-        // Liberações liberadas aguardando pagamento ao cliente (Consultor)
-        if ($user->hasRole('consultor')) {
+        if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             $liberacoes = LiberacaoEmprestimo::with(['emprestimo.cliente', 'emprestimo.operacao'])
                 ->where('consultor_id', $user->id)
                 ->where('status', 'liberado')
@@ -189,8 +185,7 @@ class KanbanService
     {
         $items = collect([]);
 
-        // Cobranças do dia (Consultor)
-        if ($user->hasRole('consultor')) {
+        if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             $parcelas = Parcela::with(['emprestimo.cliente', 'emprestimo.operacao'])
                 ->whereHas('emprestimo', function ($query) use ($user, $aplicarFiltroOperacao) {
                     $query->where('consultor_id', $user->id);
@@ -219,8 +214,7 @@ class KanbanService
             }
         }
 
-        // Prestações aprovadas aguardando comprovante (Gestor e Admin)
-        if ($user->hasAnyRole(['gestor', 'administrador'])) {
+        if (!empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             $prestacoes = Settlement::with(['consultor', 'operacao'])
                 ->where('status', 'aprovado')
                 ->when(true, function ($query) use ($aplicarFiltroOperacao) {
@@ -255,8 +249,7 @@ class KanbanService
     {
         $items = collect([]);
 
-        // Prestações enviadas aguardando confirmação de recebimento (Gestor e Admin)
-        if ($user->hasAnyRole(['gestor', 'administrador'])) {
+        if (!empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             $prestacoes = Settlement::with(['consultor', 'operacao'])
                 ->where('status', 'enviado')
                 ->when(true, function ($query) use ($aplicarFiltroOperacao) {
@@ -294,8 +287,7 @@ class KanbanService
     {
         $items = collect([]);
 
-        // Parcelas atrasadas (Consultor)
-        if ($user->hasRole('consultor')) {
+        if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             $parcelas = Parcela::with(['emprestimo.cliente', 'emprestimo.operacao'])
                 ->whereHas('emprestimo', function ($query) use ($user, $aplicarFiltroOperacao) {
                     $query->where('consultor_id', $user->id)
@@ -326,8 +318,7 @@ class KanbanService
             }
         }
 
-        // Parcelas atrasadas (Gestor e Admin - todas)
-        if ($user->hasAnyRole(['gestor', 'administrador'])) {
+        if (!empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             $parcelas = Parcela::with(['emprestimo.cliente', 'emprestimo.operacao', 'emprestimo.consultor'])
                 ->whereHas('emprestimo', function ($q) use ($aplicarFiltroOperacao) {
                     $aplicarFiltroOperacao($q);

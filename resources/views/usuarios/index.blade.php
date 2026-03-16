@@ -51,7 +51,8 @@
                                             </td>
                                             <td>
                                                 @foreach($usuario->operacoes as $operacao)
-                                                    <span class="badge bg-info me-1">{{ $operacao->nome }}</span>
+                                                    @php $papel = $operacao->pivot->role ?? 'consultor'; @endphp
+                                                    <span class="badge bg-info me-1" title="Papel: {{ ucfirst($papel) }}">{{ $operacao->nome }} ({{ ucfirst($papel) }})</span>
                                                 @endforeach
                                                 @if($usuario->operacoes->isEmpty())
                                                     <span class="text-muted">Sem operações</span>

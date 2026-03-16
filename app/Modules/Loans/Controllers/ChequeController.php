@@ -180,14 +180,8 @@ class ChequeController extends Controller
 
         // Verificar permissão
         $user = auth()->user();
-        if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
+        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             return back()->with('error', 'Você não tem permissão para adicionar cheques a este empréstimo.');
-        }
-        if ($user->hasAnyRole(['administrador', 'gestor']) && !$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
-                return back()->with('error', 'Você não tem permissão para esta operação.');
-            }
         }
 
         $validated = $request->validate([
@@ -224,14 +218,8 @@ class ChequeController extends Controller
 
         // Verificar permissão
         $user = auth()->user();
-        if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
+        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             return back()->with('error', 'Você não tem permissão para editar este cheque.');
-        }
-        if ($user->hasAnyRole(['administrador', 'gestor']) && !$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
-                return back()->with('error', 'Você não tem permissão para esta operação.');
-            }
         }
 
         $validated = $request->validate([
@@ -268,14 +256,8 @@ class ChequeController extends Controller
 
         // Verificar permissão
         $user = auth()->user();
-        if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
+        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             return back()->with('error', 'Você não tem permissão para excluir este cheque.');
-        }
-        if ($user->hasAnyRole(['administrador', 'gestor']) && !$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
-                return back()->with('error', 'Você não tem permissão para esta operação.');
-            }
         }
 
         try {
@@ -298,14 +280,8 @@ class ChequeController extends Controller
 
         // Verificar permissão
         $user = auth()->user();
-        if (!$user->hasAnyRole(['administrador', 'gestor'])) {
+        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor'])) {
             return back()->with('error', 'Apenas administradores e gestores podem marcar cheques como depositados.');
-        }
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
-                return back()->with('error', 'Você não tem permissão para esta operação.');
-            }
         }
 
         $validated = $request->validate([
@@ -341,14 +317,8 @@ class ChequeController extends Controller
 
         // Verificar permissão
         $user = auth()->user();
-        if (!$user->hasAnyRole(['administrador', 'gestor'])) {
+        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor'])) {
             return back()->with('error', 'Apenas administradores e gestores podem marcar cheques como compensados.');
-        }
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
-                return back()->with('error', 'Você não tem permissão para esta operação.');
-            }
         }
 
         $validated = $request->validate([
@@ -384,14 +354,8 @@ class ChequeController extends Controller
 
         // Verificar permissão
         $user = auth()->user();
-        if (!$user->hasAnyRole(['administrador', 'gestor'])) {
+        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor'])) {
             return back()->with('error', 'Apenas administradores e gestores podem marcar cheques como devolvidos.');
-        }
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
-                return back()->with('error', 'Você não tem permissão para esta operação.');
-            }
         }
 
         $validated = $request->validate([
@@ -436,15 +400,9 @@ class ChequeController extends Controller
         }
 
         $user = auth()->user();
-        if (!$user->hasAnyRole(['administrador', 'gestor'])) {
+        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor'])) {
             return redirect()->route('emprestimos.show', $emprestimo->id)
                 ->with('error', 'Apenas administradores e gestores podem registrar pagamento.');
-        }
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
-                abort(403, 'Acesso negado a esta operação.');
-            }
         }
 
         return view('cheques.pagar', compact('cheque', 'emprestimo'));
@@ -460,14 +418,8 @@ class ChequeController extends Controller
 
         // Verificar permissão
         $user = auth()->user();
-        if (!$user->hasAnyRole(['administrador', 'gestor'])) {
+        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor'])) {
             return back()->with('error', 'Apenas administradores e gestores podem registrar pagamento em dinheiro.');
-        }
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
-                return back()->with('error', 'Você não tem permissão para esta operação.');
-            }
         }
 
         $validated = $request->validate([
@@ -518,14 +470,8 @@ class ChequeController extends Controller
 
         // Verificar permissão
         $user = auth()->user();
-        if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
+        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             return back()->with('error', 'Você não tem permissão para substituir este cheque.');
-        }
-        if ($user->hasAnyRole(['administrador', 'gestor']) && !$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
-                return back()->with('error', 'Você não tem permissão para esta operação.');
-            }
         }
 
         $validated = $request->validate([

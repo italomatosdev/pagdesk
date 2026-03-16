@@ -143,7 +143,7 @@ class GarantiaController extends Controller
         }
 
         $user = auth()->user();
-        if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
+        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             return back()->with('error', 'Você não tem permissão para adicionar garantias a este empréstimo.');
         }
         if (!$user->isSuperAdmin()) {
@@ -211,7 +211,7 @@ class GarantiaController extends Controller
         }
 
         $user = auth()->user();
-        if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
+        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             return back()->with('error', 'Você não tem permissão para editar esta garantia.');
         }
         if (!$user->isSuperAdmin()) {
@@ -276,7 +276,7 @@ class GarantiaController extends Controller
         }
 
         $user = auth()->user();
-        if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
+        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             return back()->with('error', 'Você não tem permissão para excluir esta garantia.');
         }
         if (!$user->isSuperAdmin()) {
@@ -310,7 +310,7 @@ class GarantiaController extends Controller
         }
 
         $user = auth()->user();
-        if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
+        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             return back()->with('error', 'Você não tem permissão para excluir este anexo.');
         }
         if (!$user->isSuperAdmin()) {
@@ -346,7 +346,7 @@ class GarantiaController extends Controller
         }
 
         $user = auth()->user();
-        if (!$user->hasAnyRole(['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
+        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['error' => 'Sem permissão'], 403);
             }

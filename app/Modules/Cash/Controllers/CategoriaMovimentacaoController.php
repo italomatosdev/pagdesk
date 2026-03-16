@@ -18,7 +18,7 @@ class CategoriaMovimentacaoController extends Controller
             if (auth()->user()->isSuperAdmin()) {
                 abort(403, 'Super Admin não pode acessar categorias de movimentação.');
             }
-            if (!auth()->user()->hasAnyRole(['gestor', 'administrador'])) {
+            if (empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
                 abort(403, 'Apenas gestores e administradores podem gerenciar categorias.');
             }
             return $next($request);

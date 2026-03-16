@@ -17,9 +17,8 @@ class OperacaoController extends Controller
     public function __construct(OperacaoService $operacaoService)
     {
         $this->middleware('auth');
-        // Administradores e gestores
         $this->middleware(function ($request, $next) {
-            if (!auth()->user()->hasAnyRole(['administrador', 'gestor'])) {
+            if (empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
                 abort(403, 'Acesso negado. Apenas administradores e gestores podem gerenciar operações.');
             }
             return $next($request);

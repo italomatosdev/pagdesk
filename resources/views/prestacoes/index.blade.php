@@ -38,7 +38,7 @@
                                         @endforeach
                                     </select>
                                 </div>
-                                @if(auth()->user()->hasAnyRole(['administrador', 'gestor']))
+                                @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor'])))
                                 <div class="col-md-3">
                                     <label class="form-label">Usuário</label>
                                     <select name="consultor_id" id="consultor-select-prestacoes" class="form-select">
@@ -132,7 +132,7 @@
                                                         <i class="bx bx-show"></i> Ver Detalhes
                                                     </a>
                                                     
-                                                    @if($settlement->isPendente() && auth()->user()->hasAnyRole(['gestor', 'administrador']))
+                                                    @if($settlement->isPendente() && !empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])))
                                                         <form action="{{ route('prestacoes.aprovar', $settlement->id) }}" 
                                                               method="POST" class="d-inline">
                                                             @csrf
@@ -153,7 +153,7 @@
                                                         </button>
                                                     @endif
                                                     
-                                                    @if($settlement->isEnviado() && auth()->user()->hasAnyRole(['gestor', 'administrador']))
+                                                    @if($settlement->isEnviado() && !empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])))
                                                         <form action="{{ route('prestacoes.confirmar-recebimento', $settlement->id) }}" 
                                                               method="POST" class="d-inline" 
                                                               onsubmit="return confirmarRecebimento(this)">

@@ -96,18 +96,26 @@ class QuitacaoService
 
             $parcelasProcessadas = [];
 
+            $totalParcelasAberto = $parcelas->count();
+            $indiceParcela = 0;
             foreach ($parcelas as $parcela) {
                 if ($restante <= 0) {
                     break;
                 }
+                $indiceParcela++;
+                $ehUltimaParcela = ($indiceParcela === $totalParcelasAberto);
                 $valorParcela = (float) $parcela->valor;
                 $pagoParcela = (float) ($parcela->valor_pago ?? 0);
-                $faltaParcela = $valorParcela - $pagoParcela;
+                $faltaParcela = round($valorParcela - $pagoParcela, 2);
                 if ($faltaParcela <= 0) {
                     continue;
                 }
-                $valorNestePagamento = min($faltaParcela, $restante);
-                $restante -= $valorNestePagamento;
+                // Na última parcela, atribuir todo o restante para evitar sobra por arredondamento em float
+                $valorNestePagamento = $ehUltimaParcela
+                    ? round($restante, 2)
+                    : min($faltaParcela, round($restante, 2));
+                $valorNestePagamento = min($valorNestePagamento, $faltaParcela);
+                $restante = round($restante - $valorNestePagamento, 2);
                 $valorTotalMovimentacao += $valorNestePagamento;
 
                 $pagamento = Pagamento::create([
@@ -126,8 +134,9 @@ class QuitacaoService
                     $primeiroPagamento = $pagamento;
                 }
 
-                $novoValorPago = $pagoParcela + $valorNestePagamento;
-                $marcarComoPaga = $novoValorPago >= $valorParcela || $quitacaoComDesconto;
+                $novoValorPago = round($pagoParcela + $valorNestePagamento, 2);
+                // Tolerância de 1 centavo para considerar paga (evita parcela pendente por arredondamento em float)
+                $marcarComoPaga = ($novoValorPago >= $valorParcela - 0.01) || $quitacaoComDesconto;
                 $parcela->update([
                     'valor_pago' => $novoValorPago,
                     'data_pagamento' => $dataPagamento,

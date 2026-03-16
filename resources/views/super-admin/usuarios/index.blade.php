@@ -149,9 +149,10 @@
                                                 @endif
                                             </td>
                                             <td>
-                                                @forelse($usuario->roles as $role)
-                                                    <span class="badge bg-{{ $role->name == 'administrador' ? 'danger' : ($role->name == 'gestor' ? 'warning' : 'primary') }}">
-                                                        {{ ucfirst($role->name) }}
+                                                @php $papeisUnicos = $usuario->operacoes->pluck('pivot.role')->map(fn ($r) => $r ?? 'consultor')->unique()->values(); @endphp
+                                                @forelse($papeisUnicos as $p)
+                                                    <span class="badge bg-{{ $p === 'administrador' ? 'danger' : ($p === 'gestor' ? 'warning' : 'primary') }} me-1">
+                                                        {{ ucfirst($p) }}
                                                     </span>
                                                 @empty
                                                     <span class="badge bg-secondary">Nenhum</span>
@@ -159,11 +160,12 @@
                                             </td>
                                             <td>
                                                 @if($usuario->operacoes->count() > 0)
-                                                    @foreach($usuario->operacoes->take(2) as $operacao)
-                                                        <span class="badge bg-light text-dark">{{ $operacao->nome }}</span>
+                                                    @foreach($usuario->operacoes->take(3) as $operacao)
+                                                        @php $papel = $operacao->pivot->role ?? 'consultor'; @endphp
+                                                        <span class="badge bg-light text-dark me-1" title="{{ ucfirst($papel) }}">{{ $operacao->nome }} ({{ ucfirst($papel) }})</span>
                                                     @endforeach
-                                                    @if($usuario->operacoes->count() > 2)
-                                                        <span class="badge bg-secondary">+{{ $usuario->operacoes->count() - 2 }}</span>
+                                                    @if($usuario->operacoes->count() > 3)
+                                                        <span class="badge bg-secondary">+{{ $usuario->operacoes->count() - 3 }}</span>
                                                     @endif
                                                 @else
                                                     <span class="text-muted">-</span>

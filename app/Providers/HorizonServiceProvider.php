@@ -32,7 +32,7 @@ class HorizonServiceProvider extends HorizonApplicationServiceProvider
             if (!$user) {
                 return false;
             }
-            return $user->hasRole('administrador');
+            return !empty($user->getOperacoesIdsOndeTemPapel(['administrador']));
         });
     }
 }
