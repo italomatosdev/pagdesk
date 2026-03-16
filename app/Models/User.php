@@ -6,6 +6,7 @@ namespace App\Models;
 use App\Notifications\ResetPasswordNotification;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
@@ -94,11 +95,13 @@ class User extends Authenticatable
 
     /**
      * Relacionamento: Operações do usuário (many-to-many)
-     * Um usuário pode estar em várias operações
+     * Um usuário pode estar em várias operações.
+     * Inclui pivot 'role' (papel por operação: consultor, gestor, administrador).
      */
     public function operacoes()
     {
         return $this->belongsToMany(\App\Modules\Core\Models\Operacao::class, 'operacao_user', 'user_id', 'operacao_id')
+            ->withPivot('role')
             ->withTimestamps();
     }
 
@@ -117,15 +120,72 @@ class User extends Authenticatable
     }
 
     /**
-     * Verificar se o usuário tem acesso a uma operação específica
-     * 
+     * Retorna o papel do usuário na operação (string ou null).
+     * Fonte: operacao_user.role. Super Admin retorna 'administrador'.
+     */
+    public function getPapelNaOperacao(int $operacaoId): ?string
+    {
+        if ($this->isSuperAdmin()) {
+            return 'administrador';
+        }
+        $role = DB::table('operacao_user')
+            ->where('user_id', $this->id)
+            ->where('operacao_id', $operacaoId)
+            ->value('role');
+        return $role !== null ? (string) $role : null;
+    }
+
+    /**
+     * True se na operação $operacaoId o usuário tem o papel $papel.
+     */
+    public function temPapelNaOperacao(int $operacaoId, string $papel): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+        return $this->getPapelNaOperacao($operacaoId) === $papel;
+    }
+
+    /**
+     * True se na operação $operacaoId o usuário tem algum dos papéis.
+     * @param array<int, string> $papeis ex.: ['gestor', 'administrador']
+     */
+    public function temAlgumPapelNaOperacao(int $operacaoId, array $papeis): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+        $papel = $this->getPapelNaOperacao($operacaoId);
+        return $papel !== null && in_array($papel, $papeis, true);
+    }
+
+    /**
+     * IDs das operações em que o usuário tem um dos papéis (útil para sidebar/relatórios).
+     * Super Admin: retorna IDs de todas as operações.
+     * @param array<int, string> $papeis ex.: ['gestor', 'administrador']
+     * @return array<int>
+     */
+    public function getOperacoesIdsOndeTemPapel(array $papeis): array
+    {
+        if ($this->isSuperAdmin()) {
+            return \App\Modules\Core\Models\Operacao::query()->pluck('id')->toArray();
+        }
+        return $this->operacoes()
+            ->wherePivotIn('role', $papeis)
+            ->pluck('operacoes.id')
+            ->toArray();
+    }
+
+    /**
+     * Verificar se o usuário tem acesso a uma operação específica.
+     * Sem papel global: só Super Admin vê tudo; demais precisam estar em operacao_user (com role definido).
+     *
      * @param int $operacaoId
      * @return bool
      */
     public function temAcessoOperacao(int $operacaoId): bool
     {
-        // Super Admin e administradores têm acesso a todas as operações
-        if ($this->isSuperAdmin() || $this->hasRole('administrador')) {
+        if ($this->isSuperAdmin()) {
             return true;
         }
 
@@ -133,18 +193,16 @@ class User extends Authenticatable
     }
 
     /**
-     * Aplicar filtro de operações permitidas em uma query
-     * Para administradores, não aplica filtro (vê tudo)
-     * Para outros usuários, filtra apenas pelas operações vinculadas
-     * 
+     * Aplicar filtro de operações permitidas em uma query.
+     * Só Super Admin vê tudo; demais usuários restritos às operações em operacao_user.
+     *
      * @param \Illuminate\Database\Eloquent\Builder $query
      * @param string $column Nome da coluna (padrão: 'operacao_id')
      * @return \Illuminate\Database\Eloquent\Builder
      */
     public function aplicarFiltroOperacoes($query, string $column = 'operacao_id')
     {
-        // Administradores veem tudo
-        if ($this->hasRole('administrador')) {
+        if ($this->isSuperAdmin()) {
             return $query;
         }
 
