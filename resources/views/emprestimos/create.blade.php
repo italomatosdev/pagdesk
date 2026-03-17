@@ -92,6 +92,7 @@
                                 @enderror
                             </div>
 
+                            @if(!($negociacao ?? false))
                             <div id="bloco-retroativo" class="mb-3" style="display: none;">
                                 <div class="alert alert-secondary mb-2">
                                     <div class="form-check form-switch mb-2">
@@ -110,6 +111,7 @@
                                     </small>
                                 </div>
                             </div>
+                            @endif
                             <script>
                                 window.permiteRetroativoPorOperacao = @json($operacoes->pluck('permite_emprestimo_retroativo', 'id'));
                                 window.consultoresPorOperacao = @json($consultoresPorOperacao ?? []);
