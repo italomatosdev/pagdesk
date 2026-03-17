@@ -252,6 +252,24 @@ class Cliente extends Model
     }
 
     /**
+     * Accessor: Documento mascarado (ex.: ***.***.***-12 para CPF) para exibição em telas sensíveis (ex.: mural de devedores).
+     */
+    public function getDocumentoMascaradoAttribute(): string
+    {
+        if (!$this->documento) {
+            return '';
+        }
+        $doc = preg_replace('/[^0-9]/', '', $this->documento);
+        if (strlen($doc) === 11) {
+            return '***.***.***-' . substr($doc, -2);
+        }
+        if (strlen($doc) === 14) {
+            return '**.***.***/****-' . substr($doc, -2);
+        }
+        return '***';
+    }
+
+    /**
      * Accessor: CPF formatado (mantido para compatibilidade)
      * @deprecated Use documento_formatado ao invés disso
      */

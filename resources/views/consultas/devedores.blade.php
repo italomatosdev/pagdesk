@@ -67,7 +67,10 @@
                                                 @endif
                                             </div>
                                             <div class="small fw-bold text-truncate" title="{{ $cliente->nome }}">{{ $cliente->nome }}</div>
-                                            <div class="small text-muted">{{ $cliente->documento_formatado ?? $cliente->documento }}</div>
+                                            <div class="small text-muted">{{ $cliente->documento_mascarado }}</div>
+                                            @if(isset($diasAtrasoPorCliente[$cliente->id]))
+                                                <span class="badge bg-warning text-dark mt-1">{{ $diasAtrasoPorCliente[$cliente->id] }} {{ $diasAtrasoPorCliente[$cliente->id] === 1 ? 'dia' : 'dias' }} em atraso</span>
+                                            @endif
                                         </div>
                                     </div>
                                 </div>
