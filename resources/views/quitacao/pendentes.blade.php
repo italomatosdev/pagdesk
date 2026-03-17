@@ -61,6 +61,7 @@
                                         <th>Saldo devedor</th>
                                         <th>Valor solicitado</th>
                                         <th>Desconto</th>
+                                        <th>Motivo do desconto</th>
                                         <th>Data solicitação</th>
                                         <th class="text-end">Ações</th>
                                     </tr>
@@ -76,6 +77,13 @@
                                             <td>R$ {{ number_format($s->saldo_devedor, 2, ',', '.') }}</td>
                                             <td>R$ {{ number_format($s->valor_solicitado, 2, ',', '.') }}</td>
                                             <td class="text-warning">R$ {{ number_format($s->valor_desconto, 2, ',', '.') }}</td>
+                                            <td>
+                                                @if($s->motivo_desconto)
+                                                    <span class="small d-block">{{ $s->motivo_desconto }}</span>
+                                                @else
+                                                    <span class="text-muted small">—</span>
+                                                @endif
+                                            </td>
                                             <td>{{ $s->created_at->format('d/m/Y H:i') }}</td>
                                             <td class="text-end">
                                                 <div class="btn-group btn-group-sm">
@@ -103,6 +111,12 @@
                                                         </div>
                                                         <div class="modal-body">
                                                             <p>Empréstimo #{{ $s->emprestimo_id }} – {{ $s->emprestimo->cliente->nome ?? '' }}. Valor solicitado: R$ {{ number_format($s->valor_solicitado, 2, ',', '.') }}.</p>
+                                                            @if($s->motivo_desconto)
+                                                                <div class="alert alert-info py-2">
+                                                                    <strong>Motivo informado pelo solicitante:</strong>
+                                                                    <div class="small mb-0">{{ $s->motivo_desconto }}</div>
+                                                                </div>
+                                                            @endif
                                                             <div class="mb-3">
                                                                 <label class="form-label">Motivo da rejeição <span class="text-danger">*</span></label>
                                                                 <textarea name="motivo_rejeicao" class="form-control" rows="3" required minlength="10" maxlength="500" placeholder="Informe o motivo (mín. 10 caracteres)"></textarea>
