@@ -387,8 +387,10 @@ class EmprestimoService
                         'observacoes' => $observacoes,
                     ]);
                     $parcela->refresh();
+                    // PagamentoService::registrar() já atualizou valor_pago (somou valorJuros). Só garantir
+                    // status 'paga' e data_pagamento, pois para renovação (só juros) o valor pago é menor
+                    // que o valor da parcela e o registrar() pode ter deixado status 'pendente'.
                     $parcela->update([
-                        'valor_pago' => $parcela->valor,
                         'status' => 'paga',
                         'data_pagamento' => Carbon::today(),
                     ]);
