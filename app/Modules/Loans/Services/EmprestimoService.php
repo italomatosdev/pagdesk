@@ -7,6 +7,7 @@ use App\Modules\Core\Services\NotificacaoService;
 use App\Modules\Core\Traits\Auditable;
 use App\Modules\Cash\Models\CashLedgerEntry;
 use App\Models\User;
+use App\Models\Scopes\EmpresaScope;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\Parcela;
@@ -1533,6 +1534,19 @@ class EmprestimoService
                     $garantiaOriginal->update(['status' => 'liberada']);
                 }
             }
+
+            // Encerrar parcelas do empréstimo antigo (ainda pendentes/atrasadas) como "paga" com valor 0,
+            // para não exibirem como atrasadas na tela do empréstimo finalizado (nenhum pagamento foi registrado).
+            // Usa withoutGlobalScope para não depender de empresa_id nas parcelas (ex.: parcelas antigas com empresa_id null).
+            $dataEncerramento = Carbon::today();
+            Parcela::withoutGlobalScope(EmpresaScope::class)
+                ->where('emprestimo_id', $emprestimoOrigem->id)
+                ->whereNotIn('status', ['paga', 'quitada_garantia'])
+                ->update([
+                    'status' => 'paga',
+                    'valor_pago' => 0,
+                    'data_pagamento' => $dataEncerramento,
+                ]);
 
             $statusAnterior = $emprestimoOrigem->status;
             $emprestimoOrigem->update([

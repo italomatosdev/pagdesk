@@ -170,7 +170,7 @@
                                 </div>
                                 @php
                                     $valorJaPago = $emprestimo->parcelas->sum('valor_pago') ?? 0;
-                                    $parcelasPagas = $emprestimo->parcelas->where('status', 'paga')->count();
+                                    $parcelasPagas = $emprestimo->parcelas->filter(fn($p) => $p->status === 'paga' && (float)($p->valor_pago ?? 0) > 0)->count();
                                     $quitacaoServiceInfo = app(\App\Modules\Loans\Services\QuitacaoService::class);
                                     $saldoDevedorInfo = $quitacaoServiceInfo->getSaldoDevedor($emprestimo);
                                 @endphp
