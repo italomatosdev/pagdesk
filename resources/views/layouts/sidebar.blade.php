@@ -287,6 +287,9 @@
                         @if($countQuitacaoDesconto > 0)
                             <span class="badge rounded-pill bg-success">{{ $countQuitacaoDesconto }}</span>
                         @endif
+                        @if($countRetroativo > 0)
+                            <span class="badge rounded-pill bg-secondary">{{ $countRetroativo }}</span>
+                        @endif
                     </a>
                 </li>
                 @endif
