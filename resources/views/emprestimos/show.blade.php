@@ -170,7 +170,7 @@
                                 </div>
                                 @php
                                     $valorJaPago = $emprestimo->parcelas->sum('valor_pago') ?? 0;
-                                    $parcelasPagas = $emprestimo->parcelas->where('status', 'paga')->count();
+                                    $parcelasPagas = $emprestimo->parcelas->filter(fn($p) => $p->status === 'paga' && (float)($p->valor_pago ?? 0) > 0)->count();
                                     $quitacaoServiceInfo = app(\App\Modules\Loans\Services\QuitacaoService::class);
                                     $saldoDevedorInfo = $quitacaoServiceInfo->getSaldoDevedor($emprestimo);
                                 @endphp
@@ -391,12 +391,34 @@
 
                         <!-- Quitar empréstimo: diária = "Quitar todas as parcelas diárias"; demais = "Quitar empréstimo por completo" -->
                         @php
+                            $solicitacaoQuitacaoPendente = \App\Modules\Loans\Models\SolicitacaoQuitacao::where('emprestimo_id', $emprestimo->id)->where('status', 'pendente')->first();
                             $parcelasAbertasQuitacao = $emprestimo->parcelas->filter(fn($p) => !in_array($p->status, ['paga', 'quitada_garantia']));
                             $podeQuitarCompleto = $emprestimo->isAtivo() && $parcelasAbertasQuitacao->isNotEmpty() &&
                                 (($podeVerAcoesGestorAdmin ?? false) || $emprestimo->consultor_id === auth()->id());
                             $ehDiaria = $emprestimo->frequencia === 'diaria';
                         @endphp
-                        @if($podeQuitarCompleto)
+                        @if($solicitacaoQuitacaoPendente)
+                            <hr>
+                            <div class="alert alert-warning mb-3">
+                                <h6 class="alert-heading">
+                                    <i class="bx bx-time-five"></i> Quitação com desconto aguardando aprovação
+                                </h6>
+                                <p class="mb-2">
+                                    Existe uma solicitação de quitação com valor inferior ao saldo devedor (R$ {{ number_format($solicitacaoQuitacaoPendente->valor_solicitado, 2, ',', '.') }}) 
+                                    aguardando aprovação do gestor ou administrador. O botão de quitar fica disponível após a liberação ou rejeição dessa solicitação.
+                                </p>
+                                @if(!empty($solicitacaoQuitacaoPendente->motivo_desconto))
+                                    <p class="mb-0 small text-muted">
+                                        <strong>Motivo informado:</strong> {{ $solicitacaoQuitacaoPendente->motivo_desconto }}
+                                    </p>
+                                @endif
+                                @if($podeVerAcoesGestorAdmin ?? false)
+                                    <a href="{{ route('quitacao.pendentes') }}" class="btn btn-outline-warning btn-sm">
+                                        <i class="bx bx-list-ul"></i> Ver em Quitações pendentes
+                                    </a>
+                                @endif
+                            </div>
+                        @elseif($podeQuitarCompleto)
                             <hr>
                             <div class="alert alert-success mb-3">
                                 @if($ehDiaria)

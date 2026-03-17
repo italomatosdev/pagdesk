@@ -323,6 +323,7 @@ A pasta **`docs/`** contém guias e referências:
 - [MODULO_VENDAS.md](docs/MODULO_VENDAS.md) — Vendas, produtos, crediário
 - [RADAR.md](docs/RADAR.md) — Consulta cadastral (CPF/CNPJ)
 - [VENCIMENTO_MENSAL_FEVEREIRO.md](docs/VENCIMENTO_MENSAL_FEVEREIRO.md) — Vencimento mensal (mesmo dia do mês) e exceção fevereiro no retroativo
+- [NEGOCIACAO_EMPRESTIMOS.md](docs/NEGOCIACAO_EMPRESTIMOS.md) — Negociação (novo empréstimo com saldo devedor), encerramento de parcelas do antigo e exibição "parcelas pagas"
 
 **Técnico:**
 - [CONFIGURAR_REDIS.md](docs/CONFIGURAR_REDIS.md) — Redis e cache
