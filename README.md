@@ -322,6 +322,7 @@ A pasta **`docs/`** contém guias e referências:
 - [GUIA_INSTALACAO.md](docs/GUIA_INSTALACAO.md) — Instalação passo a passo
 - [MODULO_VENDAS.md](docs/MODULO_VENDAS.md) — Vendas, produtos, crediário
 - [RADAR.md](docs/RADAR.md) — Consulta cadastral (CPF/CNPJ)
+- [VENCIMENTO_MENSAL_FEVEREIRO.md](docs/VENCIMENTO_MENSAL_FEVEREIRO.md) — Vencimento mensal (mesmo dia do mês) e exceção fevereiro no retroativo
 
 **Técnico:**
 - [CONFIGURAR_REDIS.md](docs/CONFIGURAR_REDIS.md) — Redis e cache

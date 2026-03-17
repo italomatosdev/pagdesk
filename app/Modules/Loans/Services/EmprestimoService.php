@@ -117,6 +117,14 @@ class EmprestimoService
                 'empresa_id' => $empresaId,
             ]);
 
+            // Checkbox "1ª parcela em 30/03": só para mensal, 1 parcela, data início em fevereiro
+            if (!empty($dados['primeira_parcela_dia_30'])
+                && $emprestimo->frequencia === 'mensal'
+                && (int) $emprestimo->numero_parcelas === 1
+                && (int) Carbon::parse($emprestimo->data_inicio)->month === 2) {
+                $emprestimo->dia_primeira_parcela_override = 30;
+            }
+
             // Usar Strategy Pattern para gerar estrutura de pagamento
             // Para troca_cheque: não gera parcelas (cheques são cadastrados agora)
             // Para outros tipos: gera parcelas normalmente
@@ -409,6 +417,16 @@ class EmprestimoService
             // Gerar parcelas para o novo empréstimo
             $this->gerarParcelas($novoEmprestimo);
 
+            // Mensal: vencimento no mesmo dia do mês (regra 31/30/fev → 01)
+            if ($emprestimo->frequencia === 'mensal') {
+                $dataVencimentoAntiga = Carbon::parse($parcela->data_vencimento);
+                $novaDataVencimento = self::proximoMesMesmoDia($dataVencimentoAntiga, 1);
+                $novaParcela = $novoEmprestimo->parcelas()->first();
+                if ($novaParcela) {
+                    $novaParcela->update(['data_vencimento' => $novaDataVencimento]);
+                }
+            }
+
             // Se o empréstimo original tinha garantias (tipo empenho), transferir para o novo empréstimo
             if ($emprestimo->garantias->isNotEmpty()) {
                 foreach ($emprestimo->garantias as $garantiaOriginal) {
@@ -577,8 +595,27 @@ class EmprestimoService
                         $dataVencimento->addWeek();
                         break;
                     case 'mensal':
-                        $dataVencimento->addMonth();
+                        $dataVencimento = self::proximoMesMesmoDia($dataVencimento->copy(), 1);
                         break;
+                }
+            } else {
+                // Primeira parcela: 1 período após data_inicio
+                if ($emprestimo->frequencia === 'mensal') {
+                    if (!empty($emprestimo->dia_primeira_parcela_override)) {
+                        $ano = (int) Carbon::parse($emprestimo->data_inicio)->year;
+                        $dataVencimento = Carbon::createFromDate($ano, 3, min((int) $emprestimo->dia_primeira_parcela_override, 31));
+                    } else {
+                        $dataVencimento = self::proximoMesMesmoDia($dataVencimento->copy(), 1);
+                    }
+                } else {
+                    switch ($emprestimo->frequencia) {
+                        case 'diaria':
+                            $dataVencimento->addDay();
+                            break;
+                        case 'semanal':
+                            $dataVencimento->addWeek();
+                            break;
+                    }
                 }
             }
 
@@ -620,7 +657,12 @@ class EmprestimoService
                 break;
             case 'mensal':
             default:
-                $dataVencimento->addMonth();
+                if (!empty($emprestimo->dia_primeira_parcela_override)) {
+                    $ano = (int) Carbon::parse($emprestimo->data_inicio)->year;
+                    $dataVencimento = Carbon::createFromDate($ano, 3, min((int) $emprestimo->dia_primeira_parcela_override, 31));
+                } else {
+                    $dataVencimento = self::proximoMesMesmoDia($dataVencimento->copy(), 1);
+                }
                 break;
         }
 
@@ -635,10 +677,10 @@ class EmprestimoService
                         $dataVencimento->addWeek();
                         break;
                     case 'mensal':
-                        $dataVencimento->addMonth();
+                        $dataVencimento = self::proximoMesMesmoDia($dataVencimento->copy(), 1);
                         break;
                     default:
-                        $dataVencimento->addMonth();
+                        $dataVencimento = self::proximoMesMesmoDia($dataVencimento->copy(), 1);
                         break;
                 }
             }
@@ -655,6 +697,53 @@ class EmprestimoService
                 'empresa_id' => $emprestimo->empresa_id,
             ]);
         }
+    }
+
+    /**
+     * Calcula a data de vencimento "mesmo dia do mês" no mês seguinte, com regras:
+     * - Se o próximo mês tem 31 dias: pode usar dia 31.
+     * - Se o próximo mês tem 30 dias: usar no máximo dia 30 (ex.: 31/03 → 30/04).
+     * - Se o próximo mês é fevereiro (não tem 30 dias): usar dia 01 do próximo mês (ex.: 28/02 → 01/03).
+     *
+     * @param \Carbon\Carbon $dataVencimentoAntiga Data de vencimento de referência (ex.: parcela antiga)
+     * @param int $numeroMeses Quantidade de meses a adicionar (default 1)
+     * @return \Carbon\Carbon
+     */
+    public static function proximoMesMesmoDia(Carbon $dataVencimentoAntiga, int $numeroMeses = 1): Carbon
+    {
+        // Calcula ano/mês alvo sem addMonths para evitar rollover (ex.: 30/01 + 1 mês = fev, não mar)
+        $ano = (int) $dataVencimentoAntiga->year;
+        $mes = (int) $dataVencimentoAntiga->month + $numeroMeses;
+        while ($mes > 12) {
+            $mes -= 12;
+            $ano++;
+        }
+        while ($mes < 1) {
+            $mes += 12;
+            $ano--;
+        }
+        $diaOriginal = (int) $dataVencimentoAntiga->day;
+
+        // Fevereiro: se o dia seria 30 ou 31 (não existe), vencimento vai para 01/03; senão mesmo dia em fev (até 28/29)
+        if ($mes === 2) {
+            if ($diaOriginal >= 30) {
+                return Carbon::createFromDate($ano, 3, 1);
+            }
+            $ultimoDiaFev = Carbon::createFromDate($ano, 2, 1)->endOfMonth()->day;
+            $dia = min($diaOriginal, $ultimoDiaFev);
+            return Carbon::createFromDate($ano, 2, $dia);
+        }
+
+        // Meses com 30 dias (abr, jun, set, nov): se dia seria 31, usar 30
+        $mesesCom30Dias = [4, 6, 9, 11];
+        if (in_array($mes, $mesesCom30Dias)) {
+            $dia = $diaOriginal > 30 ? 30 : $diaOriginal;
+            return Carbon::createFromDate($ano, $mes, $dia);
+        }
+
+        // Meses com 31 dias: mesmo dia (até 31)
+        $dia = min($diaOriginal, 31);
+        return Carbon::createFromDate($ano, $mes, $dia);
     }
 
     /**

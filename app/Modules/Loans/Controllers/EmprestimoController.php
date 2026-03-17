@@ -462,6 +462,7 @@ class EmprestimoController extends Controller
             'cheques.*.observacoes' => 'nullable|string|max:1000',
             'is_retroativo' => 'boolean',
             'consultor_id' => 'nullable|exists:users,id',
+            'primeira_parcela_dia_30' => 'nullable|boolean',
         ];
         $validated = $request->validate($rules);
 

@@ -299,6 +299,15 @@
                                                data-min-brasil="{{ $hojeBrasil }}"
                                                required>
                                         <small class="text-muted">1ª parcela vence 1 período após esta data</small>
+                                        <div id="aviso-fevereiro-30" class="mt-2 small text-secondary" style="display: none;">
+                                            <strong>Fevereiro:</strong> com 1 parcela mensal, use 28/02 ou 29/02 e marque a opção abaixo para 1ª parcela em 30/03.
+                                        </div>
+                                        <div id="opcao-primeira-parcela-dia-30" class="mt-1" style="display: none;">
+                                            <div class="form-check">
+                                                <input type="checkbox" class="form-check-input" name="primeira_parcela_dia_30" id="primeira-parcela-dia-30" value="1" {{ old('primeira_parcela_dia_30') ? 'checked' : '' }}>
+                                                <label class="form-check-label" for="primeira-parcela-dia-30">Quero que a 1ª parcela vença no dia 30 (30/03)</label>
+                                            </div>
+                                        </div>
                                         <div class="mt-1 small text-secondary">
                                             <strong>Horário atual (servidor/app):</strong> {{ \Carbon\Carbon::now('America/Sao_Paulo')->format('d/m/Y H:i:s') }} (America/Sao_Paulo)
                                         </div>
@@ -993,13 +1002,42 @@
                     return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
                 }
 
+                // Mesmo dia do mês no mês seguinte (regra: 31→30 em mês de 30 dias; fev→dia 01)
+                // Calcula ano/mês alvo sem usar setMonth para evitar rollover (ex.: 30/01 + 1 mês = fev, não mar)
+                function proximoMesMesmoDia(dataRef, numMeses) {
+                    let ano = dataRef.getFullYear();
+                    let mes = dataRef.getMonth() + numMeses;
+                    while (mes > 11) { mes -= 12; ano++; }
+                    while (mes < 0) { mes += 12; ano--; }
+                    const diaOriginal = dataRef.getDate();
+                    // Fevereiro: se o dia seria 30 ou 31 (não existe), vencimento vai para 01/03; senão mesmo dia em fev (até 28/29)
+                    if (mes === 1) {
+                        if (diaOriginal >= 30) return new Date(ano, 2, 1);
+                        const ultimoDiaFev = new Date(ano, 2, 0).getDate();
+                        return new Date(ano, 1, Math.min(diaOriginal, ultimoDiaFev));
+                    }
+                    const meses30 = [3, 5, 8, 10];
+                    if (meses30.indexOf(mes) !== -1) {
+                        const dia = diaOriginal > 30 ? 30 : diaOriginal;
+                        return new Date(ano, mes, dia);
+                    }
+                    const dia = Math.min(diaOriginal, 31);
+                    return new Date(ano, mes, dia);
+                }
+
                 // Função auxiliar para calcular data de vencimento
                 // Mesma lógica do backend: primeira parcela vence 1 período após data_inicio
                 function calcularDataVencimento(dataInicio, frequencia, numeroParcela) {
                     const data = typeof dataInicio === 'string' ? parseDateInput(dataInicio) : new Date(dataInicio);
                     
-                    // Primeira parcela: adiciona 1 período à data de início
-                    // Parcelas seguintes: adiciona mais períodos
+                    // Checkbox "1ª parcela em 30/03": mensal, 1ª parcela, data em fev
+                    if (frequencia === 'mensal' && numeroParcela === 1) {
+                        const cb = document.getElementById('primeira-parcela-dia-30');
+                        if (cb && cb.checked && data.getMonth() === 1) {
+                            return new Date(data.getFullYear(), 2, 30);
+                        }
+                    }
+                    
                     switch(frequencia) {
                         case 'diaria':
                             data.setDate(data.getDate() + numeroParcela);
@@ -1008,8 +1046,7 @@
                             data.setDate(data.getDate() + (numeroParcela * 7));
                             break;
                         case 'mensal':
-                            data.setMonth(data.getMonth() + numeroParcela);
-                            break;
+                            return proximoMesMesmoDia(data, numeroParcela);
                     }
                     
                     return data;
@@ -1520,6 +1557,7 @@
                     atualizarSecaoGarantias();
                     atualizarSecaoCheques();
                     atualizarCamposPorTipo();
+                    if (typeof atualizarOpcaoPrimeiraParcelaDia30 === 'function') atualizarOpcaoPrimeiraParcelaDia30();
                     previewEmprestimo.style.display = 'none';
                 });
 
@@ -1579,10 +1617,30 @@
                         if (isRetroativo) {
                             dataInicioEl.removeAttribute('min');
                         } else {
-                            // Usar "hoje" no fuso Brasil (vindo do servidor) para não bloquear 13/03 quando no Brasil ainda é 13
                             var minBrasil = dataInicioEl.getAttribute('data-min-brasil');
                             dataInicioEl.setAttribute('min', minBrasil || new Date().toISOString().split('T')[0]);
                         }
+                    }
+                    if (typeof atualizarOpcaoPrimeiraParcelaDia30 === 'function') atualizarOpcaoPrimeiraParcelaDia30();
+                }
+
+                function atualizarOpcaoPrimeiraParcelaDia30() {
+                    const tipo = tipoEmprestimo && tipoEmprestimo.value;
+                    const isRetroativo = isRetroativoCheck && isRetroativoCheck.checked;
+                    const freq = document.getElementById('frequencia') && document.getElementById('frequencia').value;
+                    const numParc = document.querySelector('input[name="numero_parcelas"]');
+                    const num = numParc ? parseInt(numParc.value, 10) : 0;
+                    const dataInicioVal = dataInicioEl && dataInicioEl.value;
+                    const mesFev = dataInicioVal && dataInicioVal.length >= 7 && dataInicioVal.substring(5, 7) === '02';
+                    const contextoFev = tipo !== 'troca_cheque' && isRetroativo && freq === 'mensal' && mesFev;
+                    const mostrarCheckbox = contextoFev && num === 1;
+                    const aviso = document.getElementById('aviso-fevereiro-30');
+                    const opcao = document.getElementById('opcao-primeira-parcela-dia-30');
+                    if (aviso) aviso.style.display = contextoFev ? 'block' : 'none';
+                    if (opcao) opcao.style.display = mostrarCheckbox ? 'block' : 'none';
+                    if (!mostrarCheckbox) {
+                        const cb = document.getElementById('primeira-parcela-dia-30');
+                        if (cb) cb.checked = false;
                     }
                 }
 
@@ -1592,6 +1650,18 @@
                 if (isRetroativoCheck) {
                     isRetroativoCheck.addEventListener('change', atualizarRetroativoUi);
                 }
+                if (dataInicioEl) {
+                    dataInicioEl.addEventListener('change', atualizarOpcaoPrimeiraParcelaDia30);
+                }
+                const frequenciaEl = document.getElementById('frequencia');
+                if (frequenciaEl) {
+                    frequenciaEl.addEventListener('change', atualizarOpcaoPrimeiraParcelaDia30);
+                }
+                const numeroParcelasInput = document.querySelector('input[name="numero_parcelas"]');
+                if (numeroParcelasInput) {
+                    numeroParcelasInput.addEventListener('change', atualizarOpcaoPrimeiraParcelaDia30);
+                    numeroParcelasInput.addEventListener('input', atualizarOpcaoPrimeiraParcelaDia30);
+                }
                 if (operacaoSelect) {
                     atualizarBlocoRetroativo();
                 }
@@ -1600,6 +1670,7 @@
                 atualizarSecaoGarantias();
                 atualizarSecaoCheques();
                 atualizarCamposPorTipo();
+                if (typeof atualizarOpcaoPrimeiraParcelaDia30 === 'function') atualizarOpcaoPrimeiraParcelaDia30();
 
                 // Função para preencher automaticamente com dados de teste
                 function preencherDadosTeste() {
