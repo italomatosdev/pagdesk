@@ -70,21 +70,21 @@
                                 <tbody>
                                     @forelse($solicitacoes as $s)
                                         @php
-                                            $emp = $s->parcela->emprestimo;
                                             $parcela = $s->parcela;
+                                            $emp = $parcela?->emprestimo;
                                             $principalPagamento = $s->valor - $s->valor_juros_solicitado;
                                         @endphp
                                         <tr>
                                             <td>{{ $s->id }}</td>
-                                            <td><a href="{{ route('emprestimos.show', $emp->id) }}">#{{ $emp->id }}</a></td>
-                                            <td>{{ $emp->cliente->nome ?? '-' }}</td>
-                                            <td>{{ $emp->operacao->nome ?? '-' }}</td>
+                                            <td>@if($emp)<a href="{{ route('emprestimos.show', $emp->id) }}">#{{ $emp->id }}</a>@else-@endif</td>
+                                            <td>{{ $emp?->cliente?->nome ?? '-' }}</td>
+                                            <td>{{ $emp?->operacao?->nome ?? '-' }}</td>
                                             <td>#{{ $parcela->numero ?? $parcela->id }}</td>
                                             <td>R$ {{ number_format($principalPagamento, 2, ',', '.') }}</td>
                                             <td class="text-danger">R$ {{ number_format($s->valor_juros_devido, 2, ',', '.') }}</td>
                                             <td>R$ {{ number_format($s->valor_juros_solicitado, 2, ',', '.') }}</td>
                                             <td class="fw-semibold">R$ {{ number_format($s->valor, 2, ',', '.') }}</td>
-                                            <td>{{ $s->consultor->name ?? '-' }}</td>
+                                            <td>{{ $s->consultor?->name ?? '-' }}</td>
                                             <td>{{ $s->created_at->format('d/m/Y H:i') }}</td>
                                             <td>
                                                 <div class="d-flex gap-1 flex-wrap">
