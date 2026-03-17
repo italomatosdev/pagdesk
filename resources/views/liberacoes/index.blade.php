@@ -23,7 +23,8 @@
                                 $pendentesQuitacaoDesconto = \App\Modules\Loans\Models\SolicitacaoQuitacao::where('status', 'pendente');
                                 $pendentesNegociacao = \App\Modules\Loans\Models\SolicitacaoNegociacao::where('status', 'pendente');
                                 $pendentesRetroativo = \App\Modules\Loans\Models\SolicitacaoEmprestimoRetroativo::where('status', 'aguardando');
-                                if (empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador']))) {
+                                $aplicarFiltroOps = !auth()->user()->isSuperAdmin();
+                                if ($aplicarFiltroOps) {
                                     $opsIds = auth()->user()->getOperacoesIds();
                                     if (!empty($opsIds)) {
                                         $pendentesProdutoObjeto->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
