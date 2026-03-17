@@ -29,6 +29,7 @@ class PagamentoController extends Controller
         $parcela = null;
         $returnTo = $request->input('return_to'); // Para saber de onde veio
         $renovar = $request->input('renovar', false); // Parâmetro para pré-selecionar renovação
+        $renovacaoTipo = $request->input('renovacao_tipo'); // 'nenhum' = só juros (sem atraso), 'com_abate' = renovar com abate no saldo
         $executarGarantia = $request->input('executar_garantia', false); // Parâmetro para pré-selecionar executar garantia
 
         if ($parcelaId) {
@@ -42,7 +43,7 @@ class PagamentoController extends Controller
             }
         }
 
-        return view('pagamentos.create', compact('parcela', 'returnTo', 'renovar', 'executarGarantia'));
+        return view('pagamentos.create', compact('parcela', 'returnTo', 'renovar', 'renovacaoTipo', 'executarGarantia'));
     }
 
     /**

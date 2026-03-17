@@ -282,10 +282,10 @@
                                     <i class="bx bx-info-circle"></i> Renovação de Empréstimo Disponível
                                 </h6>
                                 <p class="mb-2">
-                                    Este empréstimo pode ser renovado. O cliente pagará apenas os <strong>juros do período</strong>
-                                    e o valor principal será renovado com novo prazo.
+                                    Este empréstimo pode ser renovado de duas formas: <strong>pagar só juros</strong> (principal renovado com novo prazo)
+                                    ou <strong>renovar com abate</strong> (valor pago abate o principal; o saldo restante vira novo empréstimo).
                                 </p>
-                                <div class="row mb-2">
+                                <div class="row mb-3">
                                     <div class="col-md-6">
                                         <strong>Valor Principal:</strong> R$ {{ number_format($emprestimo->valor_total, 2, ',', '.') }}
                                     </div>
@@ -293,9 +293,14 @@
                                         <strong>Valor dos Juros:</strong> R$ {{ number_format($emprestimo->calcularValorJuros(), 2, ',', '.') }}
                                     </div>
                                 </div>
-                                <a href="{{ route('pagamentos.create', ['parcela_id' => $parcela->id, 'renovar' => '1']) }}" class="btn btn-primary">
-                                    <i class="bx bx-refresh"></i> Renovar Empréstimo (Pagar Só Juros)
-                                </a>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <a href="{{ route('pagamentos.create', ['parcela_id' => $parcela->id, 'renovar' => '1', 'renovacao_tipo' => 'nenhum']) }}" class="btn btn-primary">
+                                        <i class="bx bx-refresh"></i> Renovar (só juros)
+                                    </a>
+                                    <a href="{{ route('pagamentos.create', ['parcela_id' => $parcela->id, 'renovar' => '1', 'renovacao_tipo' => 'com_abate']) }}" class="btn btn-outline-primary">
+                                        <i class="bx bx-money"></i> Renovar com abate
+                                    </a>
+                                </div>
                             </div>
                         @elseif($emprestimo->isAtivo() && $emprestimo->numero_parcelas === 1 && $emprestimo->jurosJaForamPagos())
                             <hr>

@@ -561,6 +561,7 @@ class EmprestimoController extends Controller
         }
 
         $emprestimoOrigem = Emprestimo::with(['operacao', 'cliente'])->findOrFail($emprestimoOrigemId);
+        $operacaoIdOrigem = (int) $emprestimoOrigem->operacao_id;
 
         if (empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
             if ($emprestimoOrigem->consultor_id !== $user->id) {
