@@ -36,7 +36,7 @@ class DevedoresController extends Controller
         if ($diasMin !== null && $diasMin !== '') {
             $diasMin = max(0, (int) $diasMin);
         } else {
-            $diasMin = 1;
+            $diasMin = 10;
         }
 
         $hoje = now()->format('Y-m-d');
