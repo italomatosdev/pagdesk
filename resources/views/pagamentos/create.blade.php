@@ -161,9 +161,14 @@
                                                 
                                                 <!-- Sub-opções de Renovação (aparecem quando renovação está selecionada) -->
                                                 <div class="ms-4 mt-2 ps-3 border-start border-2" id="sub_opcoes_renovacao" style="display: {{ (isset($renovar) && $renovar) ? 'block' : 'none' }};">
+                                                    @php
+                                                        $isRenovarNenhum = (isset($renovar) && $renovar && ($renovacaoTipo ?? '') === 'nenhum');
+                                                        $isRenovarAbate = (isset($renovar) && $renovar && ($renovacaoTipo ?? '') === 'com_abate');
+                                                        $isRenovarAutomatico = (isset($renovar) && $renovar && ($renovacaoTipo ?? '') !== 'nenhum' && !$isRenovarAbate);
+                                                    @endphp
                                                     <div class="mb-2">
                                                         <input type="radio" name="tipo_juros_renovacao" id="renovacao_nenhum" value="nenhum" 
-                                                               {{ (isset($renovar) && $renovar) ? '' : 'checked' }} class="form-check-input">
+                                                               {{ $isRenovarNenhum || (!isset($renovar) || !$renovar) ? 'checked' : '' }} class="form-check-input">
                                                         <label for="renovacao_nenhum" class="form-check-label ms-2">
                                                             <strong>Renovar sem juros de atraso</strong>
                                                         </label>
@@ -177,7 +182,7 @@
                                                     @if($taxaJurosRenovacao > 0)
                                                     <div class="mb-2">
                                                         <input type="radio" name="tipo_juros_renovacao" id="renovacao_automatico" value="automatico" 
-                                                               {{ (isset($renovar) && $renovar) ? 'checked' : '' }} class="form-check-input">
+                                                               {{ $isRenovarAutomatico ? 'checked' : '' }} class="form-check-input">
                                                         <label for="renovacao_automatico" class="form-check-label ms-2">
                                                             <strong>Renovar com juros de atraso (automático)</strong> 
                                                             ({{ number_format($taxaJurosRenovacao, 2, ',', '.') }}% {{ $tipoCalculoRenovacao === 'por_dia' ? 'ao dia' : 'ao mês' }})
@@ -230,7 +235,7 @@
                                                     </div>
                                                     
                                                     <div class="mb-2">
-                                                        <input type="radio" name="tipo_juros_renovacao" id="renovacao_com_abate" value="com_abate" class="form-check-input">
+                                                        <input type="radio" name="tipo_juros_renovacao" id="renovacao_com_abate" value="com_abate" {{ ($isRenovarAbate ?? false) ? 'checked' : '' }} class="form-check-input">
                                                         <label for="renovacao_com_abate" class="form-check-label ms-2">
                                                             <strong>Renovar com abate no saldo</strong> - Informar valor total a pagar (o valor abate o saldo; novo empréstimo = saldo restante)
                                                         </label>
@@ -1095,29 +1100,20 @@
                 // Calcular inicialmente
                 atualizarValorPagamento();
                 
-                // Se veio com parâmetro renovar, garantir que está selecionado
+                // Se veio com parâmetro renovar, garantir que está selecionado e sub-opção conforme renovacao_tipo
                 @if(isset($renovar) && $renovar && $podeRenovar && !$jurosJaPagos)
                 const radioRenovacao = document.getElementById('tipo_juros_renovacao');
+                const renovacaoTipoParam = @json($renovacaoTipo ?? '');
                 if (radioRenovacao) {
                     radioRenovacao.checked = true;
                     radioRenovacao.dispatchEvent(new Event('change'));
-                    
-                    // Selecionar sub-opção automática por padrão se não houver nenhuma selecionada
                     setTimeout(() => {
-                        const subOpcaoSelecionada = document.querySelector('input[name="tipo_juros_renovacao"]:checked');
-                        if (!subOpcaoSelecionada) {
-                            const renovacaoAutomatico = document.getElementById('renovacao_automatico');
-                            if (renovacaoAutomatico) {
-                                renovacaoAutomatico.checked = true;
-                                renovacaoAutomatico.dispatchEvent(new Event('change'));
-                            } else {
-                                // Se não tem automático, seleciona nenhum
-                                const renovacaoNenhum = document.getElementById('renovacao_nenhum');
-                                if (renovacaoNenhum) {
-                                    renovacaoNenhum.checked = true;
-                                    renovacaoNenhum.dispatchEvent(new Event('change'));
-                                }
-                            }
+                        const alvo = (renovacaoTipoParam === 'com_abate') ? document.getElementById('renovacao_com_abate')
+                                    : (renovacaoTipoParam === 'nenhum') ? document.getElementById('renovacao_nenhum')
+                                    : document.getElementById('renovacao_automatico') || document.getElementById('renovacao_nenhum');
+                        if (alvo) {
+                            alvo.checked = true;
+                            alvo.dispatchEvent(new Event('change'));
                         }
                     }, 100);
                 }
