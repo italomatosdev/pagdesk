@@ -55,9 +55,11 @@ class ClienteController extends Controller
             }
         }
 
-        // Filtro por operação (ex.: link "Ver" na tela de detalhe da operação)
-        $operacaoIdFiltro = $request->filled('operacao_id') ? (int) $request->operacao_id : null;
-        if ($operacaoIdFiltro && ($isSuperAdmin || in_array($operacaoIdFiltro, $operacoesIds, true))) {
+        // Filtro por operação (lista + links externos)
+        $operacaoIdRequest = $request->filled('operacao_id') ? (int) $request->operacao_id : null;
+        $operacaoIdFiltro = null;
+        if ($operacaoIdRequest && ($isSuperAdmin || in_array($operacaoIdRequest, $operacoesIds, true))) {
+            $operacaoIdFiltro = $operacaoIdRequest;
             $query->whereHas('operationClients', fn ($q) => $q->where('operacao_id', $operacaoIdFiltro));
         }
 
@@ -116,9 +118,18 @@ class ClienteController extends Controller
                 }
             ])
             ->orderBy('nome')
-            ->paginate(15);
+            ->paginate(15)
+            ->withQueryString();
 
-        return view('clientes.index', compact('clientes', 'isSuperAdmin', 'stats'));
+        if ($isSuperAdmin) {
+            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
+        } else {
+            $operacoes = !empty($operacoesIds)
+                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+                : collect();
+        }
+
+        return view('clientes.index', compact('clientes', 'isSuperAdmin', 'stats', 'operacoes', 'operacaoIdFiltro'));
     }
 
     /**
@@ -156,6 +167,11 @@ class ClienteController extends Controller
         }
         if ($request->filled('nome')) {
             $query->where('nome', 'like', "%{$request->nome}%");
+        }
+
+        $operacaoIdRequest = $request->filled('operacao_id') ? (int) $request->operacao_id : null;
+        if ($operacaoIdRequest && ($isSuperAdmin || in_array($operacaoIdRequest, $operacoesIds, true))) {
+            $query->whereHas('operationClients', fn ($q) => $q->where('operacao_id', $operacaoIdRequest));
         }
 
         $clientes = $query->orderBy('nome')->get();
