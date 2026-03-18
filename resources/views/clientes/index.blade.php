@@ -90,7 +90,7 @@
                                 <a href="{{ route('clientes.link-cadastro') }}" class="btn btn-outline-info">
                                     <i class="bx bx-link-alt"></i> Link de cadastro
                                 </a>
-                                <a href="{{ route('clientes.export', request()->only(['documento', 'cpf', 'nome'])) }}" class="btn btn-outline-success">
+                                <a href="{{ route('clientes.export', request()->only(['documento', 'cpf', 'nome', 'operacao_id'])) }}" class="btn btn-outline-success">
                                     <i class="bx bx-download"></i> Exportar CSV
                                 </a>
                                 <a href="{{ route('clientes.create') }}" class="btn btn-primary">
@@ -102,16 +102,27 @@
                     <div class="card-body">
                         <!-- Filtros -->
                         <form method="GET" action="{{ route('clientes.index') }}" class="mb-3" id="form-filtro-clientes">
-                            <div class="row g-3">
-                                <div class="col-md-4">
-                                    <input type="text" name="documento" class="form-control" placeholder="CPF/CNPJ" 
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-3">
+                                    <label class="form-label small text-muted mb-0">Operação</label>
+                                    <select name="operacao_id" class="form-select">
+                                        <option value="">Todas</option>
+                                        @foreach($operacoes ?? [] as $op)
+                                            <option value="{{ $op->id }}" @selected((int) ($operacaoIdFiltro ?? 0) === (int) $op->id)>{{ $op->nome }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small text-muted mb-0">CPF/CNPJ</label>
+                                    <input type="text" name="documento" class="form-control" placeholder="CPF/CNPJ"
                                            value="{{ request('documento') ?? request('cpf') }}">
                                 </div>
-                                <div class="col-md-4">
-                                    <input type="text" name="nome" class="form-control" placeholder="Nome" 
+                                <div class="col-md-3">
+                                    <label class="form-label small text-muted mb-0">Nome</label>
+                                    <input type="text" name="nome" class="form-control" placeholder="Nome"
                                            value="{{ request('nome') }}">
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <button type="submit" class="btn btn-primary me-2" id="btn-buscar-clientes">
                                         <i class="bx bx-search"></i> Buscar
                                     </button>
