@@ -78,19 +78,73 @@
 
             <!-- Total de Empréstimos -->
             <div class="col-md-6 col-xl-3 mb-3">
-                <div class="card h-100">
-                    <div class="card-body d-flex flex-column">
-                        <div class="d-flex justify-content-between">
-                            <div>
+                <div class="card h-100 border shadow-sm overflow-hidden">
+                    <div class="card-body d-flex flex-column pb-2 px-3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="pe-2">
                                 <h6 class="mb-0 font-size-15">Total de Empréstimos</h6>
-                                <h4 class="mt-3 mb-0 font-size-22">{{ number_format($stats['total_emprestimos'], 0, ',', '.') }}</h4>
+                                <h4 class="mt-2 mb-0 font-size-22">{{ number_format($stats['total_emprestimos'], 0, ',', '.') }}</h4>
+                                <small class="text-muted d-block mt-1" style="font-size: 0.7rem;">Criados no período · por status</small>
                             </div>
-                            <div class="">
+                            <div class="flex-shrink-0">
                                 <div class="avatar">
                                     <div class="avatar-title rounded bg-success-subtle">
                                         <i class="bx bx-money font-size-24 mb-0 text-success"></i>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                                @php
+                                    $labelsStatusEmp = [
+                                        'draft' => 'Rascunho',
+                                        'pendente' => 'Pendentes',
+                                        'aguardando_aceite_retroativo' => 'Aguard. retroativo',
+                                        'aprovado' => 'Aprovados',
+                                        'ativo' => 'Ativos',
+                                        'finalizado' => 'Finalizados',
+                                        'cancelado' => 'Cancelados',
+                                    ];
+                                    $corStatusEmp = [
+                                        'draft' => 'secondary',
+                                        'pendente' => 'warning',
+                                        'aguardando_aceite_retroativo' => 'info',
+                                        'aprovado' => 'primary',
+                                        'ativo' => 'success',
+                                        'finalizado' => 'dark',
+                                        'cancelado' => 'danger',
+                                    ];
+                                    $porStatus = is_array($emprestimosPorStatus ?? null)
+                                        ? $emprestimosPorStatus
+                                        : ($emprestimosPorStatus ?? collect())->toArray();
+                                    $tilesStatusEmp = [];
+                                    foreach ($labelsStatusEmp as $st => $label) {
+                                        $tilesStatusEmp[] = [
+                                            'label' => $label,
+                                            'n' => (int) ($porStatus[$st] ?? 0),
+                                            'cor' => $corStatusEmp[$st] ?? 'secondary',
+                                        ];
+                                    }
+                                    foreach ($porStatus as $st => $n) {
+                                        if (! array_key_exists($st, $labelsStatusEmp) && (int) $n > 0) {
+                                            $tilesStatusEmp[] = [
+                                                'label' => ucfirst(str_replace('_', ' ', $st)),
+                                                'n' => (int) $n,
+                                                'cor' => 'secondary',
+                                            ];
+                                        }
+                                    }
+                                    usort($tilesStatusEmp, fn ($a, $b) => $b['n'] <=> $a['n']);
+                                @endphp
+                        <div class="dashboard-emp-status-scroll-horizontal mt-2 pt-2 border-top mx-n3 px-3">
+                            <div class="dashboard-emp-status-strip d-flex flex-nowrap gap-2 align-items-stretch pb-1">
+                                        @foreach($tilesStatusEmp as $tile)
+                                            <div class="dashboard-status-tile flex-shrink-0 rounded-3 px-2 py-1 text-center border-bottom border-{{ $tile['cor'] }} border-3 bg-body-secondary bg-opacity-10"
+                                                 style="min-width: 4.25rem; max-width: 6.5rem;"
+                                                 title="{{ $tile['label'] }}: {{ $tile['n'] }} empréstimo(s)">
+                                                <div class="fw-bold text-{{ $tile['cor'] }} font-size-16 lh-1">{{ number_format($tile['n'], 0, ',', '.') }}</div>
+                                                <div class="text-truncate text-muted mt-1" style="font-size: 0.62rem; line-height: 1.1;">{{ $tile['label'] }}</div>
+                                            </div>
+                                        @endforeach
                             </div>
                         </div>
                     </div>
@@ -1251,6 +1305,41 @@
             </div>
         </div>
         <!-- END ROW -->
+        <style>
+            /* Largura fixa da viewport de scroll = card; faixa interna pode ser maior → barra horizontal */
+            .dashboard-emp-status-scroll-horizontal {
+                display: block;
+                width: 100%;
+                max-width: 100%;
+                overflow-x: auto;
+                overflow-y: hidden;
+                overscroll-behavior-x: contain;
+                scrollbar-width: thin;
+                scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
+                -webkit-overflow-scrolling: touch;
+                touch-action: pan-x;
+            }
+            .dashboard-emp-status-scroll-horizontal .dashboard-emp-status-strip {
+                width: max-content;
+                min-height: 2.75rem;
+            }
+            .dashboard-emp-status-scroll-horizontal::-webkit-scrollbar { height: 6px; }
+            .dashboard-emp-status-scroll-horizontal::-webkit-scrollbar-thumb {
+                background: rgba(0, 0, 0, 0.25);
+                border-radius: 6px;
+            }
+            .dashboard-emp-status-scroll-horizontal::-webkit-scrollbar-track {
+                background: rgba(0, 0, 0, 0.06);
+                border-radius: 6px;
+            }
+            .dashboard-status-tile {
+                transition: transform 0.12s ease, box-shadow 0.12s ease;
+            }
+            .dashboard-status-tile:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            }
+        </style>
     @endsection
     @section('scripts')
         <!-- ApexCharts -->

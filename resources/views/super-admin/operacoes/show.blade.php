@@ -73,6 +73,18 @@
                                     {{ $operacao->requer_liberacao ? 'Sim' : 'Não' }}
                                 </span>
                             </div>
+                            <div class="col-md-6 mb-3">
+                                <strong>Pagamento em produto/objeto:</strong>
+                                <span class="badge bg-{{ $operacao->requer_autorizacao_pagamento_produto ? 'info' : 'secondary' }}">
+                                    {{ $operacao->requer_autorizacao_pagamento_produto ? 'Permitido' : 'Não' }}
+                                </span>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <strong>Empréstimo retroativo:</strong>
+                                <span class="badge bg-{{ $operacao->permite_emprestimo_retroativo ? 'success' : 'secondary' }}">
+                                    {{ $operacao->permite_emprestimo_retroativo ? 'Permitido' : 'Não' }}
+                                </span>
+                            </div>
                             @if($operacao->taxa_juros_atraso)
                                 <div class="col-md-6 mb-3">
                                     <strong>Taxa de Juros por Atraso:</strong>

@@ -325,6 +325,7 @@ class EmpresaController extends Controller
             'requer_aprovacao' => 'nullable|boolean',
             'requer_liberacao' => 'nullable|boolean',
             'requer_autorizacao_pagamento_produto' => 'nullable|boolean',
+            'permite_emprestimo_retroativo' => 'nullable|boolean',
             'taxa_juros_atraso' => 'nullable|numeric|min:0|max:100',
             'tipo_calculo_juros' => 'nullable|in:por_dia,por_mes',
             'documentos_obrigatorios' => 'nullable|array',
@@ -336,7 +337,8 @@ class EmpresaController extends Controller
             $requerAprovacao = $request->has('requer_aprovacao') ? (bool) $request->input('requer_aprovacao') : true;
             $requerLiberacao = $request->has('requer_liberacao') ? (bool) $request->input('requer_liberacao') : true;
             $requerAutorizacaoProduto = $request->has('requer_autorizacao_pagamento_produto') ? (bool) $request->input('requer_autorizacao_pagamento_produto') : false;
-            
+            $permiteEmprestimoRetroativo = $request->has('permite_emprestimo_retroativo') && $request->permite_emprestimo_retroativo == '1';
+
             // Criar operação vinculada à empresa
             $operacao = Operacao::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)->create([
                 'nome' => $validated['nome'],
@@ -347,6 +349,7 @@ class EmpresaController extends Controller
                 'requer_aprovacao' => $requerAprovacao,
                 'requer_liberacao' => $requerLiberacao,
                 'requer_autorizacao_pagamento_produto' => $requerAutorizacaoProduto,
+                'permite_emprestimo_retroativo' => $permiteEmprestimoRetroativo,
                 'taxa_juros_atraso' => $validated['taxa_juros_atraso'] ?? 0,
                 'tipo_calculo_juros' => $validated['tipo_calculo_juros'] ?? 'por_dia',
                 'empresa_id' => $empresa->id,

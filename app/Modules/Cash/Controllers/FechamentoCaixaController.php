@@ -9,6 +9,7 @@ use App\Modules\Cash\Services\SettlementService;
 use App\Modules\Core\Models\Operacao;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class FechamentoCaixaController extends Controller
@@ -88,6 +89,71 @@ class FechamentoCaixaController extends Controller
             'status',
             'dataInicio',
             'dataFim'
+        ));
+    }
+
+    /**
+     * Tela de conferência (extrato e totais) antes de confirmar o fechamento de caixa.
+     */
+    public function conferir(Request $request): View|RedirectResponse
+    {
+        $user = auth()->user();
+
+        if ($user->isSuperAdmin()) {
+            abort(403, 'Super Admin não pode acessar Fechamento de Caixa.');
+        }
+
+        $validated = $request->validate([
+            'usuario_id' => 'required|exists:users,id',
+            'operacao_id' => 'required|exists:operacoes,id',
+        ]);
+
+        $usuarioId = (int) $validated['usuario_id'];
+        $operacaoId = (int) $validated['operacao_id'];
+
+        if (!$user->temAcessoOperacao($operacaoId)) {
+            return redirect()->route('fechamento-caixa.index')
+                ->with('error', 'Você não tem acesso a esta operação.');
+        }
+
+        if ($usuarioId !== $user->id) {
+            if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+                return redirect()->route('fechamento-caixa.index')
+                    ->with('error', 'Você não tem permissão para fechar o caixa de outro usuário.');
+            }
+        }
+
+        $dados = $this->settlementService->prepararConferenciaFechamento($usuarioId, $operacaoId);
+
+        if ($dados['saldoAtual'] <= 0) {
+            return redirect()->route('fechamento-caixa.index', ['operacao_id' => $operacaoId])
+                ->with('error', 'Não há saldo positivo para fechar. Saldo atual: R$ ' . number_format($dados['saldoAtual'], 2, ',', '.'));
+        }
+
+        $usuarioAlvo = \App\Models\User::findOrFail($usuarioId);
+        $operacao = Operacao::findOrFail($operacaoId);
+        $movimentacoes = $dados['movimentacoes'];
+        $saldoInicial = $dados['saldoInicial'];
+        $totalEntradas = $dados['totalEntradas'];
+        $totalSaidas = $dados['totalSaidas'];
+        $saldoFinal = $dados['saldoFinal'];
+        $saldoAtual = $dados['saldoAtual'];
+        $dataInicioConf = $dados['dataInicio'];
+        $dataFimConf = $dados['dataFim'];
+        $quantidadeMovimentacoes = $movimentacoes->count();
+
+        return view('caixa.fechamento.conferir', compact(
+            'usuarioAlvo',
+            'operacao',
+            'movimentacoes',
+            'saldoInicial',
+            'totalEntradas',
+            'totalSaidas',
+            'saldoFinal',
+            'saldoAtual',
+            'quantidadeMovimentacoes',
+            'dataInicioConf',
+            'dataFimConf'
         ));
     }
 
@@ -195,6 +261,8 @@ class FechamentoCaixaController extends Controller
                 : 'Caixa fechado com sucesso! O usuário foi notificado.';
 
             return redirect()->route('fechamento-caixa.show', $settlement->id)->with('success', $msg);
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao fechar caixa: ' . $e->getMessage())->withInput();
         }
