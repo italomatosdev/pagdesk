@@ -100,7 +100,7 @@ class SettlementService
 
             // Data início = dia seguinte ao último fechamento ou primeira movimentação
             if ($ultimoFechamento) {
-                $dataInicio = $ultimoFechamento->data_fim->addDay()->format('Y-m-d');
+                $dataInicio = $ultimoFechamento->data_fim->copy()->addDay()->format('Y-m-d');
             } else {
                 $primeiraMov = CashLedgerEntry::where('consultor_id', $usuarioId)
                     ->where('operacao_id', $operacaoId)
@@ -155,6 +155,58 @@ class SettlementService
 
             return $settlement;
         });
+    }
+
+    /**
+     * Dados para tela de conferência antes do fechamento (mesmo período e saldo que fecharCaixa usará).
+     *
+     * @return array{dataInicio: string, dataFim: string, saldoAtual: float, saldoInicial: float, totalEntradas: float, totalSaidas: float, saldoFinal: float, movimentacoes: \Illuminate\Support\Collection}
+     */
+    public function prepararConferenciaFechamento(int $usuarioId, int $operacaoId): array
+    {
+        $cashService = app(\App\Modules\Cash\Services\CashService::class);
+
+        $ultimoFechamento = Settlement::where('consultor_id', $usuarioId)
+            ->where('operacao_id', $operacaoId)
+            ->where('status', 'concluido')
+            ->orderBy('data_fim', 'desc')
+            ->first();
+
+        if ($ultimoFechamento) {
+            $dataInicio = $ultimoFechamento->data_fim->copy()->addDay()->format('Y-m-d');
+        } else {
+            $primeiraMov = CashLedgerEntry::where('consultor_id', $usuarioId)
+                ->where('operacao_id', $operacaoId)
+                ->orderBy('data_movimentacao', 'asc')
+                ->first();
+            $dataInicio = $primeiraMov ? $primeiraMov->data_movimentacao->format('Y-m-d') : now()->format('Y-m-d');
+        }
+
+        $dataFim = now()->format('Y-m-d');
+        $saldoAtual = $cashService->calcularSaldo($usuarioId, $operacaoId);
+        $saldoInicial = $cashService->calcularSaldoInicial($usuarioId, $operacaoId, $dataInicio);
+        $totalEntradas = $cashService->calcularTotalEntradas($usuarioId, $operacaoId, $dataInicio, $dataFim);
+        $totalSaidas = $cashService->calcularTotalSaidas($usuarioId, $operacaoId, $dataInicio, $dataFim);
+        $saldoFinal = $saldoInicial + $totalEntradas - $totalSaidas;
+
+        $movimentacoes = CashLedgerEntry::where('consultor_id', $usuarioId)
+            ->where('operacao_id', $operacaoId)
+            ->whereBetween('data_movimentacao', [$dataInicio, $dataFim])
+            ->with(['operacao', 'pagamento.parcela.emprestimo.cliente'])
+            ->orderBy('data_movimentacao', 'asc')
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        return [
+            'dataInicio' => $dataInicio,
+            'dataFim' => $dataFim,
+            'saldoAtual' => (float) $saldoAtual,
+            'saldoInicial' => (float) $saldoInicial,
+            'totalEntradas' => (float) $totalEntradas,
+            'totalSaidas' => (float) $totalSaidas,
+            'saldoFinal' => (float) $saldoFinal,
+            'movimentacoes' => $movimentacoes,
+        ];
     }
 
     /**

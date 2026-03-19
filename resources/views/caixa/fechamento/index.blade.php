@@ -11,6 +11,18 @@
 @section('content')
     <div class="row">
         <div class="col-12">
+            @if(session('error'))
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    {{ session('error') }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+                </div>
+            @endif
+            @if(session('success'))
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    {{ session('success') }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+                </div>
+            @endif
             <!-- Card: Meu Saldo / Fechar Meu Caixa -->
             @if($meuSaldo > 0)
             <div class="card mb-3 border-primary">
@@ -25,9 +37,9 @@
                             <p class="text-muted mb-1">Meu saldo atual</p>
                             <h3 class="text-success mb-0">R$ {{ number_format($meuSaldo, 2, ',', '.') }}</h3>
                         </div>
-                        <button type="button" class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#modalFecharMeuCaixa">
-                            <i class="bx bx-lock-alt"></i> Fechar Meu Caixa
-                        </button>
+                        <a href="{{ route('fechamento-caixa.conferir', ['usuario_id' => auth()->id(), 'operacao_id' => $operacaoId]) }}" class="btn btn-primary btn-lg">
+                            <i class="bx bx-search-alt"></i> Conferir e fechar meu caixa
+                        </a>
                     </div>
                 </div>
             </div>
@@ -71,54 +83,11 @@
                                             <span class="text-success fw-bold">R$ {{ number_format($usuario->saldo_operacao, 2, ',', '.') }}</span>
                                         </td>
                                         <td class="text-center">
-                                            <button type="button" class="btn btn-danger btn-sm" 
-                                                    data-bs-toggle="modal" 
-                                                    data-bs-target="#modalFechar{{ $usuario->id }}">
-                                                <i class="bx bx-lock-alt"></i> Fechar
-                                            </button>
+                                            <a href="{{ route('fechamento-caixa.conferir', ['usuario_id' => $usuario->id, 'operacao_id' => $operacaoId]) }}" class="btn btn-danger btn-sm">
+                                                <i class="bx bx-search-alt"></i> Conferir e fechar
+                                            </a>
                                         </td>
                                     </tr>
-
-                                    <!-- Modal -->
-                                    <div class="modal fade" id="modalFechar{{ $usuario->id }}" tabindex="-1">
-                                        <div class="modal-dialog">
-                                            <div class="modal-content">
-                                                <form method="POST" action="{{ route('fechamento-caixa.fechar') }}">
-                                                    @csrf
-                                                    <input type="hidden" name="usuario_id" value="{{ $usuario->id }}">
-                                                    <input type="hidden" name="operacao_id" value="{{ $operacaoId }}">
-                                                    
-                                                    <div class="modal-header bg-danger text-white">
-                                                        <h5 class="modal-title text-white">
-                                                            <i class="bx bx-lock-alt"></i> Fechar Caixa
-                                                        </h5>
-                                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                                                    </div>
-                                                    <div class="modal-body">
-                                                        <div class="alert alert-secondary">
-                                                            <strong>{{ $usuario->name }}</strong><br>
-                                                            <span class="text-success fw-bold fs-5">
-                                                                R$ {{ number_format($usuario->saldo_operacao, 2, ',', '.') }}
-                                                            </span>
-                                                        </div>
-                                                        <p class="text-muted small mb-3">
-                                                            O usuário será notificado e deverá enviar o valor com comprovante.
-                                                        </p>
-                                                        <div class="mb-0">
-                                                            <label class="form-label">Observações (opcional)</label>
-                                                            <textarea name="observacoes" class="form-control" rows="2"></textarea>
-                                                        </div>
-                                                    </div>
-                                                    <div class="modal-footer">
-                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                                                        <button type="submit" class="btn btn-danger">
-                                                            <i class="bx bx-lock-alt"></i> Confirmar
-                                                        </button>
-                                                    </div>
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>
                                     @endif
                                 @endforeach
                             </tbody>
@@ -291,47 +260,6 @@
         </div>
     </div>
 
-    <!-- Modal: Fechar Meu Caixa -->
-    @if($meuSaldo > 0)
-    <div class="modal fade" id="modalFecharMeuCaixa" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <form method="POST" action="{{ route('fechamento-caixa.fechar') }}">
-                    @csrf
-                    <input type="hidden" name="usuario_id" value="{{ auth()->id() }}">
-                    <input type="hidden" name="operacao_id" value="{{ $operacaoId }}">
-                    
-                    <div class="modal-header bg-primary text-white">
-                        <h5 class="modal-title text-white">
-                            <i class="bx bx-lock-alt"></i> Fechar Meu Caixa
-                        </h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="alert alert-primary">
-                            <strong>Operação:</strong> {{ $operacaoSelecionada?->nome }}<br>
-                            <strong>Valor a enviar:</strong> 
-                            <span class="text-success fw-bold fs-5">R$ {{ number_format($meuSaldo, 2, ',', '.') }}</span>
-                        </div>
-                        <p class="text-muted small mb-3">
-                            Ao confirmar, você deverá enviar o valor e anexar o comprovante.
-                        </p>
-                        <div class="mb-0">
-                            <label class="form-label">Observações (opcional)</label>
-                            <textarea name="observacoes" class="form-control" rows="2"></textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bx bx-lock-alt"></i> Confirmar Fechamento
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-    @endif
 @endsection
 
 @section('scripts')

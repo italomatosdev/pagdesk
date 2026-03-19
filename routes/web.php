@@ -327,6 +327,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
     // Fechamento de Caixa (nova tela unificada)
     Route::prefix('fechamento-caixa')->name('fechamento-caixa.')->group(function () {
         Route::get('/', [App\Modules\Cash\Controllers\FechamentoCaixaController::class, 'index'])->name('index');
+        Route::get('/conferir', [App\Modules\Cash\Controllers\FechamentoCaixaController::class, 'conferir'])->name('conferir');
         Route::post('/fechar', [App\Modules\Cash\Controllers\FechamentoCaixaController::class, 'fechar'])->name('fechar');
         Route::get('/{id}', [App\Modules\Cash\Controllers\FechamentoCaixaController::class, 'show'])->name('show');
         Route::post('/{id}/aprovar', [App\Modules\Cash\Controllers\FechamentoCaixaController::class, 'aprovar'])->name('aprovar');
