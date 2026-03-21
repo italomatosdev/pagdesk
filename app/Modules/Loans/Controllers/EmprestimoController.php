@@ -8,6 +8,7 @@ use App\Modules\Core\Models\Operacao;
 use App\Modules\Core\Services\ClienteService;
 use App\Modules\Core\Services\OperacaoDadosClienteService;
 use App\Support\FichaContatoLookup;
+use App\Support\NotificacaoClienteDisplayName;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Parcela;
 use App\Modules\Loans\Models\SolicitacaoEmprestimoRetroativo;
@@ -625,7 +626,7 @@ class EmprestimoController extends Controller
             $dadosNotif = [
                 'tipo' => 'negociacao_pendente',
                 'titulo' => 'Nova Solicitação de Negociação',
-                'mensagem' => "{$user->name} solicitou negociação do empréstimo #{$emprestimoOrigemId} - Cliente: {$emprestimoOrigem->cliente->nome}. Saldo devedor: R$ " . number_format($saldoDevedor, 2, ',', '.'),
+                'mensagem' => "{$user->name} solicitou negociação do empréstimo #{$emprestimoOrigemId} - Cliente: " . NotificacaoClienteDisplayName::forEmprestimo($emprestimoOrigem) . '. Saldo devedor: R$ ' . number_format($saldoDevedor, 2, ',', '.'),
                 'url' => route('liberacoes.negociacoes'),
                 'dados' => ['solicitacao_id' => $solicitacao->id],
             ];

@@ -9,6 +9,7 @@ use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Parcela;
 use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\SolicitacaoQuitacao;
+use App\Support\NotificacaoClienteDisplayName;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -226,8 +227,7 @@ class QuitacaoService
             ]);
             self::auditar('solicitar_quitacao_desconto', $solicitacao, null, $solicitacao->toArray());
 
-            $cliente = $emprestimo->cliente;
-            $clienteNome = $cliente ? $cliente->nome : 'Cliente';
+            $clienteNome = NotificacaoClienteDisplayName::forEmprestimo($emprestimo);
             $mensagem = "Quitação com desconto do empréstimo #{$emprestimo->id} ({$clienteNome}): R$ " . number_format($valorSolicitado, 2, ',', '.') . " (saldo R$ " . number_format($saldoDevedor, 2, ',', '.') . "). Solicitado por {$user->name}.";
             $notificacaoService = app(NotificacaoService::class);
             $operacaoId = (int) $emprestimo->operacao_id;

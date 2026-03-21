@@ -102,10 +102,10 @@ O **Radar** é descrito no código como a consulta cadastral interna do sistema 
 
 ### Fase D — Modelo e legado
 
-| # | Item | Ação sugerida |
-|---|------|----------------|
-| D1 | Accessors `Cliente` + `ClienteDadosEmpresa` | Decisão de produto: convivência até migração, ou reduzir override em telas sensíveis passando a **DTO/view model** com fonte explícita. |
-| D2 | Notificações | Opcional: incluir nome da ficha da operação do empréstimo quando disponível. |
+| # | Item | Ação sugerida | Estado |
+|---|------|----------------|--------|
+| D1 | Accessors `Cliente` + `ClienteDadosEmpresa` | Decisão de produto: convivência até migração, ou reduzir override em telas sensíveis passando a **DTO/view model** com fonte explícita. | Pendente (produto) |
+| D2 | Notificações | Incluir **nome da ficha** (`operacao_dados_clientes.nome`) da operação do empréstimo quando existir; senão `Cliente->nome`. | **Feito** — `NotificacaoClienteDisplayName::forEmprestimo` em empréstimos, pagamentos, liberações, quitação e negociação. |
 
 ---
 
@@ -121,7 +121,7 @@ O **Radar** é descrito no código como a consulta cadastral interna do sistema 
 
 - Plano macro: `docs/PLANO_OPERACAO_DADOS_CLIENTE.md`
 - Serviço: `App\Modules\Core\Services\OperacaoDadosClienteService`
-- Helpers: `App\Support\WhatsappLink`, `App\Support\FichaContatoLookup`
+- Helpers: `App\Support\WhatsappLink`, `App\Support\FichaContatoLookup`, `App\Support\NotificacaoClienteDisplayName` (D2)
 - Radar: `App\Modules\Core\Controllers\RadarController.php` → `ClienteController::buscarPorCpf`
 - Model `Cliente` (accessors): `getNomeAttribute`, `getTelefoneAttribute`, `getDadosEmpresaAtual()`, etc.
 

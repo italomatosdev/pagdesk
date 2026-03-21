@@ -8,6 +8,7 @@ use App\Modules\Core\Traits\Auditable;
 use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\PagamentoProdutoObjetoItem;
 use App\Modules\Loans\Models\Parcela;
+use App\Support\NotificacaoClienteDisplayName;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -138,7 +139,7 @@ class PagamentoService
                 $mensagem = sprintf(
                     'Empréstimo #%d - %s. Valor R$ %s. Aguardando aceite em Liberações.',
                     $emprestimo->id,
-                    $emprestimo->cliente ? $emprestimo->cliente->nome : 'Cliente',
+                    NotificacaoClienteDisplayName::forEmprestimo($emprestimo),
                     number_format($pagamento->valor, 2, ',', '.')
                 );
                 $operacaoId = (int) $emprestimo->operacao_id;
@@ -689,14 +690,14 @@ class PagamentoService
                         
                         // Notificar consultor sobre liberação
                         $notificacaoService = app(\App\Modules\Core\Services\NotificacaoService::class);
-                        $cliente = $emprestimo->cliente;
+                        $nomeCliente = NotificacaoClienteDisplayName::forEmprestimo($emprestimo);
                         
                         if ($emprestimo->consultor_id) {
                             $notificacaoService->criar([
                                 'user_id' => $emprestimo->consultor_id,
                                 'tipo' => 'garantia_liberada',
                                 'titulo' => 'Garantia Liberada',
-                                'mensagem' => "A garantia do empréstimo #{$emprestimo->id} do cliente {$cliente->nome} foi liberada. Todas as parcelas foram quitadas.",
+                                'mensagem' => "A garantia do empréstimo #{$emprestimo->id} do cliente {$nomeCliente} foi liberada. Todas as parcelas foram quitadas.",
                                 'url' => route('emprestimos.show', $emprestimo->id),
                                 'dados' => [
                                     'emprestimo_id' => $emprestimo->id,

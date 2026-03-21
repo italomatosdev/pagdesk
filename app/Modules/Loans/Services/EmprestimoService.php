@@ -8,6 +8,7 @@ use App\Modules\Core\Traits\Auditable;
 use App\Modules\Cash\Models\CashLedgerEntry;
 use App\Models\User;
 use App\Models\Scopes\EmpresaScope;
+use App\Support\NotificacaoClienteDisplayName;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\Parcela;
@@ -161,7 +162,7 @@ class EmprestimoService
                 $dadosNotif = [
                     'tipo' => 'emprestimo_retroativo_aguardando_aceite',
                     'titulo' => 'Empréstimo retroativo aguardando aceite',
-                    'mensagem' => 'Empréstimo #' . $emprestimo->id . ' (retroativo) criado por consultor aguardando sua aprovação.',
+                    'mensagem' => 'Empréstimo #' . $emprestimo->id . ' (retroativo) — ' . NotificacaoClienteDisplayName::forEmprestimo($emprestimo) . ' — criado por consultor aguardando sua aprovação.',
                     'url' => route('emprestimos.retroativo.pendentes'),
                 ];
                 $notificacaoService->criarParaGestoresDaOperacao($operacaoId, $dadosNotif);
@@ -220,11 +221,12 @@ class EmprestimoService
             
             if ($cliente) {
                 $operacaoId = (int) $emprestimo->operacao_id;
+                $nomeCliente = NotificacaoClienteDisplayName::forEmprestimo($emprestimo);
                 if ($status === 'pendente') {
                     $notificacaoService->criarParaRoleComOperacao('administrador', $operacaoId, [
                         'tipo' => 'emprestimo_pendente',
                         'titulo' => 'Novo Empréstimo Pendente',
-                        'mensagem' => "Empréstimo de R$ " . number_format($emprestimo->valor_total, 2, ',', '.') . " para {$cliente->nome} aguardando aprovação",
+                        'mensagem' => "Empréstimo de R$ " . number_format($emprestimo->valor_total, 2, ',', '.') . " para {$nomeCliente} aguardando aprovação",
                         'url' => route('aprovacoes.index'),
                         'dados' => ['emprestimo_id' => $emprestimo->id],
                     ]);
@@ -232,7 +234,7 @@ class EmprestimoService
                     $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, [
                         'tipo' => 'emprestimo_aprovado',
                         'titulo' => 'Empréstimo Aprovado - Liberação Pendente',
-                        'mensagem' => "Empréstimo de R$ " . number_format($emprestimo->valor_total, 2, ',', '.') . " para {$cliente->nome} aprovado e aguardando liberação",
+                        'mensagem' => "Empréstimo de R$ " . number_format($emprestimo->valor_total, 2, ',', '.') . " para {$nomeCliente} aprovado e aguardando liberação",
                         'url' => route('liberacoes.index'),
                         'dados' => ['emprestimo_id' => $emprestimo->id],
                     ]);
@@ -836,10 +838,11 @@ class EmprestimoService
             
             if ($cliente) {
                 $operacaoId = (int) $emprestimo->operacao_id;
+                $nomeCliente = NotificacaoClienteDisplayName::forEmprestimo($emprestimo);
                 $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, [
                     'tipo' => 'emprestimo_aprovado',
                     'titulo' => 'Empréstimo Aprovado - Liberação Pendente',
-                    'mensagem' => "Empréstimo de R$ " . number_format($emprestimo->valor_total, 2, ',', '.') . " para {$cliente->nome} aprovado e aguardando liberação",
+                    'mensagem' => "Empréstimo de R$ " . number_format($emprestimo->valor_total, 2, ',', '.') . " para {$nomeCliente} aprovado e aguardando liberação",
                     'url' => route('liberacoes.index'),
                     'dados' => ['emprestimo_id' => $emprestimo->id],
                 ]);
@@ -1108,7 +1111,7 @@ class EmprestimoService
 
             // Notificações
             $notificacaoService = app(NotificacaoService::class);
-            $cliente = $emprestimo->cliente;
+            $nomeCliente = NotificacaoClienteDisplayName::forEmprestimo($emprestimo);
             
             // Notificar consultor sobre cancelamento
             if ($emprestimo->consultor_id) {
@@ -1116,7 +1119,7 @@ class EmprestimoService
                     'user_id' => $emprestimo->consultor_id,
                     'tipo' => 'emprestimo_cancelado',
                     'titulo' => 'Empréstimo Cancelado',
-                    'mensagem' => "O empréstimo #{$emprestimo->id} do cliente {$cliente->nome} foi cancelado. Motivo: {$motivoCancelamento}",
+                    'mensagem' => "O empréstimo #{$emprestimo->id} do cliente {$nomeCliente} foi cancelado. Motivo: {$motivoCancelamento}",
                     'url' => route('emprestimos.show', $emprestimo->id),
                     'dados' => ['emprestimo_id' => $emprestimo->id],
                 ]);
@@ -1208,13 +1211,13 @@ class EmprestimoService
             );
 
             $notificacaoService = app(NotificacaoService::class);
-            $cliente = $emprestimo->cliente;
+            $nomeCliente = NotificacaoClienteDisplayName::forEmprestimo($emprestimo);
             if ($emprestimo->consultor_id) {
                 $notificacaoService->criar([
                     'user_id' => $emprestimo->consultor_id,
                     'tipo' => 'emprestimo_cancelado',
                     'titulo' => 'Empréstimo Cancelado',
-                    'mensagem' => "O empréstimo #{$emprestimo->id} do cliente {$cliente->nome} foi cancelado (com desfazimento de pagamentos). Motivo: {$motivoCancelamento}",
+                    'mensagem' => "O empréstimo #{$emprestimo->id} do cliente {$nomeCliente} foi cancelado (com desfazimento de pagamentos). Motivo: {$motivoCancelamento}",
                     'url' => route('emprestimos.show', $emprestimo->id),
                     'dados' => ['emprestimo_id' => $emprestimo->id],
                 ]);
@@ -1429,7 +1432,7 @@ class EmprestimoService
 
             // Notificações
             $notificacaoService = app(\App\Modules\Core\Services\NotificacaoService::class);
-            $cliente = $emprestimo->cliente;
+            $nomeCliente = NotificacaoClienteDisplayName::forEmprestimo($emprestimo);
 
             // Notificar consultor
             if ($emprestimo->consultor_id) {
@@ -1437,7 +1440,7 @@ class EmprestimoService
                     'user_id' => $emprestimo->consultor_id,
                     'tipo' => 'garantia_executada',
                     'titulo' => 'Garantia Executada',
-                    'mensagem' => "A garantia do empréstimo #{$emprestimo->id} do cliente {$cliente->nome} foi executada. Motivo: {$observacoes}",
+                    'mensagem' => "A garantia do empréstimo #{$emprestimo->id} do cliente {$nomeCliente} foi executada. Motivo: {$observacoes}",
                     'url' => route('emprestimos.show', $emprestimo->id),
                     'dados' => [
                         'emprestimo_id' => $emprestimo->id,

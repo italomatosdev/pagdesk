@@ -8,6 +8,7 @@ use App\Modules\Core\Services\NotificacaoService;
 use App\Modules\Core\Traits\Auditable;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\LiberacaoEmprestimo;
+use App\Support\NotificacaoClienteDisplayName;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -184,14 +185,14 @@ class LiberacaoService
 
             // Notificações
             $notificacaoService = app(NotificacaoService::class);
-            $cliente = $liberacao->emprestimo->cliente;
+            $nomeCliente = NotificacaoClienteDisplayName::forEmprestimo($liberacao->emprestimo);
             
             // Notificar consultor sobre liberação disponível
             $notificacaoService->criar([
                 'user_id' => $liberacao->consultor_id,
                 'tipo' => 'liberacao_disponivel',
                 'titulo' => 'Dinheiro Liberado',
-                'mensagem' => "R$ " . number_format($liberacao->valor_liberado, 2, ',', '.') . " liberado para pagamento ao cliente {$cliente->nome}",
+                'mensagem' => "R$ " . number_format($liberacao->valor_liberado, 2, ',', '.') . " liberado para pagamento ao cliente {$nomeCliente}",
                 'url' => route('liberacoes.minhas'),
                 'dados' => ['liberacao_id' => $liberacao->id, 'emprestimo_id' => $liberacao->emprestimo_id],
             ]);
@@ -275,12 +276,12 @@ class LiberacaoService
                     'descricao' => "Liberação de dinheiro recebida - Empréstimo #{$liberacao->emprestimo->id}",
                 ]));
 
-                $cliente = $liberacao->emprestimo->cliente;
+                $nomeCliente = NotificacaoClienteDisplayName::forEmprestimo($liberacao->emprestimo);
                 $notificacaoService->criar([
                     'user_id' => $liberacao->consultor_id,
                     'tipo' => 'liberacao_disponivel',
                     'titulo' => 'Dinheiro Liberado',
-                    'mensagem' => "R$ " . number_format($liberacao->valor_liberado, 2, ',', '.') . " liberado para pagamento ao cliente {$cliente->nome}",
+                    'mensagem' => "R$ " . number_format($liberacao->valor_liberado, 2, ',', '.') . " liberado para pagamento ao cliente {$nomeCliente}",
                     'url' => route('liberacoes.minhas'),
                     'dados' => ['liberacao_id' => $liberacao->id, 'emprestimo_id' => $liberacao->emprestimo_id],
                 ]);
@@ -376,12 +377,12 @@ class LiberacaoService
             // Notificações
             $notificacaoService = app(NotificacaoService::class);
             $emprestimo = $liberacao->emprestimo;
-            $cliente = $emprestimo->cliente;
+            $nomeCliente = NotificacaoClienteDisplayName::forEmprestimo($emprestimo);
             $operacaoId = (int) $emprestimo->operacao_id;
             $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, [
                 'tipo' => 'pagamento_registrado',
                 'titulo' => 'Pagamento ao Cliente Confirmado',
-                'mensagem' => "Consultor confirmou pagamento de R$ " . number_format($liberacao->valor_liberado, 2, ',', '.') . " ao cliente {$cliente->nome}",
+                'mensagem' => "Consultor confirmou pagamento de R$ " . number_format($liberacao->valor_liberado, 2, ',', '.') . " ao cliente {$nomeCliente}",
                 'url' => route('emprestimos.show', $liberacao->emprestimo_id),
                 'dados' => ['liberacao_id' => $liberacao->id, 'emprestimo_id' => $liberacao->emprestimo_id],
             ]);
