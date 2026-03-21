@@ -77,6 +77,12 @@
 - **Listagem/export (`clientes.index` / `export`):** com filtro por operação, busca por nome também em `operacao_dados_clientes` (nome, telefone, e-mail da ficha); tabela e CSV priorizam dados da ficha para exibição.
 - **Pendente (evolução Fase 4):** accessors / telas que ainda leem só `clientes` sem contexto de operação.
 
+**Detalhe da tela `show` (Fase 4 — em andamento):**
+- `ClienteController::show`: query opcional **`?operacao_id=`**. Valida vínculo cliente–operação e permissão (super admin ou operação nas operações do usuário); se inválido → redirect sem query + flash de erro. Se ok → `operacaoContextoShow` com `id`, `nome` da operação e ficha (`OperacaoDadosCliente|null` via `obterParaOperacao`).
+- **Sem `operacao_id`:** mesmo critério do `edit` — lista `operacoesVinculadasParaEdicaoFicha`; **uma** operação → redirect para `show?operacao_id=`; **várias** → view `show-escolher-operacao`; **nenhuma** (ex.: super admin, cliente sem vínculos) → página geral sem ficha por operação. **`?geral=1`** força essa visão geral (evita loop com “Ver cadastro geral” e com Voltar em telas de escolha).
+- `resources/views/clientes/show.blade.php`: título e bloco de informações (nome, contato, endereço, observações, WhatsApp) **priorizam a ficha** quando há contexto; alerta com link “cadastro geral (sem filtro)” (`geral=1`); botão Editar e tabela de vínculos com **Ver** / **Editar** por operação (`show` / `edit` com `operacao_id`).
+- **`clientes.index`:** com filtro por operação ativo, o botão **Ver** abre `clientes.show` **com** `operacao_id` na URL para manter o mesmo contexto.
+
 ---
 
 ## Fase 4 — Convivência com `ClienteDadosEmpresa` e accessors do `Cliente`

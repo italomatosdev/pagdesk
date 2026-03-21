@@ -512,8 +512,11 @@ class ClienteController extends Controller
     /**
      * Mostrar detalhes do cliente
      * Super Admin: qualquer cliente. Demais: apenas se o cliente tiver vínculo com alguma das minhas operações.
+     * Query opcional ?operacao_id= — exibe dados de contato/endereço da ficha (`operacao_dados_clientes`) quando existir.
+     * Sem operacao_id: mesmo critério do {@see edit()} — uma operação acessível → redirect com ela; várias → tela de escolha.
+     * ?geral=1 força a visão geral (sem ficha por operação), sem redirect nem escolha.
      */
-    public function show(int $id): View
+    public function show(Request $request, int $id): View|RedirectResponse
     {
         $user = auth()->user();
         $isSuperAdmin = $user->isSuperAdmin();
@@ -533,6 +536,43 @@ class ClienteController extends Controller
             if (!$temAcesso) {
                 abort(403, 'Você não tem acesso a este cliente.');
             }
+        }
+
+        if (! $request->filled('operacao_id') && ! $request->boolean('geral')) {
+            $opcoes = $this->operacoesVinculadasParaEdicaoFicha($cliente, $user);
+
+            if ($opcoes->count() === 1) {
+                $only = $opcoes->first();
+
+                return redirect()->route('clientes.show', [
+                    'id' => $id,
+                    'operacao_id' => $only['operacao_id'],
+                ]);
+            }
+
+            if ($opcoes->count() > 1) {
+                return view('clientes.show-escolher-operacao', [
+                    'cliente' => $cliente,
+                    'opcoes' => $opcoes,
+                    'isSuperAdmin' => $isSuperAdmin,
+                ]);
+            }
+        }
+
+        $operacaoContextoShow = null;
+        if ($request->filled('operacao_id')) {
+            $oid = (int) $request->query('operacao_id');
+            $temVinculo = $cliente->operationClients()->where('operacao_id', $oid)->exists();
+            $pode = $isSuperAdmin || (! empty($operacoesIds) && in_array($oid, $operacoesIds, true));
+            if (! $temVinculo || ! $pode) {
+                return redirect()->route('clientes.show', $id)
+                    ->with('error', 'Operação inválida, sem permissão ou sem vínculo com este cliente.');
+            }
+            $operacaoContextoShow = [
+                'id' => $oid,
+                'nome' => Operacao::withoutGlobalScope(EmpresaScope::class)->whereKey($oid)->value('nome') ?? 'Operação',
+                'ficha' => $this->operacaoDadosClienteService->obterParaOperacao($cliente->id, $oid),
+            ];
         }
 
         // Filtrar documentos por empresa (quando houver)
@@ -662,7 +702,8 @@ class ClienteController extends Controller
             'atrasadasPorOperacao',
             'totalAtrasado',
             'statsCliente',
-            'isSuperAdmin'
+            'isSuperAdmin',
+            'operacaoContextoShow'
         ));
     }
 
@@ -1386,7 +1427,7 @@ class ClienteController extends Controller
     }
 
     /**
-     * Operações vinculadas ao cliente que o usuário pode usar para editar a ficha (por operação).
+     * Operações vinculadas ao cliente que o usuário pode usar para contexto de ficha (show/edit por operação).
      *
      * @return Collection<int, array{operacao_id: int, nome: string, empresa_nome: string|null}>
      */

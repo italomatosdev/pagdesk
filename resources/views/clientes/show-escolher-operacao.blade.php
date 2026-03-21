@@ -1,9 +1,9 @@
 @extends('layouts.master')
 @section('title')
-    Escolher operação — Editar cliente
+    Escolher operação — Ver cliente
 @endsection
 @section('page-title')
-    Editar ficha: {{ $cliente->nome }}
+    Ver cliente: {{ $cliente->nome }}
 @endsection
 @section('body')
     <body>
@@ -13,9 +13,9 @@
         <div class="col-lg-8 mx-auto">
             <div class="card">
                 <div class="card-header">
-                    <h4 class="card-title mb-0">Em qual operação deseja editar a ficha?</h4>
+                    <h4 class="card-title mb-0">Em qual operação deseja ver a ficha?</h4>
                     <p class="text-muted mb-0 small mt-2">
-                        O cadastro é mantido <strong>por operação</strong>. Escolha a operação para carregar e salvar nome, contato, endereço e documentos dessa ficha.
+                        O cadastro é exibido <strong>por operação</strong>. Escolha a operação para ver nome, contato e endereço dessa ficha.
                     </p>
                 </div>
                 <div class="card-body">
@@ -25,7 +25,7 @@
 
                     <div class="list-group">
                         @foreach($opcoes as $op)
-                            <a href="{{ route('clientes.edit', ['id' => $cliente->id, 'operacao_id' => $op['operacao_id']]) }}"
+                            <a href="{{ route('clientes.show', ['id' => $cliente->id, 'operacao_id' => $op['operacao_id']]) }}"
                                class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
                                 <div>
                                     <strong>{{ $op['nome'] }}</strong>
@@ -39,8 +39,11 @@
                     </div>
 
                     <div class="mt-4">
-                        <a href="{{ route('clientes.show', ['id' => $cliente->id, 'geral' => 1]) }}" class="btn btn-secondary">
-                            <i class="bx bx-arrow-back"></i> Voltar para o cliente
+                        <a href="{{ route('clientes.show', ['id' => $cliente->id, 'geral' => 1]) }}" class="btn btn-outline-secondary">
+                            <i class="bx bx-list-ul"></i> Ver cadastro geral (sem filtro por operação)
+                        </a>
+                        <a href="{{ route('clientes.index') }}" class="btn btn-secondary ms-2">
+                            <i class="bx bx-arrow-back"></i> Voltar à lista
                         </a>
                     </div>
                 </div>

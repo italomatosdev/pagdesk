@@ -300,7 +300,7 @@
                             @endif
 
                             <div class="d-flex justify-content-end gap-2">
-                                <a href="{{ route('clientes.show', $cliente->id) }}" class="btn btn-secondary">
+                                <a href="{{ route('clientes.show', !empty($operacaoParaFichaId) ? ['id' => $cliente->id, 'operacao_id' => $operacaoParaFichaId] : $cliente->id) }}" class="btn btn-secondary">
                                     <i class="bx bx-x"></i> Cancelar
                                 </a>
                                 <button type="submit" class="btn btn-primary">

@@ -196,7 +196,7 @@
                                             </td>
                                             <td>
                                                 <div class="d-flex gap-1">
-                                                    <a href="{{ route('clientes.show', $cliente->id) }}" 
+                                                    <a href="{{ !empty($operacaoIdFiltro) ? route('clientes.show', ['id' => $cliente->id, 'operacao_id' => $operacaoIdFiltro]) : route('clientes.show', $cliente->id) }}"
                                                        class="btn btn-sm btn-info" title="Ver Detalhes">
                                                         <i class="bx bx-show"></i>
                                                     </a>
