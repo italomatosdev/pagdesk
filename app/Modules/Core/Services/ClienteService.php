@@ -112,6 +112,8 @@ class ClienteService
                 // Remover documentos dos dados antes de criar o cliente
                 $documentos = $dados['documentos'] ?? null;
                 unset($dados['documentos']);
+                $operacaoIdDocumentos = $dados['operacao_id_documentos'] ?? null;
+                unset($dados['operacao_id_documentos']);
                 
                 $cliente = Cliente::create($dados);
                 
@@ -121,7 +123,7 @@ class ClienteService
                 // Processar uploads de documentos se fornecidos
                 if ($documentos) {
                     \Log::info("Processando documentos para cliente ID: {$cliente->id}");
-                    $this->processarDocumentos($cliente->id, $documentos);
+                    $this->processarDocumentos($cliente->id, $documentos, $operacaoIdDocumentos);
                     \Log::info("Documentos processados com sucesso para cliente ID: {$cliente->id}");
                 } else {
                     \Log::warning("Nenhum documento fornecido para cliente ID: {$cliente->id}");
@@ -441,9 +443,10 @@ class ClienteService
      *
      * @param int $clienteId
      * @param array $documentos Array com 'documento_cliente', 'selfie_documento', 'anexos'
+     * @param int|null $operacaoId Contexto da operação (ex.: cadastro por link público)
      * @return void
      */
-    protected function processarDocumentos(int $clienteId, array $documentos): void
+    protected function processarDocumentos(int $clienteId, array $documentos, ?int $operacaoId = null): void
     {
         try {
             // Na criação, documentos são sempre originais (empresa_id = null)
@@ -457,6 +460,7 @@ class ClienteService
                     ClientDocument::create([
                         'cliente_id' => $clienteId,
                         'empresa_id' => $empresaId,
+                        'operacao_id' => $operacaoId,
                         'categoria' => 'documento',
                         'tipo' => 'documento_identidade',
                         'arquivo_path' => $path,
@@ -476,6 +480,7 @@ class ClienteService
                     ClientDocument::create([
                         'cliente_id' => $clienteId,
                         'empresa_id' => $empresaId,
+                        'operacao_id' => $operacaoId,
                         'categoria' => 'selfie',
                         'tipo' => 'selfie_documento',
                         'arquivo_path' => $path,
@@ -495,6 +500,7 @@ class ClienteService
                         ClientDocument::create([
                             'cliente_id' => $clienteId,
                             'empresa_id' => $empresaId, // null = documento original
+                            'operacao_id' => $operacaoId,
                             'categoria' => 'anexo',
                             'tipo' => 'anexo',
                             'arquivo_path' => $path,
@@ -507,6 +513,16 @@ class ClienteService
             \Log::error("Erro ao processar documentos do cliente ID {$clienteId}: " . $e->getMessage());
             throw $e;
         }
+    }
+
+    /**
+     * Grava documentos do formulário com contexto de operação (ex.: link público quando o CPF já existe e está entrando em outra operação).
+     *
+     * @param  array<string, mixed>  $documentos  documento_cliente, selfie_documento, anexos
+     */
+    public function processarDocumentosParaOperacao(int $clienteId, array $documentos, int $operacaoId): void
+    {
+        $this->processarDocumentos($clienteId, $documentos, $operacaoId);
     }
 
     /**

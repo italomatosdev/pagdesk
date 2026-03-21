@@ -3,7 +3,7 @@
 **Estado atual (concluído):**
 - Tabela `operacao_dados_clientes` criada e populada (backfill 1:1 com `operation_clients`).
 - Coluna `client_documents.operacao_id` (nullable) criada; registros legados permanecem `NULL`.
-- A **UI/API** ainda não usa `operacao_dados_clientes` como fonte principal (Fase 2+); o **serviço** da Fase 1 já existe no código.
+- **Cadastro por link público** grava/atualiza `operacao_dados_clientes` e anexos com `operacao_id` (Fase 2). Telas internas / listagens ainda podem usar só `clientes` até a Fase 3+.
 
 **Objetivo de negócio:**
 - Ficha cadastral (nome, contato, endereço, etc.) **por par** `(cliente_id, operacao_id)`.
@@ -48,6 +48,11 @@
 4. **Anexos (opcional nesta fase ou Fase 3):** ao criar `ClientDocument` neste fluxo, passar **`operacao_id`** da operação do link.
 
 **Critério de pronto:** fluxos manuais: primeiro cadastro, segundo link mesma operação, segundo link outra operação; conferir linhas em `operacao_dados_clientes` e `operation_clients`.
+
+**Implementado (Fase 2):**
+- `CadastroClienteController`: chama `salvarOuAtualizar` no cadastro **novo** e no fluxo “CPF já existe, outra operação”. Se **já vinculado à mesma operação**, não grava nada — só redireciona para a página final com mensagem (“já cadastrado”; mantém `ClienteDadosEmpresa` no fluxo outra operação).
+- `ClienteService::cadastrar`: aceita `operacao_id_documentos` nos dados; `processarDocumentos` grava `operacao_id` em `ClientDocument` quando informado (cadastro novo pelo link). Fluxo “CPF já existe, outra operação”: `processarDocumentosParaOperacao` após o vínculo, com o mesmo `operacao_id` do link.
+- `ClientDocument`: `operacao_id` no `fillable` + relação `operacao()`.
 
 ---
 
@@ -110,7 +115,7 @@ Hoje `Cliente` usa accessors que misturam **empresa criadora** vs **`cliente_dad
 
 ## Próximo passo imediato (implementação)
 
-Implementar **Fase 2** (`CadastroClienteController` + anexos com `operacao_id` quando couber). Fase 1 já está no repositório.
+Implementar **Fase 3** (CRUD interno, telas `clientes/*`, uploads com `operacao_id` no contexto da operação). Fases 1 e 2 cobrem serviço + link público.
 
 ---
 

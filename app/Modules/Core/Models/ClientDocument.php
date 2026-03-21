@@ -15,6 +15,7 @@ class ClientDocument extends Model
     protected $fillable = [
         'cliente_id',
         'empresa_id', // null = documento original (empresa criadora), preenchido = documento específico da empresa
+        'operacao_id', // null = legado; preenchido = documento no contexto da operação (ex.: cadastro por link)
         'categoria', // 'documento', 'selfie', 'anexo'
         'tipo',
         'numero',
@@ -45,6 +46,11 @@ class ClientDocument extends Model
     public function empresa()
     {
         return $this->belongsTo(Empresa::class, 'empresa_id');
+    }
+
+    public function operacao()
+    {
+        return $this->belongsTo(Operacao::class, 'operacao_id');
     }
 
     /**
