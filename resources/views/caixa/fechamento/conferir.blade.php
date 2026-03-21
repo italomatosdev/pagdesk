@@ -151,11 +151,11 @@
                                             </td>
                                             <td>
                                                 {{ $movimentacao->descricao }}
-                                                @if($movimentacao->pagamento && $movimentacao->pagamento->parcela && $movimentacao->pagamento->parcela->emprestimo && $movimentacao->pagamento->parcela->emprestimo->cliente)
+                                                @if($movimentacao->pagamento && $movimentacao->pagamento->parcela && $movimentacao->pagamento->parcela->emprestimo)
                                                     <br>
                                                     <small class="text-muted">
                                                         <i class="bx bx-user"></i>
-                                                        {{ $movimentacao->pagamento->parcela->emprestimo->cliente->nome }}
+                                                        {{ \App\Support\ClienteNomeExibicao::fromParcelaMap($movimentacao->pagamento->parcela, $fichasContatoPorClienteOperacao ?? collect()) }}
                                                     </small>
                                                 @endif
                                             </td>

@@ -367,6 +367,10 @@ class EmprestimoController extends Controller
                     $operacaoSelecionadaId = $emprestimoOrigem->operacao_id;
                 }
             }
+
+            $nomeClienteExibicaoOrigem = $emprestimoOrigem !== null
+                ? ClienteNomeExibicao::forEmprestimo($emprestimoOrigem)
+                : null;
             
             return view('emprestimos.create', compact(
                 'operacoes',
@@ -375,7 +379,8 @@ class EmprestimoController extends Controller
                 'operacaoSelecionadaId',
                 'negociacao',
                 'emprestimoOrigem',
-                'saldoDevedor'
+                'saldoDevedor',
+                'nomeClienteExibicaoOrigem'
             ));
         } catch (\Exception $e) {
             \Log::error('Erro ao carregar formulário de empréstimo: ' . $e->getMessage());
@@ -388,6 +393,7 @@ class EmprestimoController extends Controller
             $negociacao = false;
             $emprestimoOrigem = null;
             $saldoDevedor = null;
+            $nomeClienteExibicaoOrigem = null;
             return view('emprestimos.create', compact(
                 'operacoes',
                 'consultoresPorOperacao',
@@ -395,7 +401,8 @@ class EmprestimoController extends Controller
                 'operacaoSelecionadaId',
                 'negociacao',
                 'emprestimoOrigem',
-                'saldoDevedor'
+                'saldoDevedor',
+                'nomeClienteExibicaoOrigem'
             ));
         }
     }

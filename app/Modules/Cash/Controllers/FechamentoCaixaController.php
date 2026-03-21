@@ -7,6 +7,7 @@ use App\Modules\Cash\Models\Settlement;
 use App\Modules\Cash\Services\CashService;
 use App\Modules\Cash\Services\SettlementService;
 use App\Modules\Core\Models\Operacao;
+use App\Support\FichaContatoLookup;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\ValidationException;
@@ -142,6 +143,8 @@ class FechamentoCaixaController extends Controller
         $dataFimConf = $dados['dataFim'];
         $quantidadeMovimentacoes = $movimentacoes->count();
 
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapFromCashLedgerEntries($movimentacoes);
+
         return view('caixa.fechamento.conferir', compact(
             'usuarioAlvo',
             'operacao',
@@ -153,7 +156,8 @@ class FechamentoCaixaController extends Controller
             'saldoAtual',
             'quantidadeMovimentacoes',
             'dataInicioConf',
-            'dataFimConf'
+            'dataFimConf',
+            'fichasContatoPorClienteOperacao'
         ));
     }
 
@@ -211,6 +215,8 @@ class FechamentoCaixaController extends Controller
 
         $quantidadeMovimentacoes = $movimentacoes->count();
 
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapFromCashLedgerEntries($movimentacoes);
+
         return view('caixa.fechamento.show', compact(
             'settlement',
             'movimentacoes',
@@ -218,7 +224,8 @@ class FechamentoCaixaController extends Controller
             'totalEntradas',
             'totalSaidas',
             'saldoFinal',
-            'quantidadeMovimentacoes'
+            'quantidadeMovimentacoes',
+            'fichasContatoPorClienteOperacao'
         ));
     }
 

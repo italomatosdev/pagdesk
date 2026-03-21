@@ -32,7 +32,16 @@
 | Vendas | `VendaController@index` + `@show`, `vendas/index`, `vendas/show` (`pairsFromVendas` em `FichaContatoLookup`) |
 | Relatórios quitação | `RelatorioController` (`quitacoes`, `jurosQuitacoes`), `relatorios/quitacoes`, `relatorios/juros-quitacoes` |
 
-**Ainda pendente (onda 3 ou escopo separado):** `caixa/*`, `prestacoes/*`, `emprestimos/create` (resumo com empréstimo origem), outras telas fora da lista acima.
+### Onda 3 — **Feito** (caixa, prestações legado, negociação em create)
+
+| Área | Arquivos |
+|------|----------|
+| Caixa / fechamento | `FechamentoCaixaController` (`conferir`, `show`), `caixa/fechamento/conferir`, `caixa/fechamento/show` — mapa via `FichaContatoLookup::mapFromCashLedgerEntries` + `fromParcelaMap` nas movimentações |
+| Prestações (views legado) | `SettlementController` (`show`, `preview`), `prestacoes/show`, `prestacoes/preview` — mesmo padrão |
+| Empréstimo create (negociação) | `EmprestimoController@create` — `nomeClienteExibicaoOrigem`; `emprestimos/create` (alerta do empréstimo origem) |
+| Suporte | `FichaContatoLookup::mapFromCashLedgerEntries` |
+
+**Ainda pendente (fora do escopo D1 curto):** outras telas pontuais não mapeadas; `caixa/index` não exibia nome de cliente por empréstimo (apenas referências/categorias).
 
 ### Critério de pronto por tela
 

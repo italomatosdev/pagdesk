@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Cash\Models\Settlement;
 use App\Modules\Cash\Services\SettlementService;
 use App\Modules\Core\Models\Operacao;
+use App\Support\FichaContatoLookup;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -124,6 +125,8 @@ class SettlementController extends Controller
 
         $quantidadeMovimentacoes = $movimentacoes->count();
 
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapFromCashLedgerEntries($movimentacoes);
+
         return view('prestacoes.show', compact(
             'settlement',
             'movimentacoes',
@@ -131,7 +134,8 @@ class SettlementController extends Controller
             'totalEntradas',
             'totalSaidas',
             'saldoFinal',
-            'quantidadeMovimentacoes'
+            'quantidadeMovimentacoes',
+            'fichasContatoPorClienteOperacao'
         ));
     }
 
@@ -230,6 +234,8 @@ class SettlementController extends Controller
 
         $quantidadeMovimentacoes = $movimentacoes->count();
 
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapFromCashLedgerEntries($movimentacoes);
+
         return view('prestacoes.preview', compact(
             'operacao',
             'movimentacoes',
@@ -238,7 +244,8 @@ class SettlementController extends Controller
             'totalSaidas',
             'saldoFinal',
             'quantidadeMovimentacoes',
-            'validated'
+            'validated',
+            'fichasContatoPorClienteOperacao'
         ));
     }
 

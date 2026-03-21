@@ -69,4 +69,17 @@ final class FichaContatoLookup
             ->filter(fn ($v) => (int) $v->cliente_id > 0 && (int) $v->operacao_id > 0)
             ->map(fn ($v) => [(int) $v->cliente_id, (int) $v->operacao_id]);
     }
+
+    /**
+     * Mapa de fichas para linhas de caixa ligadas a pagamento → parcela → empréstimo (nome na operação).
+     *
+     * @param  iterable<int, \App\Modules\Cash\Models\CashLedgerEntry>  $entries
+     * @return Collection<string, OperacaoDadosCliente>
+     */
+    public static function mapFromCashLedgerEntries(iterable $entries): Collection
+    {
+        $parcelas = collect($entries)->map(fn ($m) => $m->pagamento?->parcela)->filter();
+
+        return self::mapByClienteOperacaoPairs(self::pairsFromParcelas($parcelas));
+    }
 }

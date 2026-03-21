@@ -21,7 +21,7 @@
                         <div>
                             <h5 class="alert-heading mb-1">Negociação do Empréstimo #{{ $emprestimoOrigem->id }}</h5>
                             <p class="mb-1">
-                                <strong>Cliente:</strong> {{ $emprestimoOrigem->cliente->nome }}<br>
+                                <strong>Cliente:</strong> {{ $nomeClienteExibicaoOrigem ?? ($emprestimoOrigem->cliente->nome ?? 'Cliente') }}<br>
                                 <strong>Saldo Devedor:</strong> <span class="text-primary fw-bold">R$ {{ number_format($saldoDevedor, 2, ',', '.') }}</span>
                             </p>
                             <small class="text-muted">
