@@ -98,7 +98,7 @@ Para crediário é obrigatório informar **número de parcelas**. O valor inform
 
 ### Tela “Nova venda”
 
-- **Cliente:** Select2 com busca por nome ou CPF (rota `clientes.api.buscar`). Com **operação** já selecionada, a API recebe `operacao_id` e o rótulo prioriza **nome da ficha** (`operacao_dados_clientes`) nessa operação; a busca também encontra por nome/telefone/e-mail da ficha. Pode-se pré-selecionar via query string `?cliente_id=X`.
+- **Cliente:** Select2 (rota `clientes.api.buscar`). É **obrigatório** selecionar a **operação** antes: sem `operacao_id` válido a busca não roda e o usuário é alertado. Com operação, o rótulo prioriza a **ficha** e a busca inclui nome/telefone/e-mail da ficha. Pode-se pré-selecionar cliente via query string `?cliente_id=X`.
 - **Operação:** select; se o usuário tiver apenas uma operação, pode ser pré-selecionada.
 - **Itens:** linhas com produto (select filtrado por operação e estoque &gt; 0) ou “Descrição livre”; quantidade; preço à vista e a crediário; subtotais. Produtos listados são filtrados pela operação escolhida (e por operação do produto).
 - **Formas de pagamento:** tipo, valor, número de parcelas (crediário), descrição opcional, comprovante (arquivo) para Dinheiro/PIX/Cartão.

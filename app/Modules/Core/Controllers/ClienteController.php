@@ -1361,6 +1361,13 @@ class ClienteController extends Controller
             }
         }
 
+        if ($operacaoValida === null || $operacaoValida < 1) {
+            return response()->json([
+                'results' => [],
+                'error' => 'Selecione a operação antes de buscar o cliente.',
+            ]);
+        }
+
         $query = Cliente::query();
 
         // Remover formatação do CPF se houver
@@ -1376,37 +1383,32 @@ class ClienteController extends Controller
                 $outer->where('nome', 'like', "%{$termo}%");
             }
 
-            if ($operacaoValida) {
-                $term = '%'.$termo.'%';
-                $outer->orWhereHas('operacaoDadosClientes', function ($sub) use ($operacaoValida, $term) {
-                    $sub->where('operacao_id', $operacaoValida)
-                        ->where(function ($inner) use ($term) {
-                            $inner->where('nome', 'like', $term)
-                                ->orWhere('telefone', 'like', $term)
-                                ->orWhere('email', 'like', $term);
-                        });
-                });
-            }
+            $term = '%'.$termo.'%';
+            $outer->orWhereHas('operacaoDadosClientes', function ($sub) use ($operacaoValida, $term) {
+                $sub->where('operacao_id', $operacaoValida)
+                    ->where(function ($inner) use ($term) {
+                        $inner->where('nome', 'like', $term)
+                            ->orWhere('telefone', 'like', $term)
+                            ->orWhere('email', 'like', $term);
+                    });
+            });
         });
 
         $clientes = $query->orderBy('nome')
             ->limit(20)
             ->get();
 
-        $fichaMap = collect();
-        if ($operacaoValida && $clientes->isNotEmpty()) {
-            $fichaMap = FichaContatoLookup::mapByClienteOperacaoPairs(
+        $fichaMap = $clientes->isNotEmpty()
+            ? FichaContatoLookup::mapByClienteOperacaoPairs(
                 $clientes->map(fn (Cliente $c) => [(int) $c->id, (int) $operacaoValida])->values()
-            );
-        }
+            )
+            : collect();
 
         $results = $clientes->map(function (Cliente $cliente) use ($fichaMap, $operacaoValida) {
-            $nomeExibicao = $operacaoValida
-                ? ClienteNomeExibicao::fromFicha(
-                    $fichaMap->get($cliente->id.'_'.$operacaoValida),
-                    $cliente
-                )
-                : ($cliente->nome ?? 'Cliente');
+            $nomeExibicao = ClienteNomeExibicao::fromFicha(
+                $fichaMap->get($cliente->id.'_'.$operacaoValida),
+                $cliente
+            );
 
             return [
                 'id' => $cliente->id,

@@ -655,11 +655,16 @@
                 // Só inicializa Select2 se não for negociação (em negociação, cliente é readonly)
                 if (clienteSelect && !isNegociacao) {
                     const clienteJaSelecionado = clienteSelect.options.length > 0 && clienteSelect.options[0].value;
+                    const msgOperacaoObrigatoria = 'Selecione a operação antes de buscar o cliente.';
+                    const getOperacaoId = () => {
+                        const opEl = document.querySelector('select[name="operacao_id"]');
+                        return opEl && opEl.value ? String(opEl.value) : '';
+                    };
                     
                     // Configuração do Select2
                     const select2Config = {
                         theme: 'bootstrap-5',
-                        placeholder: 'Digite o nome ou CPF do cliente...',
+                        placeholder: 'Selecione a operação acima, depois busque o cliente…',
                         allowClear: true,
                         minimumInputLength: 2,
                         language: {
@@ -681,20 +686,33 @@
                             dataType: 'json',
                             delay: 250,
                             data: function (params) {
-                                const opEl = document.querySelector('select[name="operacao_id"]');
-                                const operacaoId = opEl && opEl.value ? opEl.value : '';
                                 return {
                                     q: params.term,
-                                    operacao_id: operacaoId,
+                                    operacao_id: getOperacaoId(),
                                     page: params.page || 1
                                 };
                             },
+                            transport: function (params, success, failure) {
+                                if (!getOperacaoId()) {
+                                    alert(msgOperacaoObrigatoria);
+                                    failure('no_operacao');
+                                    return;
+                                }
+                                const $request = $.ajax(params);
+                                $request.then(success);
+                                $request.fail(failure);
+                                return $request;
+                            },
                             processResults: function (data, params) {
+                                if (data.error) {
+                                    alert(data.error);
+                                    return { results: [], pagination: { more: false } };
+                                }
                                 params.page = params.page || 1;
                                 return {
-                                    results: data.results,
+                                    results: data.results || [],
                                     pagination: {
-                                        more: (params.page * 20) < data.total_count
+                                        more: (params.page * 20) < (data.total_count || 0)
                                     }
                                 };
                             },
@@ -709,6 +727,13 @@
                     
                     // Inicializar Select2 para busca de clientes
                     $('#cliente-select').select2(select2Config);
+
+                    $('#cliente-select').on('select2:opening', function (e) {
+                        if (!getOperacaoId()) {
+                            e.preventDefault();
+                            alert(msgOperacaoObrigatoria);
+                        }
+                    });
 
                     const operacaoSelectCliente = document.querySelector('select[name="operacao_id"]');
                     if (operacaoSelectCliente) {
