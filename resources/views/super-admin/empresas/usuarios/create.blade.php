@@ -23,6 +23,7 @@
                     <div class="card-body">
                         <div class="alert alert-info">
                             <i class="bx bx-info-circle"></i> Este usuário será criado para a empresa <strong>{{ $empresa->nome }}</strong>.
+                            O <strong>papel</strong> é definido <strong>por operação</strong> (consultor, gestor ou administrador em cada uma). Os papéis globais do sistema são alinhados automaticamente a partir dessa escolha.
                         </div>
 
                         <form action="{{ route('super-admin.empresas.usuarios.store', $empresa->id) }}" method="POST">
@@ -67,45 +68,51 @@
                             <hr class="my-4">
 
                             <div class="mb-3">
-                                <label class="form-label">Papéis (Roles) <span class="text-danger">*</span></label>
-                                <div class="row">
-                                    @foreach($roles as $role)
-                                        <div class="col-md-4 mb-2">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="roles[]" 
-                                                       value="{{ $role->name }}" id="role_{{ $role->id }}"
-                                                       {{ in_array($role->name, old('roles', [])) ? 'checked' : '' }}>
-                                                <label class="form-check-label" for="role_{{ $role->id }}">
-                                                    {{ $role->display_name ?? ucfirst($role->name) }}
-                                                </label>
-                                            </div>
-                                        </div>
-                                    @endforeach
-                                </div>
-                                @error('roles')
-                                    <div class="text-danger small">{{ $message }}</div>
-                                @enderror
-                            </div>
-
-                            <hr class="my-4">
-
-                            <div class="mb-3">
-                                <label class="form-label">Operações</label>
-                                <small class="text-muted d-block mb-2">Selecione as operações que este usuário terá acesso (opcional)</small>
+                                <label class="form-label">Operações e papel</label>
+                                <small class="text-muted d-block mb-2">Marque as operações de acesso e o papel em cada uma. Se nenhuma for marcada, o usuário ficará sem vínculo a operações até ser editado.</small>
                                 @if($operacoes->count() > 0)
-                                    <div class="row">
-                                        @foreach($operacoes as $operacao)
-                                            <div class="col-md-6 mb-2">
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" name="operacoes[]" 
-                                                           value="{{ $operacao->id }}" id="operacao_{{ $operacao->id }}"
-                                                           {{ in_array($operacao->id, old('operacoes', [])) ? 'checked' : '' }}>
-                                                    <label class="form-check-label" for="operacao_{{ $operacao->id }}">
-                                                        {{ $operacao->nome }}
-                                                    </label>
-                                                </div>
-                                            </div>
-                                        @endforeach
+                                    @php
+                                        $oldOps = array_map('intval', (array) old('operacoes', []));
+                                        $oldRoles = old('operacao_role', []);
+                                    @endphp
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-hover mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th style="width: 60px;">Vincular</th>
+                                                    <th>Operação</th>
+                                                    <th style="width: 180px;">Papel na operação</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach($operacoes as $operacao)
+                                                    @php
+                                                        $checked = in_array((int) $operacao->id, $oldOps, true);
+                                                        $selectedRole = $oldRoles[$operacao->id] ?? 'consultor';
+                                                    @endphp
+                                                    <tr>
+                                                        <td>
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" name="operacoes[]"
+                                                                       value="{{ $operacao->id }}" id="operacao_{{ $operacao->id }}"
+                                                                       {{ $checked ? 'checked' : '' }}>
+                                                                <label class="form-check-label" for="operacao_{{ $operacao->id }}">&nbsp;</label>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <label class="form-label mb-0" for="operacao_{{ $operacao->id }}">{{ $operacao->nome }}</label>
+                                                        </td>
+                                                        <td>
+                                                            <select name="operacao_role[{{ $operacao->id }}]" class="form-select form-select-sm">
+                                                                <option value="consultor" {{ $selectedRole === 'consultor' ? 'selected' : '' }}>Consultor</option>
+                                                                <option value="gestor" {{ $selectedRole === 'gestor' ? 'selected' : '' }}>Gestor</option>
+                                                                <option value="administrador" {{ $selectedRole === 'administrador' ? 'selected' : '' }}>Administrador</option>
+                                                            </select>
+                                                        </td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
                                     </div>
                                 @else
                                     <div class="alert alert-warning">
@@ -113,6 +120,9 @@
                                     </div>
                                 @endif
                                 @error('operacoes')
+                                    <div class="text-danger small">{{ $message }}</div>
+                                @enderror
+                                @error('operacao_role')
                                     <div class="text-danger small">{{ $message }}</div>
                                 @enderror
                             </div>
