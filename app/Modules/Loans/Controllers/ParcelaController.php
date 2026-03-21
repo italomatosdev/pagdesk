@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Core\Models\Operacao;
 use App\Modules\Loans\Models\Parcela;
 use App\Modules\Loans\Services\ParcelaService;
+use App\Support\FichaContatoLookup;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -62,13 +63,18 @@ class ParcelaController extends Controller
         $valorVencendoHoje = (float) $vencendoHoje->sum('valor');
         $valorAtrasado = (float) $atrasadas->sum('valor');
 
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromParcelas($vencendoHoje->concat($atrasadas))
+        );
+
         return view('cobrancas.index', compact(
             'vencendoHoje',
             'atrasadas',
             'operacoes',
             'operacaoId',
             'valorVencendoHoje',
-            'valorAtrasado'
+            'valorAtrasado',
+            'fichasContatoPorClienteOperacao'
         ));
     }
 
@@ -157,6 +163,10 @@ class ParcelaController extends Controller
             ? collect([])
             : \App\Models\User::where('ativo', true)->whereHas('operacoes', fn ($q) => $q->whereIn('operacoes.id', $operacoesIdsFiltro)->where('operacao_user.role', 'consultor'))->orderBy('name')->get();
 
-        return view('parcelas.atrasadas', compact('parcelas', 'operacoes', 'consultores'));
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromParcelas($parcelas->items())
+        );
+
+        return view('parcelas.atrasadas', compact('parcelas', 'operacoes', 'consultores', 'fichasContatoPorClienteOperacao'));
     }
 }

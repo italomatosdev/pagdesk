@@ -4,6 +4,7 @@ namespace App\Modules\Approvals\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Approvals\Services\AprovacaoService;
+use App\Support\FichaContatoLookup;
 use App\Modules\Core\Models\Operacao;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -44,6 +45,10 @@ class AprovacaoController extends Controller
 
         $pendentes = $this->aprovacaoService->listarPendentes($operacaoId, $user);
 
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromEmprestimos($pendentes)
+        );
+
         // Operações disponíveis no filtro: Super Admin vê todas; demais só onde tem papel administrador
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->get();
@@ -54,7 +59,7 @@ class AprovacaoController extends Controller
                 : collect([]);
         }
 
-        return view('aprovacoes.index', compact('pendentes', 'operacoes', 'operacaoId'));
+        return view('aprovacoes.index', compact('pendentes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }
 
     /**

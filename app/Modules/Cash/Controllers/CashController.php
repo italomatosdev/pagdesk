@@ -407,7 +407,7 @@ class CashController extends Controller
             abort(403, 'Super Admin não pode acessar o Caixa.');
         }
 
-        $movimentacao = CashLedgerEntry::with(['operacao', 'consultor', 'categoria', 'pagamento.parcela.emprestimo'])
+        $movimentacao = CashLedgerEntry::with(['operacao', 'consultor', 'categoria', 'pagamento.parcela.emprestimo.cliente'])
             ->findOrFail($id);
 
         if (!$user->temAcessoOperacao($movimentacao->operacao_id)) {

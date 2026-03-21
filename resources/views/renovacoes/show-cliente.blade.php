@@ -16,7 +16,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h5 class="mb-1">
-                                <a href="{{ route('clientes.show', $cliente->id) }}">
+                                <a href="{{ request('operacao_id') ? \App\Support\ClienteUrl::show($cliente->id, (int) request('operacao_id')) : route('clientes.show', $cliente->id) }}">
                                     {{ $cliente->nome }}
                                 </a>
                             </h5>

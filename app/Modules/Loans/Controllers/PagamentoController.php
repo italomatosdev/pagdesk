@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\Parcela;
 use App\Modules\Loans\Services\PagamentoService;
+use App\Support\ClienteNomeExibicao;
+use App\Support\NotificacaoClienteDisplayName;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -43,7 +45,11 @@ class PagamentoController extends Controller
             }
         }
 
-        return view('pagamentos.create', compact('parcela', 'returnTo', 'renovar', 'renovacaoTipo', 'executarGarantia'));
+        $nomeClienteExibicao = $parcela
+            ? ClienteNomeExibicao::forEmprestimo($parcela->emprestimo)
+            : null;
+
+        return view('pagamentos.create', compact('parcela', 'returnTo', 'renovar', 'renovacaoTipo', 'executarGarantia', 'nomeClienteExibicao'));
     }
 
     /**
@@ -277,7 +283,7 @@ class PagamentoController extends Controller
                         $dadosNotif = [
                             'tipo' => 'renovacao_abate_valor_inferior_pendente',
                             'titulo' => 'Renovação com abate (valor inferior ao principal) aguardando aprovação',
-                            'mensagem' => sprintf('Empréstimo #%d - %s. Valor R$ %s (principal R$ %s). Aguardando em Liberações.', $emprestimo->id, $emprestimo->cliente?->nome ?? 'Cliente', number_format($valorRenovacaoAbate, 2, ',', '.'), number_format($valorPrincipalParcela, 2, ',', '.')),
+                            'mensagem' => sprintf('Empréstimo #%d - %s. Valor R$ %s (principal R$ %s). Aguardando em Liberações.', $emprestimo->id, NotificacaoClienteDisplayName::forEmprestimo($emprestimo), number_format($valorRenovacaoAbate, 2, ',', '.'), number_format($valorPrincipalParcela, 2, ',', '.')),
                             'url' => route('liberacoes.renovacao-abate'),
                             'dados' => ['solicitacao_id' => $solicitacao->id, 'emprestimo_id' => $emprestimo->id],
                         ];
@@ -355,7 +361,7 @@ class PagamentoController extends Controller
                 $notificacaoService = app(\App\Modules\Core\Services\NotificacaoService::class);
                 $emprestimo = $parcela->emprestimo;
                 $operacaoId = (int) $emprestimo->operacao_id;
-                $clienteNome = $emprestimo->cliente ? $emprestimo->cliente->nome : 'Cliente';
+                $clienteNome = NotificacaoClienteDisplayName::forEmprestimo($emprestimo);
                 $dadosNotif = [
                     'tipo' => 'pagamento_juros_contrato_reduzido_pendente',
                     'titulo' => 'Pagamento com valor inferior (juros do contrato reduzido) – aguardando aprovação',
@@ -402,7 +408,7 @@ class PagamentoController extends Controller
                         $notificacaoService = app(\App\Modules\Core\Services\NotificacaoService::class);
                         $emprestimo = $parcela->emprestimo;
                         $operacaoId = (int) $emprestimo->operacao_id;
-                        $clienteNome = $emprestimo->cliente ? $emprestimo->cliente->nome : 'Cliente';
+                        $clienteNome = NotificacaoClienteDisplayName::forEmprestimo($emprestimo);
                         $dadosNotif = [
                             'tipo' => 'pagamento_juros_parcial_pendente',
                             'titulo' => 'Pagamento com juros abaixo do devido – aguardando aprovação',
@@ -511,6 +517,7 @@ class PagamentoController extends Controller
             'operacao' => $operacao,
             'saldoDevedor' => $saldoDevedor,
             'valorEmprestado' => (float) $emprestimo->valor_total,
+            'nomeClienteExibicao' => ClienteNomeExibicao::forEmprestimo($emprestimo),
         ]);
     }
 
@@ -637,6 +644,7 @@ class PagamentoController extends Controller
             'emprestimo' => $emprestimo,
             'parcelasAbertas' => $parcelasAbertas,
             'operacao' => $operacao,
+            'nomeClienteExibicao' => ClienteNomeExibicao::forEmprestimo($emprestimo),
         ]);
     }
 

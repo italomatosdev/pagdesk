@@ -7,6 +7,7 @@ use App\Modules\Core\Models\Operacao;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\EmprestimoCheque;
 use App\Modules\Loans\Services\ChequeService;
+use App\Support\FichaContatoLookup;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
@@ -92,13 +93,17 @@ class ChequeController extends Controller
         $totais = (clone $query)->reorder()->selectRaw('COUNT(*) as total, COALESCE(SUM(valor_cheque), 0) as valor_bruto, COALESCE(SUM(valor_liquido), 0) as valor_liquido')->first();
         $cheques = $query->paginate(20)->withQueryString();
 
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromEmprestimos($cheques->map(fn ($c) => $c->emprestimo)->filter())
+        );
+
         $operacoes = $user->isSuperAdmin()
             ? Operacao::where('ativo', true)->orderBy('nome')->get()
             : (!empty($opsIds) ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get() : collect([]));
 
         $titulo = 'Cheques';
 
-        return view('cheques.index', compact('cheques', 'filtros', 'titulo', 'totais', 'operacoes'));
+        return view('cheques.index', compact('cheques', 'filtros', 'titulo', 'totais', 'operacoes', 'fichasContatoPorClienteOperacao'));
     }
 
     /**
@@ -184,6 +189,10 @@ class ChequeController extends Controller
         $totais = (clone $query)->reorder()->selectRaw('COUNT(*) as total, COALESCE(SUM(valor_cheque), 0) as valor_bruto, COALESCE(SUM(valor_liquido), 0) as valor_liquido')->first();
         $cheques = $query->paginate(20)->withQueryString();
 
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromEmprestimos($cheques->map(fn ($c) => $c->emprestimo)->filter())
+        );
+
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
         } else {
@@ -195,7 +204,7 @@ class ChequeController extends Controller
 
         $titulo = 'Cheques de Hoje';
 
-        return view('cheques.index', compact('cheques', 'filtros', 'titulo', 'totais', 'operacoes'));
+        return view('cheques.index', compact('cheques', 'filtros', 'titulo', 'totais', 'operacoes', 'fichasContatoPorClienteOperacao'));
     }
 
     /**
@@ -442,7 +451,9 @@ class ChequeController extends Controller
                 ->with('error', 'Apenas administradores e gestores podem registrar pagamento.');
         }
 
-        return view('cheques.pagar', compact('cheque', 'emprestimo'));
+        $nomeClienteExibicao = \App\Support\ClienteNomeExibicao::forEmprestimo($emprestimo);
+
+        return view('cheques.pagar', compact('cheque', 'emprestimo', 'nomeClienteExibicao'));
     }
 
     /**

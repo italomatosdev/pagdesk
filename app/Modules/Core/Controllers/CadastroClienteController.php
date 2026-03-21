@@ -9,6 +9,7 @@ use App\Modules\Core\Models\ClienteDadosEmpresa;
 use App\Modules\Core\Models\Operacao;
 use App\Modules\Core\Models\OperationClient;
 use App\Modules\Core\Services\ClienteService;
+use App\Modules\Core\Services\OperacaoDadosClienteService;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,7 +22,8 @@ use Illuminate\View\View;
 class CadastroClienteController extends Controller
 {
     public function __construct(
-        protected ClienteService $clienteService
+        protected ClienteService $clienteService,
+        protected OperacaoDadosClienteService $operacaoDadosClienteService
     ) {
         $this->middleware('throttle:10,1')->only(['showForm', 'store']);
     }
@@ -140,40 +142,10 @@ class CadastroClienteController extends Controller
                     ->exists();
 
                 if ($jaVinculadoOperacao) {
-                    // Já cadastrado nesta operação: apenas atualizar dados de contato, não alterar vínculo/consultor
-                    $dadosAtualizar = [
-                        'nome' => $validated['nome'],
-                        'telefone' => $validated['telefone'] ?? null,
-                        'email' => $validated['email'] ?? null,
-                        'data_nascimento' => $validated['data_nascimento'] ?? null,
-                        'endereco' => $validated['endereco'] ?? null,
-                        'numero' => $validated['numero'] ?? null,
-                        'cidade' => $validated['cidade'] ?? null,
-                        'estado' => $validated['estado'] ?? null,
-                        'cep' => $validated['cep'] ?? null,
-                    ];
-                    if (($validated['tipo_pessoa'] ?? 'fisica') === 'juridica') {
-                        $dadosAtualizar['responsavel_nome'] = $validated['responsavel_nome'] ?? null;
-                        $dadosAtualizar['responsavel_cpf'] = !empty($validated['responsavel_cpf'])
-                            ? preg_replace('/[^0-9]/', '', $validated['responsavel_cpf'])
-                            : null;
-                        $dadosAtualizar['responsavel_rg'] = $validated['responsavel_rg'] ?? null;
-                        $dadosAtualizar['responsavel_cnh'] = $validated['responsavel_cnh'] ?? null;
-                        $dadosAtualizar['responsavel_cargo'] = $validated['responsavel_cargo'] ?? null;
-                    } else {
-                        $dadosAtualizar['responsavel_nome'] = null;
-                        $dadosAtualizar['responsavel_cpf'] = null;
-                        $dadosAtualizar['responsavel_rg'] = null;
-                        $dadosAtualizar['responsavel_cnh'] = null;
-                        $dadosAtualizar['responsavel_cargo'] = null;
-                    }
-
-                    Cliente::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)
-                        ->where('id', $clienteExistente->id)
-                        ->update($dadosAtualizar);
-
+                    // Link só cria cadastro: se já está nesta operação, não altera dados — só informa na página final
                     return redirect()->route('cadastro-cliente.concluido')
-                        ->with('success', 'Você já está cadastrado nesta operação. Seus dados de contato foram atualizados.');
+                        ->with('ja_cadastrado_nesta_operacao', true)
+                        ->with('success', 'Você já está cadastrado nesta operação. Nenhum dado foi alterado.');
                 }
 
                 // CPF já cadastrado em outra operação: não alterar cadastro global; gravar dados na empresa da operação do link e criar vínculo
@@ -226,6 +198,23 @@ class CadastroClienteController extends Controller
                     null
                 );
 
+                $this->operacaoDadosClienteService->salvarOuAtualizar(
+                    $clienteExistente->id,
+                    $operacao->id,
+                    $this->operacaoDadosClienteService->payloadFromFormularioValidado($validated),
+                    $operacao->empresa_id
+                );
+
+                $this->clienteService->processarDocumentosParaOperacao(
+                    $clienteExistente->id,
+                    [
+                        'documento_cliente' => $documentoFile,
+                        'selfie_documento' => $selfieFile,
+                        'anexos' => $request->file('anexos'),
+                    ],
+                    $operacao->id
+                );
+
                 return redirect()->route('cadastro-cliente.concluido')
                     ->with('success', 'Cadastro realizado com sucesso! O consultor entrará em contato.');
             }
@@ -233,6 +222,7 @@ class CadastroClienteController extends Controller
             // Cliente novo: criar e vincular
             $dadosCliente = $validated;
             $dadosCliente['empresa_id'] = $operacao->empresa_id;
+            $dadosCliente['operacao_id_documentos'] = $operacao->id;
             $dadosCliente['documentos'] = [
                 'documento_cliente' => $documentoFile,
                 'selfie_documento' => $selfieFile,
@@ -248,6 +238,13 @@ class CadastroClienteController extends Controller
                 0,
                 $consultor->id,
                 null
+            );
+
+            $this->operacaoDadosClienteService->salvarOuAtualizar(
+                $cliente->id,
+                $operacao->id,
+                $this->operacaoDadosClienteService->payloadFromFormularioValidado($validated),
+                $operacao->empresa_id
             );
 
             return redirect()->route('cadastro-cliente.concluido')

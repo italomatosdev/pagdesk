@@ -84,7 +84,7 @@
                                             </td>
                                             <td>
                                                 <a href="{{ route('emprestimos.show', $s->emprestimo_id) }}">#{{ $s->emprestimo_id }}</a>
-                                                <br><small class="text-muted">{{ $s->emprestimo->cliente->nome ?? '-' }}</small>
+                                                <br><small class="text-muted">{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($s->emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}</small>
                                             </td>
                                             <td>{{ $s->emprestimo->operacao->nome ?? '-' }}</td>
                                             <td>{{ $s->solicitante->name ?? '-' }}</td>
@@ -117,7 +117,7 @@
                                                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                                         </div>
                                                         <div class="modal-body">
-                                                            <p>Empréstimo #{{ $s->emprestimo_id }} – {{ $s->emprestimo->cliente->nome ?? '' }}. O empréstimo será cancelado.</p>
+                                                            <p>Empréstimo #{{ $s->emprestimo_id }} – {{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($s->emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}. O empréstimo será cancelado.</p>
                                                             <div class="mb-3">
                                                                 <label class="form-label">Motivo da rejeição <span class="text-danger">*</span></label>
                                                                 <textarea name="motivo_rejeicao" class="form-control" rows="3" required minlength="5" maxlength="500" placeholder="Informe o motivo (mín. 5 caracteres)"></textarea>

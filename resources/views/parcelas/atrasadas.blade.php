@@ -149,9 +149,9 @@
                                     @forelse($parcelas as $parcela)
                                         <tr class="{{ $parcela->dias_atraso > 30 ? 'table-danger' : ($parcela->dias_atraso > 15 ? 'table-warning' : '') }}">
                                             <td>
-                                                <a href="{{ route('clientes.show', $parcela->emprestimo->cliente_id) }}" 
+                                                <a href="{{ \App\Support\ClienteUrl::show($parcela->emprestimo->cliente_id, $parcela->emprestimo->operacao_id) }}"
                                                    class="text-primary">
-                                                    {{ $parcela->emprestimo->cliente->nome }}
+                                                    {{ \App\Support\ClienteNomeExibicao::fromParcelaMap($parcela, $fichasContatoPorClienteOperacao ?? collect()) }}
                                                 </a>
                                             </td>
                                             <td>
@@ -191,10 +191,13 @@
                                                        class="btn btn-sm btn-info" title="Ver Empréstimo">
                                                         <i class="bx bx-show"></i>
                                                     </a>
-                                                    @if($parcela->emprestimo->cliente->temWhatsapp())
-                                                        <a href="{{ $parcela->emprestimo->cliente->whatsapp_link }}" 
-                                                           target="_blank" 
-                                                           class="btn btn-sm btn-success" 
+                                                    @php
+                                                        $fichaWaParc = ($fichasContatoPorClienteOperacao ?? collect())->get($parcela->emprestimo->cliente_id.'_'.$parcela->emprestimo->operacao_id);
+                                                    @endphp
+                                                    @if(\App\Support\WhatsappLink::temWhatsappPreferindoFicha($fichaWaParc, $parcela->emprestimo->cliente))
+                                                        <a href="{{ \App\Support\WhatsappLink::urlPreferindoFicha($fichaWaParc, $parcela->emprestimo->cliente) }}"
+                                                           target="_blank"
+                                                           class="btn btn-sm btn-success"
                                                            title="Falar no WhatsApp">
                                                             <i class="bx bxl-whatsapp"></i>
                                                         </a>

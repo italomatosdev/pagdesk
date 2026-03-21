@@ -38,14 +38,14 @@
                             </div>
                             <div class="col-md-6 mb-3">
                                 <strong>Cliente:</strong> 
-                                <a href="{{ route('clientes.show', $liberacao->emprestimo->cliente_id) }}">
-                                    {{ $liberacao->emprestimo->cliente->nome }}
+                                <a href="{{ \App\Support\ClienteUrl::show($liberacao->emprestimo->cliente_id, $liberacao->emprestimo->operacao_id) }}">
+                                    {{ $nomeClienteExibicao }}
                                 </a>
-                                @if($liberacao->emprestimo->cliente->temWhatsapp())
-                                    <a href="{{ $liberacao->emprestimo->cliente->whatsapp_link }}" 
-                                       target="_blank" 
-                                       class="btn btn-sm btn-success ms-2" 
-                                       title="Falar no WhatsApp">
+                                @if(\App\Support\WhatsappLink::temWhatsappPreferindoFicha($fichaContatoLiberacao ?? null, $liberacao->emprestimo->cliente))
+                                    <a href="{{ \App\Support\WhatsappLink::urlPreferindoFicha($fichaContatoLiberacao ?? null, $liberacao->emprestimo->cliente) }}"
+                                       target="_blank"
+                                       class="btn btn-sm btn-success ms-2"
+                                       title="Falar no WhatsApp (ficha desta operação quando houver)">
                                         <i class="bx bxl-whatsapp"></i> WhatsApp
                                     </a>
                                 @endif
@@ -239,7 +239,7 @@
                             <a href="{{ route('emprestimos.show', $liberacao->emprestimo_id) }}" class="btn btn-info">
                                 <i class="bx bx-show"></i> Ver Empréstimo
                             </a>
-                            <a href="{{ route('clientes.show', $liberacao->emprestimo->cliente_id) }}" class="btn btn-secondary">
+                            <a href="{{ \App\Support\ClienteUrl::show($liberacao->emprestimo->cliente_id, $liberacao->emprestimo->operacao_id) }}" class="btn btn-secondary">
                                 <i class="bx bx-user"></i> Ver Cliente
                             </a>
                             <a href="{{ route('liberacoes.index') }}" class="btn btn-outline-secondary">
@@ -318,7 +318,7 @@
                           class="form-liberar-dinheiro"
                           data-valor="{{ number_format($liberacao->valor_liberado, 2, ',', '.') }}"
                           data-consultor="{{ $liberacao->consultor->name }}"
-                          data-cliente="{{ $liberacao->emprestimo->cliente->nome }}"
+                          data-cliente="{{ $nomeClienteExibicao }}"
                           data-emprestimo-id="{{ $liberacao->emprestimo_id }}">
                         @csrf
                         <div class="modal-header">
@@ -329,7 +329,7 @@
                             <div class="alert alert-info">
                                 <strong>Valor:</strong> R$ {{ number_format($liberacao->valor_liberado, 2, ',', '.') }}<br>
                                 <strong>Consultor:</strong> {{ $liberacao->consultor->name }}<br>
-                                <strong>Cliente:</strong> {{ $liberacao->emprestimo->cliente->nome }}<br>
+                                <strong>Cliente:</strong> {{ $nomeClienteExibicao }}<br>
                                 <strong>Empréstimo:</strong> #{{ $liberacao->emprestimo_id }}
                             </div>
                             <div class="mb-3">
@@ -378,7 +378,7 @@
                             <div class="mb-3">
                                 <label class="form-label">Cliente</label>
                                 <input type="text" class="form-control" 
-                                       value="{{ $liberacao->emprestimo->cliente->nome }}" 
+                                       value="{{ $nomeClienteExibicao }}" 
                                        readonly>
                             </div>
                             @if($ehGestorAdminConfirmando ?? false)
@@ -536,7 +536,7 @@
                     e.preventDefault();
                     const form = this;
                     const valor = parseFloat({{ $liberacao->valor_liberado }}).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                    const cliente = '{{ $liberacao->emprestimo->cliente->nome }}';
+                    const cliente = @json($nomeClienteExibicao);
 
                     Swal.fire({
                         title: 'Confirmar Pagamento ao Cliente?',

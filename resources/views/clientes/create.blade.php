@@ -487,6 +487,25 @@
                                 })
                                 .join('') || `<div class="text-center text-muted py-3 small">Nenhuma pendência atrasada</div>`;
 
+                            const fichasListCruzada = data.fichas_por_operacao || [];
+                            const fichasBlockCruzada = fichasListCruzada.length
+                                ? `
+                                    <div class="card mb-4 text-start">
+                                        <div class="card-header py-2"><h6 class="mb-0 small">Contato por operação (ficha)</h6></div>
+                                        <div class="card-body py-2" style="max-height: 140px; overflow-y: auto;">
+                                            ${fichasListCruzada.map(f => `
+                                                <div class="border-bottom pb-2 mb-2">
+                                                    <div class="fw-semibold small">${f.operacao_nome || ('Operação #' + (f.operacao_id || ''))}</div>
+                                                    ${f.nome ? `<div class="text-muted small">${f.nome}</div>` : ''}
+                                                    ${f.telefone ? `<div class="small"><i class="bx bx-phone"></i> ${f.telefone}</div>` : ''}
+                                                    ${f.email ? `<div class="small"><i class="bx bx-envelope"></i> ${f.email}</div>` : ''}
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                `
+                                : '';
+
                             const totalAtivos = ficha.emprestimos_ativos_total || 0;
                             const valorTotalAtivos = (ficha.ativos_por_operacao || []).reduce((sum, item) => sum + (Number(item.total_ativo || 0)), 0);
                             
@@ -553,6 +572,8 @@
                                                 </small>
                                             </div>
                                         </div>
+
+                                        ${fichasBlockCruzada}
 
                                         <!-- Cards de Métricas -->
                                         <div class="row g-3 mb-4">
@@ -626,8 +647,8 @@
                                         <div class="alert alert-info mb-0 text-center">
                                             <div class="small">
                                                 <strong>Opções:</strong><br>
-                                                <strong>Usar cadastro:</strong> Vincula o cliente existente à operação atual<br>
-                                                <strong>Cadastrar novo:</strong> Cria um novo registro mesmo com CPF duplicado
+                                                <strong>Usar cadastro:</strong> Abre a ficha do cliente no sistema.<br>
+                                                <strong>Continuar preenchimento:</strong> Ao enviar o formulário com a operação selecionada, o sistema <strong>vincula</strong> este CPF/CNPJ à operação e grava a ficha da operação (não cria outro cadastro — igual ao link de cadastro).
                                             </div>
                                         </div>
                                     </div>
@@ -635,7 +656,7 @@
                                 showCancelButton: true,
                                 showDenyButton: true,
                                 confirmButtonText: 'Usar cadastro',
-                                denyButtonText: 'Cadastrar novo',
+                                denyButtonText: 'Continuar preenchimento',
                                 cancelButtonText: 'Cancelar',
                                 confirmButtonColor: '#038edc',
                                 denyButtonColor: '#f1b44c',
@@ -645,7 +666,7 @@
                                     // Usar cadastro existente - redirecionar para vincular
                                     window.location.href = `{{ url('/clientes') }}/${cliente.id}`;
                                 } else if (result.isDenied) {
-                                    // Cadastrar novo - habilitar formulário
+                                    // Preencher dados e enviar: backend vincula à operação (mesmo fluxo do link)
                                     setEtapa2Ativa(true);
                                     nomeInput?.focus();
                                 }
@@ -769,6 +790,25 @@
                                     Nenhuma pendência atrasada encontrada.
                                 </div>`;
 
+                            const fichasListMesmaEmpresa = data.fichas_por_operacao || [];
+                            const fichasBlockMesmaEmpresa = fichasListMesmaEmpresa.length
+                                ? `
+                                    <div class="card mb-4 text-start">
+                                        <div class="card-header py-2"><h6 class="mb-0 small">Contato por operação (ficha)</h6></div>
+                                        <div class="card-body py-2" style="max-height: 140px; overflow-y: auto;">
+                                            ${fichasListMesmaEmpresa.map(f => `
+                                                <div class="border-bottom pb-2 mb-2">
+                                                    <div class="fw-semibold small">${f.operacao_nome || ('Operação #' + (f.operacao_id || ''))}</div>
+                                                    ${f.nome ? `<div class="text-muted small">${f.nome}</div>` : ''}
+                                                    ${f.telefone ? `<div class="small"><i class="bx bx-phone"></i> ${f.telefone}</div>` : ''}
+                                                    ${f.email ? `<div class="small"><i class="bx bx-envelope"></i> ${f.email}</div>` : ''}
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                `
+                                : '';
+
                             Swal.fire({
                                 icon: 'info',
                                 title: 'Ficha do Cliente',
@@ -795,6 +835,8 @@
                                                 </div>
                                             </div>
                                         </div>
+
+                                        ${fichasBlockMesmaEmpresa}
 
                                         <!-- Cards de Métricas -->
                                         <div class="row g-3 mb-4">

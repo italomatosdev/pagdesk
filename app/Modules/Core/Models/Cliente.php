@@ -140,6 +140,14 @@ class Cliente extends Model
     }
 
     /**
+     * Fichas cadastrais por operação (`operacao_dados_clientes`).
+     */
+    public function operacaoDadosClientes()
+    {
+        return $this->hasMany(OperacaoDadosCliente::class, 'cliente_id');
+    }
+
+    /**
      * Relacionamento: Um cliente tem muitos empréstimos
      */
     public function emprestimos()

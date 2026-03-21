@@ -7,6 +7,8 @@ use App\Modules\Core\Models\Operacao;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\SolicitacaoQuitacao;
 use App\Modules\Loans\Services\QuitacaoService;
+use App\Support\ClienteNomeExibicao;
+use App\Support\FichaContatoLookup;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -54,6 +56,7 @@ class QuitacaoController extends Controller
             'emprestimo' => $emprestimo,
             'saldoDevedor' => $saldoDevedor,
             'parcelasAbertas' => $parcelasAbertas,
+            'nomeClienteExibicao' => ClienteNomeExibicao::forEmprestimo($emprestimo),
         ]);
     }
 
@@ -186,6 +189,10 @@ class QuitacaoController extends Controller
         }
         $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromEmprestimos($solicitacoes->map(fn ($s) => $s->emprestimo)->filter())
+        );
+
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
         } else {
@@ -195,7 +202,7 @@ class QuitacaoController extends Controller
                 : collect([]);
         }
 
-        return view('quitacao.pendentes', compact('solicitacoes', 'operacoes', 'operacaoId'));
+        return view('quitacao.pendentes', compact('solicitacoes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }
 
     /**

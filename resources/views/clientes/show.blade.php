@@ -3,7 +3,7 @@
     Cliente #{{ $cliente->id }}
 @endsection
 @section('page-title')
-    Cliente: {{ $cliente->nome }}
+    Cliente: {{ data_get($operacaoContextoShow, 'ficha')?->nome ?? $cliente->nome }}
 @endsection
 @section('body')
 
@@ -44,6 +44,23 @@
             </div>
         </div>
 
+        @if(!empty($operacaoContextoShow))
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="alert alert-secondary mb-0 d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <span>
+                            <i class="bx bx-layer me-1"></i>
+                            Ficha da operação <strong>{{ $operacaoContextoShow['nome'] }}</strong>
+                            — nome, contato e endereço abaixo são os dados cadastrados para esta operação.
+                        </span>
+                        <a href="{{ route('clientes.show', ['id' => $cliente->id, 'geral' => 1]) }}" class="btn btn-sm btn-outline-secondary">
+                            Ver cadastro geral (sem filtro)
+                        </a>
+                    </div>
+                </div>
+            </div>
+        @endif
+
         <div class="row">
             <div class="col-lg-8">
                 <div class="card">
@@ -63,19 +80,22 @@
                                         <i class="bx bx-money"></i> Criar Empréstimo
                                     </a>
                                 @endif
-                                <a href="{{ route('clientes.edit', $cliente->id) }}" class="btn btn-warning">
+                                <a href="{{ !empty($operacaoContextoShow) ? route('clientes.edit', ['id' => $cliente->id, 'operacao_id' => $operacaoContextoShow['id']]) : route('clientes.edit', $cliente->id) }}" class="btn btn-warning">
                                     <i class="bx bx-edit"></i> Editar
                                 </a>
                             </div>
                         </div>
                     </div>
                     <div class="card-body">
+                        @php
+                            $fichaShow = data_get($operacaoContextoShow, 'ficha');
+                        @endphp
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <strong>{{ $cliente->isPessoaFisica() ? 'CPF' : 'CNPJ' }}:</strong> {{ $cliente->documento_formatado }}
                             </div>
                             <div class="col-md-6 mb-3">
-                                <strong>Nome:</strong> {{ $cliente->nome }}
+                                <strong>Nome:</strong> {{ $fichaShow?->nome ?? $cliente->nome }}
                             </div>
                             @if(($isSuperAdmin ?? false) && $cliente->empresa)
                                 <div class="col-md-6 mb-3">
@@ -83,84 +103,98 @@
                                     <span class="badge bg-primary">{{ $cliente->empresa->nome }}</span>
                                 </div>
                             @endif
+                            @php
+                                $telExibir = $fichaShow?->telefone ?? $cliente->telefone;
+                                $digitsWa = preg_replace('/\D/', '', (string) ($telExibir ?? ''));
+                                if (strlen($digitsWa) >= 10 && !str_starts_with($digitsWa, '55')) {
+                                    $digitsWa = '55'.$digitsWa;
+                                }
+                                $waUrl = strlen($digitsWa) >= 12 ? 'https://wa.me/'.$digitsWa : null;
+                            @endphp
                             <div class="col-md-6 mb-3">
-                                <strong>Telefone:</strong> 
-                                {{ $cliente->telefone_formatado ?? '-' }}
-                                @if($cliente->temWhatsapp())
-                                    <a href="{{ $cliente->whatsapp_link }}" 
-                                       target="_blank" 
-                                       class="btn btn-sm btn-success ms-2" 
-                                       title="Falar no WhatsApp">
+                                <strong>Telefone:</strong>
+                                {{ $telExibir ?: '-' }}
+                                @if($waUrl)
+                                    <a href="{{ $waUrl }}" target="_blank" class="btn btn-sm btn-success ms-2" rel="noopener" title="WhatsApp com o número exibido">
+                                        <i class="bx bxl-whatsapp"></i> WhatsApp
+                                    </a>
+                                @elseif($cliente->temWhatsapp() && !$fichaShow)
+                                    <a href="{{ $cliente->whatsapp_link }}" target="_blank" class="btn btn-sm btn-success ms-2" title="Falar no WhatsApp">
                                         <i class="bx bxl-whatsapp"></i> WhatsApp
                                     </a>
                                 @endif
                             </div>
                             <div class="col-md-6 mb-3">
-                                <strong>Email:</strong> {{ $cliente->email ?? '-' }}
+                                <strong>Email:</strong> {{ $fichaShow?->email ?? $cliente->email ?? '-' }}
                             </div>
-                            @if($cliente->isPessoaFisica() && $cliente->data_nascimento)
+                            @if($cliente->isPessoaFisica() && ($fichaShow?->data_nascimento ?? $cliente->data_nascimento))
                                 <div class="col-md-6 mb-3">
-                                    <strong>Data de Nascimento:</strong> 
-                                    {{ $cliente->data_nascimento?->format('d/m/Y') ?? '-' }}
+                                    <strong>Data de Nascimento:</strong>
+                                    {{ ($fichaShow?->data_nascimento ?? $cliente->data_nascimento)?->format('d/m/Y') ?? '-' }}
                                 </div>
                             @endif
                             
-                            @if($cliente->isPessoaJuridica() && $cliente->responsavel_nome)
+                            @if($cliente->isPessoaJuridica() && ($fichaShow?->responsavel_nome ?? $cliente->responsavel_nome))
                                 <div class="col-12 mb-3">
                                     <hr>
                                     <h6 class="mb-3">Responsável Legal</h6>
                                     <div class="row">
                                         <div class="col-md-6 mb-2">
-                                            <strong>Nome:</strong> {{ $cliente->responsavel_nome }}
+                                            <strong>Nome:</strong> {{ $fichaShow?->responsavel_nome ?? $cliente->responsavel_nome }}
                                         </div>
-                                        @if($cliente->responsavel_cpf)
+                                        @if($fichaShow?->responsavel_cpf ?? $cliente->responsavel_cpf)
                                             <div class="col-md-6 mb-2">
-                                                <strong>CPF:</strong> {{ $cliente->responsavel_cpf_formatado }}
+                                                <strong>CPF:</strong>
+                                                @if($fichaShow?->responsavel_cpf)
+                                                    {{ \App\Helpers\ValidacaoDocumento::formatarCpf(preg_replace('/\D/', '', $fichaShow->responsavel_cpf)) }}
+                                                @else
+                                                    {{ $cliente->responsavel_cpf_formatado }}
+                                                @endif
                                             </div>
                                         @endif
-                                        @if($cliente->responsavel_rg)
+                                        @if($fichaShow?->responsavel_rg ?? $cliente->responsavel_rg)
                                             <div class="col-md-6 mb-2">
-                                                <strong>RG:</strong> {{ $cliente->responsavel_rg }}
+                                                <strong>RG:</strong> {{ $fichaShow?->responsavel_rg ?? $cliente->responsavel_rg }}
                                             </div>
                                         @endif
-                                        @if($cliente->responsavel_cnh)
+                                        @if($fichaShow?->responsavel_cnh ?? $cliente->responsavel_cnh)
                                             <div class="col-md-6 mb-2">
-                                                <strong>CNH:</strong> {{ $cliente->responsavel_cnh }}
+                                                <strong>CNH:</strong> {{ $fichaShow?->responsavel_cnh ?? $cliente->responsavel_cnh }}
                                             </div>
                                         @endif
-                                        @if($cliente->responsavel_cargo)
+                                        @if($fichaShow?->responsavel_cargo ?? $cliente->responsavel_cargo)
                                             <div class="col-md-6 mb-2">
-                                                <strong>Cargo/Função:</strong> {{ $cliente->responsavel_cargo }}
+                                                <strong>Cargo/Função:</strong> {{ $fichaShow?->responsavel_cargo ?? $cliente->responsavel_cargo }}
                                             </div>
                                         @endif
                                     </div>
                                 </div>
                             @endif
                             
-                            @if($cliente->endereco || $cliente->cidade || $cliente->estado || $cliente->cep)
+                            @if(($fichaShow?->endereco ?? $cliente->endereco) || ($fichaShow?->cidade ?? $cliente->cidade) || ($fichaShow?->estado ?? $cliente->estado) || ($fichaShow?->cep ?? $cliente->cep))
                                 <div class="col-12 mb-3">
                                     <strong>Endereço:</strong>
-                                    @if($cliente->endereco)
-                                        {{ $cliente->endereco }}
+                                    @if($fichaShow?->endereco ?? $cliente->endereco)
+                                        {{ $fichaShow?->endereco ?? $cliente->endereco }}
                                     @endif
-                                    @if($cliente->numero)
-                                        , {{ $cliente->numero }}
+                                    @if($fichaShow?->numero ?? $cliente->numero)
+                                        , {{ $fichaShow?->numero ?? $cliente->numero }}
                                     @endif
-                                    @if($cliente->bairro)
+                                    @if($cliente->bairro ?? null)
                                         - {{ $cliente->bairro }}
                                     @endif
-                                    @if($cliente->cidade)
-                                        - {{ $cliente->cidade }}/{{ $cliente->estado }}
+                                    @if($fichaShow?->cidade ?? $cliente->cidade)
+                                        - {{ $fichaShow?->cidade ?? $cliente->cidade }}/{{ $fichaShow?->estado ?? $cliente->estado }}
                                     @endif
-                                    @if($cliente->cep)
-                                        - CEP: {{ $cliente->cep }}
+                                    @if($fichaShow?->cep ?? $cliente->cep)
+                                        - CEP: {{ $fichaShow?->cep ?? $cliente->cep }}
                                     @endif
                                 </div>
                             @endif
-                            @if($cliente->observacoes)
+                            @if($fichaShow?->observacoes ?? $cliente->observacoes)
                                 <div class="col-12 mb-3">
                                     <strong>Observações:</strong><br>
-                                    {{ $cliente->observacoes }}
+                                    {{ $fichaShow?->observacoes ?? $cliente->observacoes }}
                                 </div>
                             @endif
                         </div>
@@ -181,6 +215,7 @@
                                             <th>Empresa</th>
                                         @endif
                                         <th>Operação</th>
+                                        <th class="text-nowrap">Ficha</th>
                                         <th>Limite de Crédito</th>
                                         <th>Status</th>
                                         <th>Consultor</th>
@@ -199,6 +234,20 @@
                                                 </td>
                                             @endif
                                             <td>{{ $vinculo->operacao->nome ?? '-' }}</td>
+                                            <td>
+                                                @if($vinculo->operacao_id)
+                                                    <div class="d-flex flex-wrap gap-1">
+                                                        <a href="{{ route('clientes.show', ['id' => $cliente->id, 'operacao_id' => $vinculo->operacao_id]) }}" class="btn btn-sm btn-outline-info" title="Ver ficha desta operação">
+                                                            <i class="bx bx-show"></i> Ver
+                                                        </a>
+                                                        <a href="{{ route('clientes.edit', ['id' => $cliente->id, 'operacao_id' => $vinculo->operacao_id]) }}" class="btn btn-sm btn-outline-primary">
+                                                            <i class="bx bx-edit-alt"></i> Editar
+                                                        </a>
+                                                    </div>
+                                                @else
+                                                    —
+                                                @endif
+                                            </td>
                                             <td>R$ {{ number_format($vinculo->limite_credito, 2, ',', '.') }}</td>
                                             <td>
                                                 <span class="badge bg-{{ $vinculo->status === 'ativo' ? 'success' : 'danger' }}">
@@ -209,7 +258,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="{{ ($isSuperAdmin ?? false) ? 5 : 4 }}" class="text-center">Nenhum vínculo com operações.</td>
+                                            <td colspan="{{ ($isSuperAdmin ?? false) ? 6 : 5 }}" class="text-center">Nenhum vínculo com operações.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>

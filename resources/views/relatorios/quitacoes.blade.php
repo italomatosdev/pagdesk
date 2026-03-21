@@ -138,7 +138,13 @@
                             <tbody>
                                 @forelse($emprestimos as $e)
                                     <tr>
-                                        <td>{{ $e->cliente ? $e->cliente->nome : '-' }}</td>
+                                        <td>
+                                            @if($e->cliente)
+                                                <a href="{{ \App\Support\ClienteUrl::show($e->cliente_id, $e->operacao_id) }}">{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($e, $fichasContatoPorClienteOperacao ?? collect()) }}</a>
+                                            @else
+                                                -
+                                            @endif
+                                        </td>
                                         <td>{{ $e->operacao ? $e->operacao->nome : '-' }}</td>
                                         <td>{{ $e->consultor ? $e->consultor->name : '-' }}</td>
                                         <td class="text-end">R$ {{ number_format($e->valor_total, 2, ',', '.') }}</td>

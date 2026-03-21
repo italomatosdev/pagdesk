@@ -75,14 +75,14 @@
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <strong>Cliente:</strong> 
-                                <a href="{{ route('clientes.show', $emprestimo->cliente_id) }}">
-                                    {{ $emprestimo->cliente->nome }}
+                                <a href="{{ \App\Support\ClienteUrl::show($emprestimo->cliente_id, $emprestimo->operacao_id) }}">
+                                    {{ $nomeClienteExibicao }}
                                 </a>
-                                @if($emprestimo->cliente->temWhatsapp())
-                                    <a href="{{ $emprestimo->cliente->whatsapp_link }}" 
-                                       target="_blank" 
-                                       class="btn btn-sm btn-success ms-2" 
-                                       title="Falar no WhatsApp">
+                                @if(\App\Support\WhatsappLink::temWhatsappPreferindoFicha($fichaContatoEmprestimo ?? null, $emprestimo->cliente))
+                                    <a href="{{ \App\Support\WhatsappLink::urlPreferindoFicha($fichaContatoEmprestimo ?? null, $emprestimo->cliente) }}"
+                                       target="_blank"
+                                       class="btn btn-sm btn-success ms-2"
+                                       title="Falar no WhatsApp (número da ficha desta operação quando houver)">
                                         <i class="bx bxl-whatsapp"></i> WhatsApp
                                     </a>
                                 @endif
@@ -632,7 +632,7 @@
                                                 <div class="alert alert-info">
                                                     <strong>Valor:</strong> R$ {{ number_format($emprestimo->liberacao->valor_liberado, 2, ',', '.') }}<br>
                                                     <strong>Consultor:</strong> {{ $emprestimo->liberacao->consultor->name ?? '-' }}<br>
-                                                    <strong>Cliente:</strong> {{ $emprestimo->cliente->nome ?? '-' }}
+                                                    <strong>Cliente:</strong> {{ $nomeClienteExibicao }}
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Comprovante (opcional)</label>
@@ -1750,7 +1750,7 @@
                                             
                                             <div class="mb-3">
                                                 <strong>Empréstimo:</strong> #{{ $emprestimo->id }}<br>
-                                                <strong>Cliente:</strong> {{ $emprestimo->cliente->nome }}<br>
+                                                <strong>Cliente:</strong> {{ $nomeClienteExibicao }}<br>
                                                 <strong>Garantia:</strong> {{ $garantia->categoria_nome }} - {{ $garantia->descricao }}<br>
                                                 @if($garantia->valor_avaliado)
                                                     <strong>Valor:</strong> {{ $garantia->valor_formatado }}
@@ -2123,7 +2123,7 @@
                       method="POST" enctype="multipart/form-data"
                       class="form-confirmar-pagamento-cliente"
                       data-valor="{{ number_format($emprestimo->liberacao->valor_liberado, 2, ',', '.') }}"
-                      data-cliente="{{ $emprestimo->cliente->nome }}"
+                      data-cliente="{{ $nomeClienteExibicao }}"
                       data-emprestimo-id="{{ $emprestimo->id }}">
                     @csrf
                     <input type="hidden" name="redirect_to" value="emprestimos.show">
@@ -2134,7 +2134,7 @@
                     <div class="modal-body">
                         <div class="alert alert-info">
                             <strong>Valor:</strong> R$ {{ number_format($emprestimo->liberacao->valor_liberado, 2, ',', '.') }}<br>
-                            <strong>Cliente:</strong> {{ $emprestimo->cliente->nome }}<br>
+                            <strong>Cliente:</strong> {{ $nomeClienteExibicao }}<br>
                             <strong>Empréstimo:</strong> #{{ $emprestimo->id }}
                         </div>
                         @if($ehGestorAdminConfirmando ?? false)
@@ -2190,7 +2190,7 @@
                         </div>
                         <div class="mb-3">
                             <strong>Empréstimo:</strong> #{{ $emprestimo->id }}<br>
-                            <strong>Cliente:</strong> {{ $emprestimo->cliente->nome }}<br>
+                            <strong>Cliente:</strong> {{ $nomeClienteExibicao }}<br>
                             <strong>Valor:</strong> R$ {{ number_format($emprestimo->valor_total, 2, ',', '.') }}
                         </div>
                         @if($emprestimo->liberacao && $emprestimo->liberacao->isLiberado())
@@ -2250,7 +2250,7 @@
                         </div>
                         <div class="mb-3">
                             <strong>Empréstimo:</strong> #{{ $emprestimo->id }}<br>
-                            <strong>Cliente:</strong> {{ $emprestimo->cliente->nome }}<br>
+                            <strong>Cliente:</strong> {{ $nomeClienteExibicao }}<br>
                             <strong>Valor:</strong> R$ {{ number_format($emprestimo->valor_total, 2, ',', '.') }}
                         </div>
                         <p class="text-muted small mb-3">

@@ -193,7 +193,13 @@
                                     @forelse($emprestimos as $emprestimo)
                                         <tr>
                                             <td>#{{ $emprestimo->id }}</td>
-                                            <td>{{ $emprestimo->cliente?->nome ?? '—' }}</td>
+                                            <td>
+                                                @if($emprestimo->cliente)
+                                                    <a href="{{ \App\Support\ClienteUrl::show($emprestimo->cliente_id, $emprestimo->operacao_id) }}">{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($emprestimo, $fichasContatoPorClienteOperacao) }}</a>
+                                                @else
+                                                    —
+                                                @endif
+                                            </td>
                                             <td>{{ $emprestimo->operacao?->nome ?? '—' }}</td>
                                             <td>
                                                 @php
@@ -236,10 +242,13 @@
                                                        class="btn btn-sm btn-info" title="Ver Detalhes">
                                                         <i class="bx bx-show"></i>
                                                     </a>
-                                                    @if($emprestimo->cliente && $emprestimo->cliente->temWhatsapp())
-                                                        <a href="{{ $emprestimo->cliente->whatsapp_link }}" 
-                                                           target="_blank" 
-                                                           class="btn btn-sm btn-success" 
+                                                    @php
+                                                        $fichaWaEmp = ($fichasContatoPorClienteOperacao ?? collect())->get($emprestimo->cliente_id.'_'.$emprestimo->operacao_id);
+                                                    @endphp
+                                                    @if($emprestimo->cliente && \App\Support\WhatsappLink::temWhatsappPreferindoFicha($fichaWaEmp, $emprestimo->cliente))
+                                                        <a href="{{ \App\Support\WhatsappLink::urlPreferindoFicha($fichaWaEmp, $emprestimo->cliente) }}"
+                                                           target="_blank"
+                                                           class="btn btn-sm btn-success"
                                                            title="Falar no WhatsApp">
                                                             <i class="bx bxl-whatsapp"></i>
                                                         </a>

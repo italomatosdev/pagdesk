@@ -7,6 +7,9 @@ use App\Modules\Core\Models\Cliente;
 use App\Modules\Core\Models\Operacao;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Models\User;
+use App\Support\ClienteNomeExibicao;
+use App\Support\ClienteUrl;
+use App\Support\FichaContatoLookup;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -46,7 +49,7 @@ class SearchController extends Controller
                     'id' => $cliente->id,
                     'title' => $cliente->nome,
                     'subtitle' => $cliente->cpf_formatado,
-                    'url' => route('clientes.show', $cliente->id),
+                    'url' => ClienteUrl::showForUser($cliente, $user),
                     'icon' => 'bx-user',
                     'badge' => 'Cliente'
                 ];
@@ -56,12 +59,16 @@ class SearchController extends Controller
         // Buscar empréstimos (por ID ou nome do cliente)
         if ($tipoBusca === 'id' || $tipoBusca === 'nome' || $tipoBusca === 'geral') {
             $emprestimos = $this->buscarEmprestimos($termo, $user);
+            $fichaMapEmprestimos = FichaContatoLookup::mapByClienteOperacaoPairs(
+                FichaContatoLookup::pairsFromEmprestimos($emprestimos)
+            );
             foreach ($emprestimos as $emprestimo) {
                 $results[] = [
                     'type' => 'emprestimo',
                     'id' => $emprestimo->id,
                     'title' => 'Empréstimo #' . $emprestimo->id,
-                    'subtitle' => $emprestimo->cliente->nome . ' - R$ ' . number_format($emprestimo->valor_total, 2, ',', '.'),
+                    'subtitle' => ClienteNomeExibicao::fromEmprestimoMap($emprestimo, $fichaMapEmprestimos)
+                        . ' - R$ ' . number_format($emprestimo->valor_total, 2, ',', '.'),
                     'url' => route('emprestimos.show', $emprestimo->id),
                     'icon' => 'bx-money',
                     'badge' => ucfirst($emprestimo->status)
@@ -157,7 +164,7 @@ class SearchController extends Controller
         // Busca global: filtro por empresa já vem do EmpresaScope do model Cliente.
         // Não exige vínculo em operation_clients para que todos os clientes da empresa apareçam.
 
-        return $query->orderBy('nome')->limit(5)->get();
+        return $query->with('operationClients')->orderBy('nome')->limit(5)->get();
     }
 
     /**

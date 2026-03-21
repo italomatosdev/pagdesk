@@ -35,7 +35,7 @@
                             @endphp
                             <div class="alert alert-{{ $estaAtrasada ? 'warning' : 'info' }} mb-0">
                                 <strong>Parcela:</strong> #{{ $parcela->numero }} de {{ $parcela->emprestimo->numero_parcelas }}<br>
-                                <strong>Cliente:</strong> {{ $parcela->emprestimo->cliente->nome }}<br>
+                                <strong>Cliente:</strong> {{ $nomeClienteExibicao ?? ($parcela->emprestimo->cliente->nome ?? 'Cliente') }}<br>
                                 <strong>Vencimento:</strong> {{ $parcela->data_vencimento->format('d/m/Y') }}<br>
                                 @if($estaAtrasada)
                                     <strong class="text-danger">Dias de atraso:</strong> {{ $diasAtraso }} dias<br>

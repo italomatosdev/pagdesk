@@ -21,8 +21,10 @@
         <env name="APP_ENV" value="testing"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="CACHE_DRIVER" value="array"/>
-        <!-- OBRIGATÓRIO: testes usam banco separado para NUNCA apagar dados do banco principal -->
-        <env name="DB_DATABASE" value="cred_test"/>
+        <!-- cred: alinhado ao ambiente local. ATENÇÃO: testes com RefreshDatabase fazem migrate:fresh e apagam o banco — não rode a suíte inteira em cred com dados importantes. -->
+        <!-- PHPUnit no Mac/host: o .env costuma ter DB_HOST=host.docker.internal (só resolve dentro do container). Forçar localhost para o PHP do host alcançar o MySQL (porta mapeada ou MySQL nativo). -->
+        <env name="DB_HOST" value="127.0.0.1"/>
+        <env name="DB_DATABASE" value="cred"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

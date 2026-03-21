@@ -156,8 +156,8 @@
                                             <td>{{ $cheques->firstItem() + $loop->index }}</td>
                                             <td>
                                                 @if($cheque->emprestimo && $cheque->emprestimo->cliente)
-                                                    <a href="{{ route('clientes.show', $cheque->emprestimo->cliente->id) }}">
-                                                        {{ $cheque->emprestimo->cliente->nome }}
+                                                    <a href="{{ \App\Support\ClienteUrl::show($cheque->emprestimo->cliente->id, $cheque->emprestimo->operacao_id) }}">
+                                                        {{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($cheque->emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}
                                                     </a>
                                                 @else
                                                     <span class="text-muted">-</span>

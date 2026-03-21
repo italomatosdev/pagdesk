@@ -560,7 +560,7 @@
                                     @forelse($liberacoesPendentes as $liberacao)
                                         <tr>
                                             <td>#{{ $liberacao->id }}</td>
-                                            <td>{{ $liberacao->emprestimo->cliente->nome }}</td>
+                                            <td>{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($liberacao->emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}</td>
                                             <td>{{ $liberacao->consultor->name }}</td>
                                             <td>R$ {{ number_format($liberacao->valor_liberado, 2, ',', '.') }}</td>
                                             <td>{{ $liberacao->created_at->format('d/m/Y H:i') }}</td>
@@ -594,7 +594,7 @@
                                 <div class="border-bottom p-2">
                                     <div class="d-flex align-items-center">
                                         <div class="flex-grow-1">
-                                            <h6 class="font-size-14 mb-1">{{ $emprestimo->cliente->nome }}</h6>
+                                            <h6 class="font-size-14 mb-1">{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}</h6>
                                             <p class="text-muted mb-0 font-size-12">
                                                 R$ {{ number_format($emprestimo->valor_total, 2, ',', '.') }}
                                             </p>
@@ -644,17 +644,30 @@
                                 <tbody>
                                     @forelse($parcelasVencidas as $parcela)
                                         <tr class="table-danger">
-                                            <td>{{ $parcela->emprestimo->cliente->nome }}</td>
+                                            <td>{{ \App\Support\ClienteNomeExibicao::fromParcelaMap($parcela, $fichasContatoPorClienteOperacao ?? collect()) }}</td>
                                             <td>R$ {{ number_format($parcela->valor - $parcela->valor_pago, 2, ',', '.') }}</td>
                                             <td>{{ $parcela->data_vencimento->format('d/m/Y') }}</td>
                                             <td>
                                                 <span class="badge bg-danger">{{ $parcela->dias_atraso }} dias</span>
                                             </td>
                                             <td>
-                                                <a href="{{ route('emprestimos.show', $parcela->emprestimo_id) }}" 
-                                                   class="btn btn-sm btn-primary">
-                                                    <i class="bx bx-show"></i>
-                                                </a>
+                                                <div class="d-flex gap-1 flex-wrap">
+                                                    <a href="{{ route('emprestimos.show', $parcela->emprestimo_id) }}"
+                                                       class="btn btn-sm btn-primary">
+                                                        <i class="bx bx-show"></i>
+                                                    </a>
+                                                    @php
+                                                        $fichaWaGest = ($fichasContatoPorClienteOperacao ?? collect())->get($parcela->emprestimo->cliente_id.'_'.$parcela->emprestimo->operacao_id);
+                                                    @endphp
+                                                    @if(\App\Support\WhatsappLink::temWhatsappPreferindoFicha($fichaWaGest, $parcela->emprestimo->cliente))
+                                                        <a href="{{ \App\Support\WhatsappLink::urlPreferindoFicha($fichaWaGest, $parcela->emprestimo->cliente) }}"
+                                                           target="_blank"
+                                                           class="btn btn-sm btn-success"
+                                                           title="WhatsApp (ficha da operação quando houver)">
+                                                            <i class="bx bxl-whatsapp"></i>
+                                                        </a>
+                                                    @endif
+                                                </div>
                                             </td>
                                         </tr>
                                     @empty

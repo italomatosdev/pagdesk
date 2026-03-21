@@ -310,9 +310,27 @@
         if (typeof $ !== 'undefined' && $.fn.select2) {
             var clienteSelectEl = document.getElementById('cliente-select');
             var clienteJaSelecionado = clienteSelectEl && clienteSelectEl.options.length > 0 && clienteSelectEl.options[0].value;
+            var msgOperacaoObrigatoriaVenda = 'Selecione a operação antes de buscar o cliente.';
+            function avisoSelect2ClienteVenda(texto) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Atenção',
+                        text: texto,
+                        confirmButtonText: 'OK',
+                        confirmButtonColor: '#038edc'
+                    });
+                } else {
+                    alert(texto);
+                }
+            }
+            function getOperacaoIdVenda() {
+                var opEl = document.getElementById('operacao-select');
+                return opEl && opEl.value ? String(opEl.value) : '';
+            }
             var select2Config = {
                 theme: 'bootstrap-5',
-                placeholder: 'Digite o nome ou CPF do cliente...',
+                placeholder: 'Selecione a operação acima, depois busque o cliente…',
                 allowClear: true,
                 minimumInputLength: 2,
                 language: {
@@ -326,9 +344,24 @@
                     dataType: 'json',
                     delay: 250,
                     data: function(params) {
-                        return { q: params.term, page: params.page || 1 };
+                        return { q: params.term, operacao_id: getOperacaoIdVenda(), page: params.page || 1 };
+                    },
+                    transport: function(params, success, failure) {
+                        if (!getOperacaoIdVenda()) {
+                            avisoSelect2ClienteVenda(msgOperacaoObrigatoriaVenda);
+                            failure('no_operacao');
+                            return;
+                        }
+                        var $request = $.ajax(params);
+                        $request.then(success);
+                        $request.fail(failure);
+                        return $request;
                     },
                     processResults: function(data, params) {
+                        if (data.error) {
+                            avisoSelect2ClienteVenda(data.error);
+                            return { results: [], pagination: { more: false } };
+                        }
                         params.page = params.page || 1;
                         return {
                             results: data.results || [],
@@ -340,6 +373,18 @@
             };
             if (clienteJaSelecionado) select2Config.minimumInputLength = 0;
             $('#cliente-select').select2(select2Config);
+            $('#cliente-select').on('select2:opening', function(e) {
+                if (!getOperacaoIdVenda()) {
+                    e.preventDefault();
+                    avisoSelect2ClienteVenda(msgOperacaoObrigatoriaVenda);
+                }
+            });
+            var operacaoSelVenda = document.getElementById('operacao-select');
+            if (operacaoSelVenda) {
+                operacaoSelVenda.addEventListener('change', function () {
+                    $('#cliente-select').val(null).trigger('change');
+                });
+            }
         }
     });
     </script>

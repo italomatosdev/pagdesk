@@ -56,7 +56,7 @@ class DevedoresController extends Controller
         $clienteIds = array_keys($diasAtrasoPorCliente);
 
         $clientes = Cliente::withoutGlobalScope(EmpresaScope::class)
-            ->with('documentos')
+            ->with(['documentos', 'operationClients'])
             ->whereIn('id', $clienteIds)
             ->orderBy('nome')
             ->get();

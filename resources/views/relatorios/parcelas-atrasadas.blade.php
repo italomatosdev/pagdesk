@@ -139,7 +139,13 @@
                                     <tbody>
                                         @forelse($parcelas as $p)
                                             <tr>
-                                                <td>{{ $p->emprestimo && $p->emprestimo->cliente ? $p->emprestimo->cliente->nome : '-' }}</td>
+                                                <td>
+                                                    @if($p->emprestimo && $p->emprestimo->cliente)
+                                                        <a href="{{ \App\Support\ClienteUrl::show($p->emprestimo->cliente_id, $p->emprestimo->operacao_id) }}">{{ \App\Support\ClienteNomeExibicao::fromParcelaMap($p, $fichasPorClienteOperacao ?? collect()) }}</a>
+                                                    @else
+                                                        -
+                                                    @endif
+                                                </td>
                                                 <td>{{ $p->emprestimo && $p->emprestimo->operacao ? $p->emprestimo->operacao->nome : '-' }}</td>
                                                 <td>{{ $p->emprestimo && $p->emprestimo->consultor ? $p->emprestimo->consultor->name : '-' }}</td>
                                                 <td class="text-center">{{ $p->numero }}/{{ $p->emprestimo ? $p->emprestimo->numero_parcelas : '-' }}</td>
@@ -168,32 +174,54 @@
                         </div>
                         <div class="tab-pane fade" id="painel-rota" role="tabpanel">
                             @php
-                                $porCliente = $parcelas->groupBy(function ($p) {
-                                    return $p->emprestimo && $p->emprestimo->cliente ? $p->emprestimo->cliente->id : 'sem-cliente';
+                                $fichasRota = $fichasPorClienteOperacao ?? collect();
+                                $porGrupoRota = $parcelas->groupBy(function ($p) {
+                                    if (!$p->emprestimo || !$p->emprestimo->cliente) {
+                                        return 'sem-cliente';
+                                    }
+
+                                    return $p->emprestimo->cliente_id.'_'.($p->emprestimo->operacao_id ?? 0);
                                 });
-                                $porCliente = $porCliente->sortBy(function ($grupo) {
-                                    $c = $grupo->first()->emprestimo->cliente ?? null;
-                                    if (!$c) return 'zzz';
-                                    return ($c->cidade ?? '') . ' ' . ($c->endereco ?? '') . ' ' . ($c->numero ?? '');
+                                $porGrupoRota = $porGrupoRota->sortBy(function ($grupo) use ($fichasRota) {
+                                    $primeira = $grupo->first();
+                                    $e = $primeira->emprestimo ?? null;
+                                    if (!$e || !$e->cliente) {
+                                        return 'zzz';
+                                    }
+                                    $k = $e->cliente_id.'_'.$e->operacao_id;
+                                    $ficha = $fichasRota->get($k);
+                                    $c = $e->cliente;
+                                    $cidade = $ficha?->cidade ?? $c->cidade;
+                                    $end = $ficha?->endereco ?? $c->endereco;
+                                    $num = $ficha?->numero ?? $c->numero;
+
+                                    return ($cidade ?? '').' '.($end ?? '').' '.($num ?? '');
                                 });
                             @endphp
-                            @if($porCliente->isEmpty())
+                            @if($porGrupoRota->isEmpty())
                                 <p class="text-muted mb-0">Nenhuma parcela atrasada para os filtros informados.</p>
                             @else
-                                <p class="text-muted small mb-3">Agrupado por cliente, ordenado por cidade/endereço para montar a rota. Use "Copiar" ou "Mapa" para navegação.</p>
+                                <p class="text-muted small mb-3">Agrupado por cliente e operação; endereço usa a <strong>ficha da operação</strong> quando existir, senão o cadastro geral. Ordenado por cidade/endereço. Use &quot;Copiar&quot; ou &quot;Mapa&quot; para navegação.</p>
                                 <div class="list-group list-group-flush">
-                                    @foreach($porCliente as $clienteId => $parcelasCliente)
+                                    @foreach($porGrupoRota as $grupoKey => $parcelasCliente)
                                         @php
                                             $primeira = $parcelasCliente->first();
-                                            $cliente = $primeira->emprestimo->cliente ?? null;
+                                            $emp = $primeira->emprestimo ?? null;
+                                            $cliente = $emp->cliente ?? null;
                                             $saldoCliente = $parcelasCliente->sum('saldo_receber');
+                                            $kFicha = $cliente && $emp && $emp->operacao_id
+                                                ? $cliente->id.'_'.$emp->operacao_id
+                                                : null;
+                                            $fichaRota = $kFicha ? $fichasRota->get($kFicha) : null;
                                             $enderecoCompleto = '';
                                             if ($cliente) {
+                                                $estadoLinha = $fichaRota?->estado ?? $cliente->estado;
+                                                $cepLinha = $fichaRota?->cep ?? $cliente->cep;
                                                 $partes = array_filter([
-                                                    $cliente->endereco ?? null,
-                                                    $cliente->numero ?? null,
-                                                    $cliente->cidade ?? null,
-                                                    $cliente->estado ? ($cliente->estado . ($cliente->cep ? ' - ' . $cliente->cep : '')) : ($cliente->cep ?? null),
+                                                    $fichaRota?->endereco ?? $cliente->endereco ?? null,
+                                                    $fichaRota?->numero ?? $cliente->numero ?? null,
+                                                    $fichaRota?->cidade ?? $cliente->cidade ?? null,
+                                                    $estadoLinha ? ($estadoLinha.($cepLinha ? ' - '.$cepLinha : '')) : ($cepLinha ?? null),
                                                 ]);
                                                 $enderecoCompleto = implode(', ', $partes);
                                             }
@@ -201,7 +229,16 @@
                                         @endphp
                                         <div class="list-group-item d-flex flex-wrap align-items-start gap-2 py-3">
                                             <div class="flex-grow-1">
-                                                <strong>{{ $cliente ? $cliente->nome : 'Cliente não informado' }}</strong>
+                                                <strong>
+                                                    @if($cliente && $emp)
+                                                        <a href="{{ \App\Support\ClienteUrl::show($cliente->id, $emp->operacao_id) }}">{{ $fichaRota?->nome ?? $cliente->nome }}</a>
+                                                    @else
+                                                        {{ $cliente ? $cliente->nome : 'Cliente não informado' }}
+                                                    @endif
+                                                </strong>
+                                                @if($emp?->operacao)
+                                                    <div class="text-muted small">{{ $emp->operacao->nome }}</div>
+                                                @endif
                                                 @if($enderecoCompleto)
                                                     <div class="text-muted small mt-1">{{ $enderecoCompleto }}</div>
                                                 @else

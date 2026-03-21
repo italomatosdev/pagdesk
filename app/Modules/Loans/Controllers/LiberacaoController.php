@@ -10,6 +10,9 @@ use App\Modules\Loans\Models\SolicitacaoNegociacao;
 use App\Modules\Loans\Models\SolicitacaoPagamentoJurosContratoReduzido;
 use App\Modules\Loans\Models\SolicitacaoPagamentoJurosParcial;
 use App\Modules\Loans\Models\SolicitacaoRenovacaoAbate;
+use App\Modules\Core\Services\OperacaoDadosClienteService;
+use App\Support\ClienteNomeExibicao;
+use App\Support\FichaContatoLookup;
 use App\Modules\Loans\Services\EmprestimoService;
 use App\Modules\Loans\Services\LiberacaoService;
 use App\Modules\Loans\Services\PagamentoService;
@@ -20,13 +23,20 @@ use Illuminate\Http\RedirectResponse;
 class LiberacaoController extends Controller
 {
     protected LiberacaoService $liberacaoService;
+
     protected PagamentoService $pagamentoService;
 
-    public function __construct(LiberacaoService $liberacaoService, PagamentoService $pagamentoService)
-    {
+    protected OperacaoDadosClienteService $operacaoDadosClienteService;
+
+    public function __construct(
+        LiberacaoService $liberacaoService,
+        PagamentoService $pagamentoService,
+        OperacaoDadosClienteService $operacaoDadosClienteService
+    ) {
         $this->middleware('auth');
         $this->liberacaoService = $liberacaoService;
         $this->pagamentoService = $pagamentoService;
+        $this->operacaoDadosClienteService = $operacaoDadosClienteService;
     }
 
     /**
@@ -52,6 +62,10 @@ class LiberacaoController extends Controller
 
         $liberacoes = $this->liberacaoService->listarAguardando($operacaoId, $user);
 
+        $fichasContatoPorClienteOperacao = $this->fichasContatoMapFromEmprestimos(
+            $liberacoes->map(fn ($l) => $l->emprestimo)->filter()
+        );
+
         // Operações disponíveis no filtro: Super Admin vê todas; demais só as vinculadas
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->get();
@@ -62,7 +76,7 @@ class LiberacaoController extends Controller
                 : collect([]);
         }
 
-        return view('liberacoes.index', compact('liberacoes', 'operacoes', 'operacaoId'));
+        return view('liberacoes.index', compact('liberacoes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }
 
     /**
@@ -174,6 +188,10 @@ class LiberacaoController extends Controller
         }
         $liberacoes = $this->liberacaoService->listarPorConsultor($user->id, $status, $operacaoId);
 
+        $fichasContatoPorClienteOperacao = $this->fichasContatoMapFromEmprestimos(
+            $liberacoes->map(fn ($l) => $l->emprestimo)->filter()
+        );
+
         if ($user->isSuperAdmin()) {
             $operacoes = \App\Modules\Core\Models\Operacao::where('ativo', true)->orderBy('nome')->get();
         } else {
@@ -183,7 +201,7 @@ class LiberacaoController extends Controller
                 : collect([]);
         }
 
-        return view('liberacoes.consultor', compact('liberacoes', 'status', 'operacoes', 'operacaoId'));
+        return view('liberacoes.consultor', compact('liberacoes', 'status', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }
 
     /**
@@ -216,7 +234,21 @@ class LiberacaoController extends Controller
             || $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador']);
         $ehGestorAdminConfirmando = $podeConfirmarPagamentoCliente && $liberacao->consultor_id !== $user->id;
 
-        return view('liberacoes.show', compact('liberacao', 'podeAprovarLiberacao', 'podeConfirmarPagamentoCliente', 'ehGestorAdminConfirmando'));
+        $fichaContatoLiberacao = $this->operacaoDadosClienteService->obterParaOperacao(
+            (int) $liberacao->emprestimo->cliente_id,
+            (int) $liberacao->emprestimo->operacao_id
+        );
+
+        $nomeClienteExibicao = ClienteNomeExibicao::fromFicha($fichaContatoLiberacao, $liberacao->emprestimo->cliente);
+
+        return view('liberacoes.show', compact(
+            'liberacao',
+            'podeAprovarLiberacao',
+            'podeConfirmarPagamentoCliente',
+            'ehGestorAdminConfirmando',
+            'fichaContatoLiberacao',
+            'nomeClienteExibicao'
+        ));
     }
 
     /**
@@ -380,6 +412,10 @@ class LiberacaoController extends Controller
 
         $itens = $query->orderByDesc('id')->paginate(20)->withQueryString();
 
+        $fichasContatoPorClienteOperacao = $this->fichasContatoMapFromEmprestimos(
+            $itens->map(fn ($item) => $item->pagamento?->parcela?->emprestimo)->filter()
+        );
+
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->get();
         } else {
@@ -389,7 +425,7 @@ class LiberacaoController extends Controller
                 : collect([]);
         }
 
-        return view('liberacoes.produtos-objeto-recebidos', compact('itens', 'operacoes', 'operacaoId', 'status'));
+        return view('liberacoes.produtos-objeto-recebidos', compact('itens', 'operacoes', 'operacaoId', 'status', 'fichasContatoPorClienteOperacao'));
     }
 
     /**
@@ -428,6 +464,8 @@ class LiberacaoController extends Controller
 
         $pagamentos = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
+        $fichasContatoPorClienteOperacao = $this->fichasContatoMapFromParcelas($pagamentos->map(fn ($p) => $p->parcela)->filter());
+
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->get();
         } else {
@@ -437,7 +475,7 @@ class LiberacaoController extends Controller
                 : collect([]);
         }
 
-        return view('liberacoes.pagamentos-produto-objeto', compact('pagamentos', 'operacoes', 'operacaoId'));
+        return view('liberacoes.pagamentos-produto-objeto', compact('pagamentos', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }
 
     /**
@@ -526,6 +564,8 @@ class LiberacaoController extends Controller
 
         $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
+        $fichasContatoPorClienteOperacao = $this->fichasContatoMapFromParcelas($solicitacoes->map(fn ($s) => $s->parcela)->filter());
+
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
         } else {
@@ -535,7 +575,7 @@ class LiberacaoController extends Controller
                 : collect([]);
         }
 
-        return view('liberacoes.solicitacoes-juros-parcial', compact('solicitacoes', 'operacoes', 'operacaoId'));
+        return view('liberacoes.solicitacoes-juros-parcial', compact('solicitacoes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }
 
     /**
@@ -632,6 +672,8 @@ class LiberacaoController extends Controller
 
         $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
+        $fichasContatoPorClienteOperacao = $this->fichasContatoMapFromParcelas($solicitacoes->map(fn ($s) => $s->parcela)->filter());
+
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
         } else {
@@ -641,7 +683,7 @@ class LiberacaoController extends Controller
                 : collect([]);
         }
 
-        return view('liberacoes.solicitacoes-juros-contrato-reduzido', compact('solicitacoes', 'operacoes', 'operacaoId'));
+        return view('liberacoes.solicitacoes-juros-contrato-reduzido', compact('solicitacoes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }
 
     /**
@@ -738,6 +780,8 @@ class LiberacaoController extends Controller
 
         $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
+        $fichasContatoPorClienteOperacao = $this->fichasContatoMapFromParcelas($solicitacoes->map(fn ($s) => $s->parcela)->filter());
+
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
         } else {
@@ -747,7 +791,7 @@ class LiberacaoController extends Controller
                 : collect([]);
         }
 
-        return view('liberacoes.solicitacoes-renovacao-abate', compact('solicitacoes', 'operacoes', 'operacaoId'));
+        return view('liberacoes.solicitacoes-renovacao-abate', compact('solicitacoes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }
 
     /**
@@ -887,6 +931,8 @@ class LiberacaoController extends Controller
 
         $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
+        $fichasContatoPorClienteOperacao = $this->fichasContatoMapFromEmprestimos($solicitacoes->map(fn ($s) => $s->emprestimo)->filter());
+
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
         } else {
@@ -896,7 +942,7 @@ class LiberacaoController extends Controller
                 : collect([]);
         }
 
-        return view('liberacoes.negociacoes', compact('solicitacoes', 'operacoes', 'operacaoId'));
+        return view('liberacoes.negociacoes', compact('solicitacoes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }
 
     /**
@@ -954,5 +1000,27 @@ class LiberacaoController extends Controller
         } catch (\Exception $e) {
             return redirect()->route('liberacoes.negociacoes')->with('error', 'Erro ao rejeitar: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * @param  iterable<int, \App\Modules\Loans\Models\Emprestimo|null>  $emprestimos
+     * @return \Illuminate\Support\Collection<string, \App\Modules\Core\Models\OperacaoDadosCliente>
+     */
+    private function fichasContatoMapFromEmprestimos(iterable $emprestimos): \Illuminate\Support\Collection
+    {
+        return FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromEmprestimos(collect($emprestimos)->filter())
+        );
+    }
+
+    /**
+     * @param  iterable<int, \App\Modules\Loans\Models\Parcela|null>  $parcelas
+     * @return \Illuminate\Support\Collection<string, \App\Modules\Core\Models\OperacaoDadosCliente>
+     */
+    private function fichasContatoMapFromParcelas(iterable $parcelas): \Illuminate\Support\Collection
+    {
+        return FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromParcelas(collect($parcelas)->filter())
+        );
     }
 }

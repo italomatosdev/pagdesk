@@ -128,6 +128,8 @@
                             <strong><i class="bx bx-link-alt"></i> Vinculado ao empréstimo</strong>
                             <p class="mb-2 text-muted small">
                                 Esta movimentação refere-se a um pagamento de parcela do empréstimo abaixo.
+                                <br>
+                                <strong>Cliente:</strong> {{ \App\Support\ClienteNomeExibicao::forEmprestimo($emprestimo) }}
                             </p>
                             <a href="{{ route('emprestimos.show', $emprestimo->id) }}" class="btn btn-primary btn-sm">
                                 <i class="bx bx-show"></i> Ver Empréstimo #{{ $emprestimo->id }}

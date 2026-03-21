@@ -56,7 +56,7 @@
                                 @endphp
                                 <div class="col-6 col-sm-4 col-md-3 col-lg-2">
                                     <div class="card border h-100 mb-0">
-                                        <div class="card-body p-2 text-center">
+                                        <div class="card-body p-2 text-center position-relative">
                                             <div class="devedor-foto rounded overflow-hidden bg-light d-inline-block mb-2" style="width: 120px; height: 120px;">
                                                 @if($selfieUrl)
                                                     <img src="{{ $selfieUrl }}" alt="" class="w-100 h-100" style="object-fit: cover;">
@@ -71,6 +71,9 @@
                                             @if(isset($diasAtrasoPorCliente[$cliente->id]))
                                                 <span class="badge bg-warning text-dark mt-1">{{ $diasAtrasoPorCliente[$cliente->id] }} {{ $diasAtrasoPorCliente[$cliente->id] === 1 ? 'dia' : 'dias' }} em atraso</span>
                                             @endif
+                                            <a href="{{ \App\Support\ClienteUrl::showForUser($cliente, auth()->user()) }}"
+                                               class="stretched-link"
+                                               aria-label="Ver ficha de {{ $cliente->nome }}"></a>
                                         </div>
                                     </div>
                                 </div>

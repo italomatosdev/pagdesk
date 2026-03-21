@@ -35,6 +35,7 @@ class RadarController extends Controller
         $cliente = null;
         $ficha = null;
         $consultaCruzada = false;
+        $fichasPorOperacao = [];
         $error = null;
 
         if ($documento !== null && $documento !== '') {
@@ -59,6 +60,7 @@ class RadarController extends Controller
                         $cliente = $data['cliente'] ?? null;
                         $ficha = $data['ficha'] ?? null;
                         $consultaCruzada = (bool) ($data['consulta_cruzada'] ?? false);
+                        $fichasPorOperacao = $data['fichas_por_operacao'] ?? [];
                     }
                 }
             } catch (\Throwable $e) {
@@ -70,6 +72,6 @@ class RadarController extends Controller
             }
         }
 
-        return view('radar.index', compact('documento', 'existe', 'cliente', 'ficha', 'consultaCruzada', 'error'));
+        return view('radar.index', compact('documento', 'existe', 'cliente', 'ficha', 'consultaCruzada', 'fichasPorOperacao', 'error'));
     }
 }

@@ -6,6 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Modules\Core\Models\Cliente;
 use App\Modules\Core\Models\Operacao;
 use App\Modules\Core\Services\ClienteService;
+use App\Modules\Core\Services\OperacaoDadosClienteService;
+use App\Support\ClienteNomeExibicao;
+use App\Support\FichaContatoLookup;
+use App\Support\NotificacaoClienteDisplayName;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Parcela;
 use App\Modules\Loans\Models\SolicitacaoEmprestimoRetroativo;
@@ -20,15 +24,20 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class EmprestimoController extends Controller
 {
     protected EmprestimoService $emprestimoService;
+
     protected ClienteService $clienteService;
+
+    protected OperacaoDadosClienteService $operacaoDadosClienteService;
 
     public function __construct(
         EmprestimoService $emprestimoService,
-        ClienteService $clienteService
+        ClienteService $clienteService,
+        OperacaoDadosClienteService $operacaoDadosClienteService
     ) {
         $this->middleware('auth');
         $this->emprestimoService = $emprestimoService;
         $this->clienteService = $clienteService;
+        $this->operacaoDadosClienteService = $operacaoDadosClienteService;
     }
 
     /**
@@ -137,7 +146,11 @@ class EmprestimoController extends Controller
             ->sum(DB::raw('valor - COALESCE(valor_pago, 0)'));
 
         $emprestimos = $query->orderBy('created_at', 'desc')->paginate(15);
-        
+
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromEmprestimos($emprestimos->items())
+        );
+
         // Operações disponíveis no filtro (Super Admin: todas; demais: apenas as do usuário)
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->get();
@@ -148,7 +161,7 @@ class EmprestimoController extends Controller
                 : collect([]);
         }
 
-        return view('emprestimos.index', compact('emprestimos', 'operacoes', 'stats'));
+        return view('emprestimos.index', compact('emprestimos', 'operacoes', 'stats', 'fichasContatoPorClienteOperacao'));
     }
 
     /**
@@ -228,9 +241,13 @@ class EmprestimoController extends Controller
 
         $emprestimos = $query->orderBy('created_at', 'desc')->get();
 
+        $fichasContatoExport = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromEmprestimos($emprestimos)
+        );
+
         $filename = 'emprestimos_' . now()->format('Y-m-d_His') . '.csv';
 
-        return response()->streamDownload(function () use ($emprestimos) {
+        return response()->streamDownload(function () use ($emprestimos, $fichasContatoExport) {
             $out = fopen('php://output', 'w');
             fprintf($out, chr(0xEF) . chr(0xBB) . chr(0xBF));
 
@@ -239,7 +256,7 @@ class EmprestimoController extends Controller
             foreach ($emprestimos as $e) {
                 fputcsv($out, [
                     $e->id,
-                    $e->cliente?->nome ?? '',
+                    ClienteNomeExibicao::fromEmprestimoMap($e, $fichasContatoExport),
                     $e->operacao?->nome ?? '',
                     number_format((float) $e->valor_total, 2, ',', '.'),
                     $e->status,
@@ -350,6 +367,10 @@ class EmprestimoController extends Controller
                     $operacaoSelecionadaId = $emprestimoOrigem->operacao_id;
                 }
             }
+
+            $nomeClienteExibicaoOrigem = $emprestimoOrigem !== null
+                ? ClienteNomeExibicao::forEmprestimo($emprestimoOrigem)
+                : null;
             
             return view('emprestimos.create', compact(
                 'operacoes',
@@ -358,7 +379,8 @@ class EmprestimoController extends Controller
                 'operacaoSelecionadaId',
                 'negociacao',
                 'emprestimoOrigem',
-                'saldoDevedor'
+                'saldoDevedor',
+                'nomeClienteExibicaoOrigem'
             ));
         } catch (\Exception $e) {
             \Log::error('Erro ao carregar formulário de empréstimo: ' . $e->getMessage());
@@ -371,6 +393,7 @@ class EmprestimoController extends Controller
             $negociacao = false;
             $emprestimoOrigem = null;
             $saldoDevedor = null;
+            $nomeClienteExibicaoOrigem = null;
             return view('emprestimos.create', compact(
                 'operacoes',
                 'consultoresPorOperacao',
@@ -378,7 +401,8 @@ class EmprestimoController extends Controller
                 'operacaoSelecionadaId',
                 'negociacao',
                 'emprestimoOrigem',
-                'saldoDevedor'
+                'saldoDevedor',
+                'nomeClienteExibicaoOrigem'
             ));
         }
     }
@@ -614,7 +638,7 @@ class EmprestimoController extends Controller
             $dadosNotif = [
                 'tipo' => 'negociacao_pendente',
                 'titulo' => 'Nova Solicitação de Negociação',
-                'mensagem' => "{$user->name} solicitou negociação do empréstimo #{$emprestimoOrigemId} - Cliente: {$emprestimoOrigem->cliente->nome}. Saldo devedor: R$ " . number_format($saldoDevedor, 2, ',', '.'),
+                'mensagem' => "{$user->name} solicitou negociação do empréstimo #{$emprestimoOrigemId} - Cliente: " . NotificacaoClienteDisplayName::forEmprestimo($emprestimoOrigem) . '. Saldo devedor: R$ ' . number_format($saldoDevedor, 2, ',', '.'),
                 'url' => route('liberacoes.negociacoes'),
                 'dados' => ['solicitacao_id' => $solicitacao->id],
             ];
@@ -686,8 +710,17 @@ class EmprestimoController extends Controller
         // Garantias só podem ser editadas/excluídas antes da liberação e se empréstimo não finalizado (apenas empenho)
         $podeEditarGarantias = $emprestimo->isEmpenho() && !$emprestimo->isFinalizado() && !$emprestimo->foiLiberado();
 
+        $fichaContatoEmprestimo = $this->operacaoDadosClienteService->obterParaOperacao(
+            (int) $emprestimo->cliente_id,
+            (int) $emprestimo->operacao_id
+        );
+
+        $nomeClienteExibicao = ClienteNomeExibicao::fromFicha($fichaContatoEmprestimo, $emprestimo->cliente);
+
         return view('emprestimos.show', compact(
             'emprestimo',
+            'fichaContatoEmprestimo',
+            'nomeClienteExibicao',
             'temRenovacaoAbatePendente',
             'solicitacoesRenovacaoAbate',
             'podeVerAcoesGestorAdmin',
@@ -967,6 +1000,10 @@ class EmprestimoController extends Controller
         }
         $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromEmprestimos($solicitacoes->map(fn ($s) => $s->emprestimo)->filter())
+        );
+
         if ($user->isSuperAdmin()) {
             $operacoes = \App\Modules\Core\Models\Operacao::where('ativo', true)->orderBy('nome')->get();
         } else {
@@ -976,7 +1013,7 @@ class EmprestimoController extends Controller
                 : collect([]);
         }
 
-        return view('emprestimos.retroativo-pendentes', compact('solicitacoes', 'operacoes', 'operacaoId'));
+        return view('emprestimos.retroativo-pendentes', compact('solicitacoes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }
 
     /**

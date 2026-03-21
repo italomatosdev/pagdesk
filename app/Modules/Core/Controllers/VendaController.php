@@ -8,6 +8,8 @@ use App\Modules\Core\Models\Operacao;
 use App\Modules\Core\Models\Produto;
 use App\Modules\Core\Models\Venda;
 use App\Modules\Core\Services\VendaService;
+use App\Support\ClienteNomeExibicao;
+use App\Support\FichaContatoLookup;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -75,6 +77,10 @@ class VendaController extends Controller
 
         $vendas = $query->orderByDesc('data_venda')->orderByDesc('id')->paginate(20)->withQueryString();
 
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromVendas($vendas->getCollection())
+        );
+
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::orderBy('nome')->get();
         } else {
@@ -84,7 +90,7 @@ class VendaController extends Controller
                 : collect([]);
         }
 
-        return view('vendas.index', compact('vendas', 'operacoes', 'stats'));
+        return view('vendas.index', compact('vendas', 'operacoes', 'stats', 'fichasContatoPorClienteOperacao'));
     }
 
     /**
@@ -246,7 +252,11 @@ class VendaController extends Controller
             }
         }
 
-        return view('vendas.show', compact('venda'));
+        $nomeClienteExibicao = $venda->cliente
+            ? ClienteNomeExibicao::forClienteOperacao($venda->cliente, (int) $venda->operacao_id)
+            : 'Cliente';
+
+        return view('vendas.show', compact('venda', 'nomeClienteExibicao'));
     }
 
     /**

@@ -21,7 +21,7 @@
                         <div>
                             <h5 class="alert-heading mb-1">Negociação do Empréstimo #{{ $emprestimoOrigem->id }}</h5>
                             <p class="mb-1">
-                                <strong>Cliente:</strong> {{ $emprestimoOrigem->cliente->nome }}<br>
+                                <strong>Cliente:</strong> {{ $nomeClienteExibicaoOrigem ?? ($emprestimoOrigem->cliente->nome ?? 'Cliente') }}<br>
                                 <strong>Saldo Devedor:</strong> <span class="text-primary fw-bold">R$ {{ number_format($saldoDevedor, 2, ',', '.') }}</span>
                             </p>
                             <small class="text-muted">
@@ -655,11 +655,29 @@
                 // Só inicializa Select2 se não for negociação (em negociação, cliente é readonly)
                 if (clienteSelect && !isNegociacao) {
                     const clienteJaSelecionado = clienteSelect.options.length > 0 && clienteSelect.options[0].value;
+                    const msgOperacaoObrigatoria = 'Selecione a operação antes de buscar o cliente.';
+                    const avisoSelect2Cliente = (texto) => {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Atenção',
+                                text: texto,
+                                confirmButtonText: 'OK',
+                                confirmButtonColor: '#038edc'
+                            });
+                        } else {
+                            alert(texto);
+                        }
+                    };
+                    const getOperacaoId = () => {
+                        const opEl = document.querySelector('select[name="operacao_id"]');
+                        return opEl && opEl.value ? String(opEl.value) : '';
+                    };
                     
                     // Configuração do Select2
                     const select2Config = {
                         theme: 'bootstrap-5',
-                        placeholder: 'Digite o nome ou CPF do cliente...',
+                        placeholder: 'Selecione a operação acima, depois busque o cliente…',
                         allowClear: true,
                         minimumInputLength: 2,
                         language: {
@@ -682,16 +700,32 @@
                             delay: 250,
                             data: function (params) {
                                 return {
-                                    q: params.term, // termo de busca
+                                    q: params.term,
+                                    operacao_id: getOperacaoId(),
                                     page: params.page || 1
                                 };
                             },
+                            transport: function (params, success, failure) {
+                                if (!getOperacaoId()) {
+                                    avisoSelect2Cliente(msgOperacaoObrigatoria);
+                                    failure('no_operacao');
+                                    return;
+                                }
+                                const $request = $.ajax(params);
+                                $request.then(success);
+                                $request.fail(failure);
+                                return $request;
+                            },
                             processResults: function (data, params) {
+                                if (data.error) {
+                                    avisoSelect2Cliente(data.error);
+                                    return { results: [], pagination: { more: false } };
+                                }
                                 params.page = params.page || 1;
                                 return {
-                                    results: data.results,
+                                    results: data.results || [],
                                     pagination: {
-                                        more: (params.page * 20) < data.total_count
+                                        more: (params.page * 20) < (data.total_count || 0)
                                     }
                                 };
                             },
@@ -706,6 +740,20 @@
                     
                     // Inicializar Select2 para busca de clientes
                     $('#cliente-select').select2(select2Config);
+
+                    $('#cliente-select').on('select2:opening', function (e) {
+                        if (!getOperacaoId()) {
+                            e.preventDefault();
+                            avisoSelect2Cliente(msgOperacaoObrigatoria);
+                        }
+                    });
+
+                    const operacaoSelectCliente = document.querySelector('select[name="operacao_id"]');
+                    if (operacaoSelectCliente) {
+                        operacaoSelectCliente.addEventListener('change', function () {
+                            $('#cliente-select').val(null).trigger('change');
+                        });
+                    }
                     
                     // Ao selecionar um cliente, verificar histórico global (Radar)
                     $('#cliente-select').on('select2:select', async function (e) {
@@ -792,6 +840,25 @@
                                 })
                                 .join('') || `<div class="text-center text-muted py-3 small">Nenhuma pendência atrasada</div>`;
                             
+                            const fichasList = data.fichas_por_operacao || [];
+                            const fichasBlock = fichasList.length
+                                ? `
+                                    <div class="card mb-3 text-start">
+                                        <div class="card-header py-2"><h6 class="mb-0 small">Contato por operação (ficha)</h6></div>
+                                        <div class="card-body py-2" style="max-height: 140px; overflow-y: auto;">
+                                            ${fichasList.map(f => `
+                                                <div class="border-bottom pb-2 mb-2">
+                                                    <div class="fw-semibold small">${f.operacao_nome || ('Operação #' + (f.operacao_id || ''))}</div>
+                                                    ${f.nome ? `<div class="text-muted small">${f.nome}</div>` : ''}
+                                                    ${f.telefone ? `<div class="small"><i class="bx bx-phone"></i> ${f.telefone}</div>` : ''}
+                                                    ${f.email ? `<div class="small"><i class="bx bx-envelope"></i> ${f.email}</div>` : ''}
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                `
+                                : '';
+                            
                             const valorTotalAtivos = (ficha.ativos_por_operacao || []).reduce((sum, item) => sum + (Number(item.total_ativo || 0)), 0);
                             
                             // Alertas de status
@@ -834,6 +901,8 @@
                                                 <i class="bx bx-id-card me-1"></i>${partes[partes.length - 1]}
                                             </small>
                                         </div>
+                                        
+                                        ${fichasBlock}
                                         
                                         <!-- Cards de Métricas -->
                                         <div class="row g-3 mb-3">

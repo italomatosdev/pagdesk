@@ -93,7 +93,7 @@
                                                 —
                                             @endif
                                         </td>
-                                        <td>{{ $emp->cliente->nome ?? '—' }}</td>
+                                        <td>{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($emp, $fichasContatoPorClienteOperacao ?? collect()) }}</td>
                                         <td>{{ $emp->operacao->nome ?? '—' }}</td>
                                         <td>
                                             @if($p->aceite_gestor_id)

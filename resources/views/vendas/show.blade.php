@@ -36,7 +36,7 @@
                     <div class="row mb-2">
                         <div class="col-md-4 text-muted">Cliente</div>
                         <div class="col-md-8">
-                            <a href="{{ route('clientes.show', $venda->cliente_id) }}">{{ $venda->cliente->nome ?? '-' }}</a>
+                            <a href="{{ \App\Support\ClienteUrl::show($venda->cliente_id, $venda->operacao_id) }}">{{ $nomeClienteExibicao ?? ($venda->cliente->nome ?? '-') }}</a>
                         </div>
                     </div>
                     <div class="row mb-2">

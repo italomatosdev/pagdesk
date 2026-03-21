@@ -7,7 +7,8 @@ use App\Modules\Loans\Models\LiberacaoEmprestimo;
 use App\Modules\Loans\Models\Parcela;
 use App\Modules\Cash\Models\Settlement;
 use App\Models\User;
-use App\Modules\Core\Models\Operacao;
+use App\Support\ClienteNomeExibicao;
+use App\Support\FichaContatoLookup;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -61,12 +62,16 @@ class KanbanService
                 ->orderBy('created_at', 'desc')
                 ->get();
 
+            $fichaMapAprovacoes = FichaContatoLookup::mapByClienteOperacaoPairs(
+                FichaContatoLookup::pairsFromEmprestimos($emprestimos)
+            );
+
             foreach ($emprestimos as $emprestimo) {
                 $items->push([
                     'tipo' => 'emprestimo',
                     'id' => $emprestimo->id,
                     'titulo' => 'Empréstimo #' . $emprestimo->id,
-                    'cliente' => $emprestimo->cliente->nome,
+                    'cliente' => ClienteNomeExibicao::fromEmprestimoMap($emprestimo, $fichaMapAprovacoes),
                     'consultor' => $emprestimo->consultor->name ?? '-',
                     'valor' => $emprestimo->valor_total,
                     'operacao' => $emprestimo->operacao->nome,
@@ -129,12 +134,16 @@ class KanbanService
                 ->orderBy('created_at', 'desc')
                 ->get();
 
+            $fichaMapLibAguardando = FichaContatoLookup::mapByClienteOperacaoPairs(
+                FichaContatoLookup::pairsFromEmprestimos($liberacoes->map(fn ($l) => $l->emprestimo)->filter())
+            );
+
             foreach ($liberacoes as $liberacao) {
                 $items->push([
                     'tipo' => 'liberacao',
                     'id' => $liberacao->id,
                     'titulo' => 'Liberação #' . $liberacao->id,
-                    'cliente' => $liberacao->emprestimo->cliente->nome,
+                    'cliente' => ClienteNomeExibicao::fromEmprestimoMap($liberacao->emprestimo, $fichaMapLibAguardando),
                     'consultor' => $liberacao->consultor->name,
                     'valor' => $liberacao->valor_liberado,
                     'operacao' => $liberacao->emprestimo->operacao->nome,
@@ -156,12 +165,16 @@ class KanbanService
                 ->orderBy('liberado_em', 'desc')
                 ->get();
 
+            $fichaMapLibPagar = FichaContatoLookup::mapByClienteOperacaoPairs(
+                FichaContatoLookup::pairsFromEmprestimos($liberacoes->map(fn ($l) => $l->emprestimo)->filter())
+            );
+
             foreach ($liberacoes as $liberacao) {
                 $items->push([
                     'tipo' => 'liberacao_pagar',
                     'id' => $liberacao->id,
                     'titulo' => 'Pagar Cliente - Empréstimo #' . $liberacao->emprestimo_id,
-                    'cliente' => $liberacao->emprestimo->cliente->nome,
+                    'cliente' => ClienteNomeExibicao::fromEmprestimoMap($liberacao->emprestimo, $fichaMapLibPagar),
                     'valor' => $liberacao->valor_liberado,
                     'operacao' => $liberacao->emprestimo->operacao->nome,
                     'emprestimo_id' => $liberacao->emprestimo_id,
@@ -196,12 +209,16 @@ class KanbanService
                 ->orderBy('data_vencimento', 'asc')
                 ->get();
 
+            $fichaMapCobranca = FichaContatoLookup::mapByClienteOperacaoPairs(
+                FichaContatoLookup::pairsFromParcelas($parcelas)
+            );
+
             foreach ($parcelas as $parcela) {
                 $items->push([
                     'tipo' => 'cobranca',
                     'id' => $parcela->id,
                     'titulo' => 'Cobrança - Parcela ' . $parcela->numero . '/' . $parcela->emprestimo->numero_parcelas,
-                    'cliente' => $parcela->emprestimo->cliente->nome,
+                    'cliente' => ClienteNomeExibicao::fromParcelaMap($parcela, $fichaMapCobranca),
                     'valor' => $parcela->valor - $parcela->valor_pago,
                     'operacao' => $parcela->emprestimo->operacao->nome,
                     'emprestimo_id' => $parcela->emprestimo_id,
@@ -299,12 +316,16 @@ class KanbanService
                 ->limit(20)
                 ->get();
 
+            $fichaMapAtrasoCons = FichaContatoLookup::mapByClienteOperacaoPairs(
+                FichaContatoLookup::pairsFromParcelas($parcelas)
+            );
+
             foreach ($parcelas as $parcela) {
                 $items->push([
                     'tipo' => 'parcela_atrasada',
                     'id' => $parcela->id,
                     'titulo' => 'Atrasada - Parcela ' . $parcela->numero . '/' . $parcela->emprestimo->numero_parcelas,
-                    'cliente' => $parcela->emprestimo->cliente->nome,
+                    'cliente' => ClienteNomeExibicao::fromParcelaMap($parcela, $fichaMapAtrasoCons),
                     'valor' => $parcela->valor - $parcela->valor_pago,
                     'operacao' => $parcela->emprestimo->operacao->nome,
                     'emprestimo_id' => $parcela->emprestimo_id,
@@ -329,12 +350,16 @@ class KanbanService
                 ->limit(20)
                 ->get();
 
+            $fichaMapAtrasoGest = FichaContatoLookup::mapByClienteOperacaoPairs(
+                FichaContatoLookup::pairsFromParcelas($parcelas)
+            );
+
             foreach ($parcelas as $parcela) {
                 $items->push([
                     'tipo' => 'parcela_atrasada',
                     'id' => $parcela->id,
                     'titulo' => 'Atrasada - Parcela ' . $parcela->numero . '/' . $parcela->emprestimo->numero_parcelas,
-                    'cliente' => $parcela->emprestimo->cliente->nome,
+                    'cliente' => ClienteNomeExibicao::fromParcelaMap($parcela, $fichaMapAtrasoGest),
                     'consultor' => $parcela->emprestimo->consultor->name ?? '-',
                     'valor' => $parcela->valor - $parcela->valor_pago,
                     'operacao' => $parcela->emprestimo->operacao->nome,

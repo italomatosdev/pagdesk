@@ -78,7 +78,7 @@
                                             <td>
                                                 <a href="{{ route('emprestimos.show', $emp->id) }}">#{{ $emp->id }}</a>
                                             </td>
-                                            <td>{{ $emp->cliente->nome ?? '-' }}</td>
+                                            <td>{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($s->emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}</td>
                                             <td>{{ $s->operacao->nome ?? '-' }}</td>
                                             <td class="fw-bold text-primary">R$ {{ number_format($s->saldo_devedor, 2, ',', '.') }}</td>
                                             <td>
