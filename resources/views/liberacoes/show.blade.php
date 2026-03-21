@@ -41,11 +41,11 @@
                                 <a href="{{ \App\Support\ClienteUrl::show($liberacao->emprestimo->cliente_id, $liberacao->emprestimo->operacao_id) }}">
                                     {{ $liberacao->emprestimo->cliente->nome }}
                                 </a>
-                                @if($liberacao->emprestimo->cliente->temWhatsapp())
-                                    <a href="{{ $liberacao->emprestimo->cliente->whatsapp_link }}" 
-                                       target="_blank" 
-                                       class="btn btn-sm btn-success ms-2" 
-                                       title="Falar no WhatsApp">
+                                @if(\App\Support\WhatsappLink::temWhatsappPreferindoFicha($fichaContatoLiberacao ?? null, $liberacao->emprestimo->cliente))
+                                    <a href="{{ \App\Support\WhatsappLink::urlPreferindoFicha($fichaContatoLiberacao ?? null, $liberacao->emprestimo->cliente) }}"
+                                       target="_blank"
+                                       class="btn btn-sm btn-success ms-2"
+                                       title="Falar no WhatsApp (ficha desta operação quando houver)">
                                         <i class="bx bxl-whatsapp"></i> WhatsApp
                                     </a>
                                 @endif

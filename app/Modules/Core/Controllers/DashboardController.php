@@ -12,6 +12,7 @@ use App\Modules\Loans\Models\Parcela;
 use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\LiberacaoEmprestimo;
 use App\Modules\Cash\Models\CashLedgerEntry;
+use App\Support\FichaContatoLookup;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Support\Facades\Cache;
@@ -1349,6 +1350,11 @@ class DashboardController extends Controller
             ->limit(10)
             ->get();
 
+        $parcelasParaFichaContato = $cobrancasHoje->concat($parcelasAtrasadas)->concat($proximasCobrancasLista);
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromParcelas($parcelasParaFichaContato)
+        );
+
         return view('dashboard.consultor', compact(
             'stats',
             'cobrancasHoje',
@@ -1359,7 +1365,8 @@ class DashboardController extends Controller
             'operacoes',
             'operacaoId',
             'dateFrom',
-            'dateTo'
+            'dateTo',
+            'fichasContatoPorClienteOperacao'
         ));
     }
 

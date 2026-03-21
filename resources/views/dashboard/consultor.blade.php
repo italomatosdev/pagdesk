@@ -374,10 +374,13 @@
                                                        class="btn btn-sm btn-info" title="Ver Empréstimo">
                                                         <i class="bx bx-show"></i> Ver Empréstimo
                                                     </a>
-                                                    @if($parcela->emprestimo->cliente->temWhatsapp())
-                                                        <a href="{{ $parcela->emprestimo->cliente->whatsapp_link }}" 
-                                                           target="_blank" 
-                                                           class="btn btn-sm btn-success" 
+                                                    @php
+                                                        $fichaWaDash = ($fichasContatoPorClienteOperacao ?? collect())->get($parcela->emprestimo->cliente_id.'_'.$parcela->emprestimo->operacao_id);
+                                                    @endphp
+                                                    @if(\App\Support\WhatsappLink::temWhatsappPreferindoFicha($fichaWaDash, $parcela->emprestimo->cliente))
+                                                        <a href="{{ \App\Support\WhatsappLink::urlPreferindoFicha($fichaWaDash, $parcela->emprestimo->cliente) }}"
+                                                           target="_blank"
+                                                           class="btn btn-sm btn-success"
                                                            title="Falar no WhatsApp">
                                                             <i class="bx bxl-whatsapp"></i>
                                                         </a>
@@ -492,10 +495,13 @@
                                                        class="btn btn-sm btn-info" title="Ver Empréstimo">
                                                         <i class="bx bx-show"></i> Ver Empréstimo
                                                     </a>
-                                                    @if($parcela->emprestimo->cliente->temWhatsapp())
-                                                        <a href="{{ $parcela->emprestimo->cliente->whatsapp_link }}" 
-                                                           target="_blank" 
-                                                           class="btn btn-sm btn-success" 
+                                                    @php
+                                                        $fichaWaDash = ($fichasContatoPorClienteOperacao ?? collect())->get($parcela->emprestimo->cliente_id.'_'.$parcela->emprestimo->operacao_id);
+                                                    @endphp
+                                                    @if(\App\Support\WhatsappLink::temWhatsappPreferindoFicha($fichaWaDash, $parcela->emprestimo->cliente))
+                                                        <a href="{{ \App\Support\WhatsappLink::urlPreferindoFicha($fichaWaDash, $parcela->emprestimo->cliente) }}"
+                                                           target="_blank"
+                                                           class="btn btn-sm btn-success"
                                                            title="Falar no WhatsApp">
                                                             <i class="bx bxl-whatsapp"></i>
                                                         </a>
@@ -646,10 +652,13 @@
                                                        class="btn btn-sm btn-info" title="Ver Empréstimo">
                                                         <i class="bx bx-show"></i> Ver Empréstimo
                                                     </a>
-                                                    @if($parcela->emprestimo->cliente->temWhatsapp())
-                                                        <a href="{{ $parcela->emprestimo->cliente->whatsapp_link }}" 
-                                                           target="_blank" 
-                                                           class="btn btn-sm btn-success" 
+                                                    @php
+                                                        $fichaWaDash = ($fichasContatoPorClienteOperacao ?? collect())->get($parcela->emprestimo->cliente_id.'_'.$parcela->emprestimo->operacao_id);
+                                                    @endphp
+                                                    @if(\App\Support\WhatsappLink::temWhatsappPreferindoFicha($fichaWaDash, $parcela->emprestimo->cliente))
+                                                        <a href="{{ \App\Support\WhatsappLink::urlPreferindoFicha($fichaWaDash, $parcela->emprestimo->cliente) }}"
+                                                           target="_blank"
+                                                           class="btn btn-sm btn-success"
                                                            title="Falar no WhatsApp">
                                                             <i class="bx bxl-whatsapp"></i>
                                                         </a>

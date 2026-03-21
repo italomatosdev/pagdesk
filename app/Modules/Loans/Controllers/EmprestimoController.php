@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Modules\Core\Models\Cliente;
 use App\Modules\Core\Models\Operacao;
 use App\Modules\Core\Services\ClienteService;
+use App\Modules\Core\Services\OperacaoDadosClienteService;
+use App\Support\FichaContatoLookup;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Parcela;
 use App\Modules\Loans\Models\SolicitacaoEmprestimoRetroativo;
@@ -20,15 +22,20 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class EmprestimoController extends Controller
 {
     protected EmprestimoService $emprestimoService;
+
     protected ClienteService $clienteService;
+
+    protected OperacaoDadosClienteService $operacaoDadosClienteService;
 
     public function __construct(
         EmprestimoService $emprestimoService,
-        ClienteService $clienteService
+        ClienteService $clienteService,
+        OperacaoDadosClienteService $operacaoDadosClienteService
     ) {
         $this->middleware('auth');
         $this->emprestimoService = $emprestimoService;
         $this->clienteService = $clienteService;
+        $this->operacaoDadosClienteService = $operacaoDadosClienteService;
     }
 
     /**
@@ -137,7 +144,11 @@ class EmprestimoController extends Controller
             ->sum(DB::raw('valor - COALESCE(valor_pago, 0)'));
 
         $emprestimos = $query->orderBy('created_at', 'desc')->paginate(15);
-        
+
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromEmprestimos($emprestimos->items())
+        );
+
         // Operações disponíveis no filtro (Super Admin: todas; demais: apenas as do usuário)
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->get();
@@ -148,7 +159,7 @@ class EmprestimoController extends Controller
                 : collect([]);
         }
 
-        return view('emprestimos.index', compact('emprestimos', 'operacoes', 'stats'));
+        return view('emprestimos.index', compact('emprestimos', 'operacoes', 'stats', 'fichasContatoPorClienteOperacao'));
     }
 
     /**
@@ -686,8 +697,14 @@ class EmprestimoController extends Controller
         // Garantias só podem ser editadas/excluídas antes da liberação e se empréstimo não finalizado (apenas empenho)
         $podeEditarGarantias = $emprestimo->isEmpenho() && !$emprestimo->isFinalizado() && !$emprestimo->foiLiberado();
 
+        $fichaContatoEmprestimo = $this->operacaoDadosClienteService->obterParaOperacao(
+            (int) $emprestimo->cliente_id,
+            (int) $emprestimo->operacao_id
+        );
+
         return view('emprestimos.show', compact(
             'emprestimo',
+            'fichaContatoEmprestimo',
             'temRenovacaoAbatePendente',
             'solicitacoesRenovacaoAbate',
             'podeVerAcoesGestorAdmin',

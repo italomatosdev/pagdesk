@@ -10,6 +10,7 @@ use App\Modules\Loans\Models\SolicitacaoNegociacao;
 use App\Modules\Loans\Models\SolicitacaoPagamentoJurosContratoReduzido;
 use App\Modules\Loans\Models\SolicitacaoPagamentoJurosParcial;
 use App\Modules\Loans\Models\SolicitacaoRenovacaoAbate;
+use App\Modules\Core\Services\OperacaoDadosClienteService;
 use App\Modules\Loans\Services\EmprestimoService;
 use App\Modules\Loans\Services\LiberacaoService;
 use App\Modules\Loans\Services\PagamentoService;
@@ -20,13 +21,20 @@ use Illuminate\Http\RedirectResponse;
 class LiberacaoController extends Controller
 {
     protected LiberacaoService $liberacaoService;
+
     protected PagamentoService $pagamentoService;
 
-    public function __construct(LiberacaoService $liberacaoService, PagamentoService $pagamentoService)
-    {
+    protected OperacaoDadosClienteService $operacaoDadosClienteService;
+
+    public function __construct(
+        LiberacaoService $liberacaoService,
+        PagamentoService $pagamentoService,
+        OperacaoDadosClienteService $operacaoDadosClienteService
+    ) {
         $this->middleware('auth');
         $this->liberacaoService = $liberacaoService;
         $this->pagamentoService = $pagamentoService;
+        $this->operacaoDadosClienteService = $operacaoDadosClienteService;
     }
 
     /**
@@ -216,7 +224,18 @@ class LiberacaoController extends Controller
             || $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador']);
         $ehGestorAdminConfirmando = $podeConfirmarPagamentoCliente && $liberacao->consultor_id !== $user->id;
 
-        return view('liberacoes.show', compact('liberacao', 'podeAprovarLiberacao', 'podeConfirmarPagamentoCliente', 'ehGestorAdminConfirmando'));
+        $fichaContatoLiberacao = $this->operacaoDadosClienteService->obterParaOperacao(
+            (int) $liberacao->emprestimo->cliente_id,
+            (int) $liberacao->emprestimo->operacao_id
+        );
+
+        return view('liberacoes.show', compact(
+            'liberacao',
+            'podeAprovarLiberacao',
+            'podeConfirmarPagamentoCliente',
+            'ehGestorAdminConfirmando',
+            'fichaContatoLiberacao'
+        ));
     }
 
     /**
