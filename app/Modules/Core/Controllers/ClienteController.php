@@ -17,6 +17,8 @@ use App\Modules\Core\Services\ClienteConsultaService;
 use App\Modules\Core\Services\OperacaoDadosClienteService;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Parcela;
+use App\Support\ClienteNomeExibicao;
+use App\Support\FichaContatoLookup;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -1342,29 +1344,73 @@ class ClienteController extends Controller
             return response()->json(['results' => []]);
         }
 
+        $user = auth()->user();
+        $operacaoIdRaw = $request->input('operacao_id');
+        $operacaoId = $operacaoIdRaw !== null && $operacaoIdRaw !== '' ? (int) $operacaoIdRaw : null;
+        $operacaoValida = null;
+        if ($operacaoId !== null && $operacaoId > 0) {
+            if ($user->isSuperAdmin()) {
+                $operacaoValida = Operacao::where('id', $operacaoId)->where('ativo', true)->exists()
+                    ? $operacaoId
+                    : null;
+            } else {
+                $opsIds = $user->getOperacoesIds();
+                $operacaoValida = (! empty($opsIds) && in_array($operacaoId, $opsIds, true))
+                    ? $operacaoId
+                    : null;
+            }
+        }
+
         $query = Cliente::query();
 
         // Remover formatação do CPF se houver
         $documentoLimpo = preg_replace('/[^0-9]/', '', $termo);
-        
-        // Buscar por documento ou nome
-        if (strlen($documentoLimpo) >= 3) {
-            $query->where(function($q) use ($documentoLimpo, $termo) {
-                $q->where('documento', 'like', "%{$documentoLimpo}%")
-                  ->orWhere('nome', 'like', "%{$termo}%");
-            });
-        } else {
-            $query->where('nome', 'like', "%{$termo}%");
-        }
+
+        $query->where(function ($outer) use ($documentoLimpo, $termo, $operacaoValida) {
+            if (strlen($documentoLimpo) >= 3) {
+                $outer->where(function ($q) use ($documentoLimpo, $termo) {
+                    $q->where('documento', 'like', "%{$documentoLimpo}%")
+                        ->orWhere('nome', 'like', "%{$termo}%");
+                });
+            } else {
+                $outer->where('nome', 'like', "%{$termo}%");
+            }
+
+            if ($operacaoValida) {
+                $term = '%'.$termo.'%';
+                $outer->orWhereHas('operacaoDadosClientes', function ($sub) use ($operacaoValida, $term) {
+                    $sub->where('operacao_id', $operacaoValida)
+                        ->where(function ($inner) use ($term) {
+                            $inner->where('nome', 'like', $term)
+                                ->orWhere('telefone', 'like', $term)
+                                ->orWhere('email', 'like', $term);
+                        });
+                });
+            }
+        });
 
         $clientes = $query->orderBy('nome')
             ->limit(20)
             ->get();
 
-        $results = $clientes->map(function($cliente) {
+        $fichaMap = collect();
+        if ($operacaoValida && $clientes->isNotEmpty()) {
+            $fichaMap = FichaContatoLookup::mapByClienteOperacaoPairs(
+                $clientes->map(fn (Cliente $c) => [(int) $c->id, (int) $operacaoValida])->values()
+            );
+        }
+
+        $results = $clientes->map(function (Cliente $cliente) use ($fichaMap, $operacaoValida) {
+            $nomeExibicao = $operacaoValida
+                ? ClienteNomeExibicao::fromFicha(
+                    $fichaMap->get($cliente->id.'_'.$operacaoValida),
+                    $cliente
+                )
+                : ($cliente->nome ?? 'Cliente');
+
             return [
                 'id' => $cliente->id,
-                'text' => $cliente->nome . ' - ' . $cliente->documento_formatado
+                'text' => $nomeExibicao.' - '.$cliente->documento_formatado,
             ];
         });
 

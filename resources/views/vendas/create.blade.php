@@ -326,7 +326,9 @@
                     dataType: 'json',
                     delay: 250,
                     data: function(params) {
-                        return { q: params.term, page: params.page || 1 };
+                        var opEl = document.getElementById('operacao-select');
+                        var operacaoId = opEl && opEl.value ? opEl.value : '';
+                        return { q: params.term, operacao_id: operacaoId, page: params.page || 1 };
                     },
                     processResults: function(data, params) {
                         params.page = params.page || 1;
@@ -340,6 +342,12 @@
             };
             if (clienteJaSelecionado) select2Config.minimumInputLength = 0;
             $('#cliente-select').select2(select2Config);
+            var operacaoSelVenda = document.getElementById('operacao-select');
+            if (operacaoSelVenda) {
+                operacaoSelVenda.addEventListener('change', function () {
+                    $('#cliente-select').val(null).trigger('change');
+                });
+            }
         }
     });
     </script>

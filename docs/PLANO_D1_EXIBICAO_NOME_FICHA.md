@@ -51,6 +51,8 @@
 
 **Telas globais (fora do critério D1):** o **mural de devedores** (`consultas/devedores`) segue a **mesma lógica do radar** (`radar/*`) — visão **global** na empresa, sem `operacao_id` único na listagem. Aí o nome exibido continua sendo o do **cadastro** (`Cliente->nome`); **não** é pendência de D1 nem inconsistência com o radar.
 
+**API Select2 de clientes (`ClienteController@buscar`):** com query `operacao_id` (formulários **novo empréstimo** e **nova venda** enviam após escolher a operação), o texto da lista usa **ficha da operação** + busca estendida em nome/telefone/e-mail da ficha.
+
 **Ainda fora do escopo D1 curto (outros):** telas de cadastro de cliente (contexto misto cadastro/ficha já tratado onde há operação), `caixa/index` sem coluna cliente, commands/logs internos.
 
 ### Critério de pronto por tela

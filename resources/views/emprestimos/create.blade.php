@@ -681,8 +681,11 @@
                             dataType: 'json',
                             delay: 250,
                             data: function (params) {
+                                const opEl = document.querySelector('select[name="operacao_id"]');
+                                const operacaoId = opEl && opEl.value ? opEl.value : '';
                                 return {
-                                    q: params.term, // termo de busca
+                                    q: params.term,
+                                    operacao_id: operacaoId,
                                     page: params.page || 1
                                 };
                             },
@@ -706,6 +709,13 @@
                     
                     // Inicializar Select2 para busca de clientes
                     $('#cliente-select').select2(select2Config);
+
+                    const operacaoSelectCliente = document.querySelector('select[name="operacao_id"]');
+                    if (operacaoSelectCliente) {
+                        operacaoSelectCliente.addEventListener('change', function () {
+                            $('#cliente-select').val(null).trigger('change');
+                        });
+                    }
                     
                     // Ao selecionar um cliente, verificar histórico global (Radar)
                     $('#cliente-select').on('select2:select', async function (e) {
