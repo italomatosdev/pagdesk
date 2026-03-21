@@ -227,13 +227,12 @@ class EmpresaController extends Controller
     public function createUsuario(int $id): View
     {
         $empresa = Empresa::findOrFail($id);
-        $roles = Role::all();
         $operacoes = Operacao::where('empresa_id', $empresa->id)
             ->where('ativo', true)
             ->orderBy('nome')
             ->get();
-        
-        return view('super-admin.empresas.usuarios.create', compact('empresa', 'roles', 'operacoes'));
+
+        return view('super-admin.empresas.usuarios.create', compact('empresa', 'operacoes'));
     }
 
     /**
@@ -247,10 +246,10 @@ class EmpresaController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
-            'roles' => 'required|array|min:1',
-            'roles.*' => 'exists:roles,name',
             'operacoes' => 'nullable|array',
             'operacoes.*' => 'integer|exists:operacoes,id',
+            'operacao_role' => 'nullable|array',
+            'operacao_role.*' => 'in:consultor,gestor,administrador',
         ]);
 
         try {
@@ -263,19 +262,28 @@ class EmpresaController extends Controller
                 'is_super_admin' => false,
             ]);
 
-            // Atribuir papéis (buscar IDs dos papéis pelos nomes)
-            $roleIds = Role::whereIn('name', $validated['roles'])->pluck('id')->toArray();
-            $usuario->roles()->sync($roleIds);
+            // Papel por operação (operacao_user.role) — mesma regra do SuperAdmin\UsuarioController::update
+            $operacoesIds = $validated['operacoes'] ?? [];
+            $operacaoRole = $request->input('operacao_role', []);
 
-            // Atribuir operações (se informadas)
-            if (!empty($validated['operacoes'])) {
-                // Validar que as operações pertencem à empresa
+            if (!empty($operacoesIds)) {
                 $operacoesValidas = Operacao::where('empresa_id', $empresa->id)
-                    ->whereIn('id', $validated['operacoes'])
+                    ->whereIn('id', $operacoesIds)
                     ->pluck('id')
                     ->toArray();
-                
-                $usuario->operacoes()->sync($operacoesValidas);
+
+                $sync = [];
+                foreach ($operacoesValidas as $opId) {
+                    $sync[$opId] = ['role' => $operacaoRole[$opId] ?? 'consultor'];
+                }
+                $usuario->operacoes()->sync($sync);
+
+                $papeisUnicos = array_unique(array_column($sync, 'role'));
+                $roleIds = Role::whereIn('name', $papeisUnicos)->pluck('id')->toArray();
+                $usuario->roles()->sync($roleIds);
+            } else {
+                $usuario->operacoes()->detach();
+                $usuario->roles()->sync([]);
             }
 
             return redirect()->route('super-admin.empresas.show', $empresa->id)
