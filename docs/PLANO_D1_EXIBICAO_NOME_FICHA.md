@@ -36,12 +36,12 @@
 
 | Área | Arquivos |
 |------|----------|
-| Caixa / fechamento | `FechamentoCaixaController` (`conferir`, `show`), `caixa/fechamento/conferir`, `caixa/fechamento/show` — mapa via `FichaContatoLookup::mapFromCashLedgerEntries` + `fromParcelaMap` nas movimentações |
+| Caixa / fechamento | `FechamentoCaixaController` (`conferir`, `show`), `caixa/fechamento/conferir`, `caixa/fechamento/show` — mapa via `FichaContatoLookup::mapFromCashLedgerEntries` + `fromParcelaMap` nas movimentações; `CashController@show` + `caixa/movimentacao/show` — `ClienteNomeExibicao::forEmprestimo` quando há vínculo pagamento → parcela |
 | Prestações (views legado) | `SettlementController` (`show`, `preview`), `prestacoes/show`, `prestacoes/preview` — mesmo padrão |
 | Empréstimo create (negociação) | `EmprestimoController@create` — `nomeClienteExibicaoOrigem`; `emprestimos/create` (alerta do empréstimo origem) |
 | Suporte | `FichaContatoLookup::mapFromCashLedgerEntries` |
 
-**Ainda pendente (fora do escopo D1 curto):** outras telas pontuais não mapeadas; `caixa/index` não exibia nome de cliente por empréstimo (apenas referências/categorias).
+**Ainda pendente (fora do escopo D1 curto):** outras telas pontuais não mapeadas; `caixa/index` não lista nome de cliente (coluna descrição/referência sem nome).
 
 ### Critério de pronto por tela
 
