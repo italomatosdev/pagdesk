@@ -73,7 +73,9 @@
 - `resources/views/clientes/edit.blade.php`: hidden + alerta de contexto de operação.
 - `resources/views/clientes/show.blade.php`: coluna “Ficha” com link `clientes/{id}/edit?operacao_id=...`.
 - **Formulário de edição com `?operacao_id=`:** `OperacaoDadosClienteService::valoresFormularioParaOperacao` — usa linha em `operacao_dados_clientes` ou fallback `payloadBrutoFromCliente`; view usa `data_get($formDefaultsOperacao, ...)`.
-- **Pendente (evolução Fase 3/4):** listagens/buscas por operação; filtrar documentos na edição pelo `operacao_id` do contexto (opcional).
+- **Edição — documentos:** lista principal filtra por `operacao_id` da ficha; bloco opcional “Outros documentos” (`operacao_id` null) só referência, sem alteração ao salvar.
+- **Listagem/export (`clientes.index` / `export`):** com filtro por operação, busca por nome também em `operacao_dados_clientes` (nome, telefone, e-mail da ficha); tabela e CSV priorizam dados da ficha para exibição.
+- **Pendente (evolução Fase 4):** accessors / telas que ainda leem só `clientes` sem contexto de operação.
 
 ---
 

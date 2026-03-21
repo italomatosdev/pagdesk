@@ -118,7 +118,12 @@
                                            value="{{ request('documento') ?? request('cpf') }}">
                                 </div>
                                 <div class="col-md-3">
-                                    <label class="form-label small text-muted mb-0">Nome</label>
+                                    <label class="form-label small text-muted mb-0">
+                                        Nome
+                                        @if(!empty($operacaoIdFiltro))
+                                            <span class="text-primary" title="Busca também na ficha desta operação">(ficha)</span>
+                                        @endif
+                                    </label>
                                     <input type="text" name="nome" class="form-control" placeholder="Nome"
                                            value="{{ request('nome') }}">
                                 </div>
@@ -152,10 +157,18 @@
                                 </thead>
                                 <tbody>
                                     @forelse($clientes as $cliente)
+                                        @php
+                                            $fichaLista = (!empty($operacaoIdFiltro)) ? $cliente->operacaoDadosClientes->first() : null;
+                                        @endphp
                                         <tr>
                                             <td>{{ $cliente->id }}</td>
                                             <td>{{ $cliente->documento_formatado }}</td>
-                                            <td>{{ $cliente->nome }}</td>
+                                            <td>
+                                                {{ $fichaLista?->nome ?? $cliente->nome }}
+                                                @if($fichaLista && trim((string) ($fichaLista->nome ?? '')) !== trim((string) $cliente->nome))
+                                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1" title="Nome na ficha da operação filtrada">ficha</span>
+                                                @endif
+                                            </td>
                                             @if($isSuperAdmin ?? false)
                                                 <td>
                                                     @if($cliente->empresa)
@@ -167,8 +180,8 @@
                                                     @endif
                                                 </td>
                                             @endif
-                                            <td>{{ $cliente->telefone_formatado ?? '-' }}</td>
-                                            <td>{{ $cliente->email ?? '-' }}</td>
+                                            <td>{{ $fichaLista?->telefone ? $fichaLista->telefone : ($cliente->telefone_formatado ?? '-') }}</td>
+                                            <td>{{ $fichaLista?->email ?? $cliente->email ?? '-' }}</td>
                                             <td>
                                                 <div class="d-flex gap-1 flex-wrap">
                                                     <span class="badge bg-info">

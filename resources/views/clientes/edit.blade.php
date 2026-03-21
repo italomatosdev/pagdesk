@@ -176,13 +176,16 @@
                             </div>
 
                             <hr class="my-4">
-                            <h5 class="mb-3">Documentos do Cliente</h5>
+                            <h5 class="mb-2">Documentos desta operação</h5>
+                            <p class="text-muted small mb-3">
+                                Arquivos enviados por esta tela ficam vinculados à operação <strong>{{ $operacaoParaFichaNome ?? '#' . $operacaoParaFichaId }}</strong>.
+                                Abaixo aparecem só os documentos com <code>operacao_id</code> desta ficha; uploads novos substituem ou acrescentam neste mesmo contexto.
+                            </p>
 
                             @php
-                                $documento = $cliente->getDocumentoPorCategoria('documento');
-                                $selfie = $cliente->getDocumentoPorCategoria('selfie');
-                                // Para anexos, mostra todos (originais + específicos da empresa)
-                                $anexos = $cliente->documentos->where('categoria', 'anexo');
+                                $documento = $documentosOperacaoFicha['documento'] ?? null;
+                                $selfie = $documentosOperacaoFicha['selfie'] ?? null;
+                                $anexos = $documentosOperacaoFicha['anexos'] ?? collect();
                             @endphp
 
                             <div class="mb-3">
@@ -190,20 +193,20 @@
                                 @if($documento)
                                     <div class="mb-2">
                                         <a href="{{ $documento->url }}" target="_blank" class="btn btn-sm btn-info">
-                                            <i class="bx bx-download"></i> Ver Documento Atual
+                                            <i class="bx bx-download"></i> Ver documento desta operação
                                         </a>
                                         <small class="text-muted d-block mt-1">
-                                            {{ $documento->nome_arquivo ?? 'Documento' }} - 
+                                            {{ $documento->nome_arquivo ?? 'Documento' }} —
                                             Enviado em: {{ $documento->created_at->format('d/m/Y H:i') }}
                                         </small>
                                     </div>
                                 @else
-                                    <div class="alert alert-warning mb-2">
-                                        <small>Nenhum documento anexado. Por favor, anexe um documento.</small>
+                                    <div class="alert alert-light border mb-2">
+                                        <small>Nenhum documento (RG/CNH) vinculado a <strong>esta operação</strong> ainda.</small>
                                     </div>
                                 @endif
                                 <input type="file" name="documento_cliente" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
-                                <small class="text-muted">Deixe em branco para manter o documento atual. Formatos: PDF, JPG, PNG (máx. 5MB)</small>
+                                <small class="text-muted">Deixe em branco para manter o arquivo desta operação. Formatos: PDF, JPG, PNG (máx. 5MB)</small>
                                 @error('documento_cliente')
                                     <div class="text-danger">{{ $message }}</div>
                                 @enderror
@@ -214,20 +217,20 @@
                                 @if($selfie)
                                     <div class="mb-2">
                                         <a href="{{ $selfie->url }}" target="_blank" class="btn btn-sm btn-info">
-                                            <i class="bx bx-download"></i> Ver Selfie Atual
+                                            <i class="bx bx-download"></i> Ver selfie desta operação
                                         </a>
                                         <small class="text-muted d-block mt-1">
-                                            {{ $selfie->nome_arquivo ?? 'Selfie' }} - 
+                                            {{ $selfie->nome_arquivo ?? 'Selfie' }} —
                                             Enviado em: {{ $selfie->created_at->format('d/m/Y H:i') }}
                                         </small>
                                     </div>
                                 @else
-                                    <div class="alert alert-warning mb-2">
-                                        <small>Nenhuma selfie anexada. Por favor, anexe uma selfie.</small>
+                                    <div class="alert alert-light border mb-2">
+                                        <small>Nenhuma selfie vinculada a <strong>esta operação</strong> ainda.</small>
                                     </div>
                                 @endif
                                 <input type="file" name="selfie_documento" class="form-control" accept=".jpg,.jpeg,.png">
-                                <small class="text-muted">Deixe em branco para manter a selfie atual. Formatos: JPG, PNG (máx. 5MB)</small>
+                                <small class="text-muted">Deixe em branco para manter a selfie desta operação. Formatos: JPG, PNG (máx. 5MB)</small>
                                 @error('selfie_documento')
                                     <div class="text-danger">{{ $message }}</div>
                                 @enderror
@@ -235,12 +238,12 @@
 
                             @if($anexos->count() > 0)
                                 <div class="mb-3">
-                                    <label class="form-label">Anexos Existentes ({{ $anexos->count() }})</label>
+                                    <label class="form-label">Anexos desta operação ({{ $anexos->count() }})</label>
                                     <div class="mb-2">
                                         @foreach($anexos as $anexo)
                                             <div class="mb-2">
                                                 <a href="{{ $anexo->url }}" target="_blank" class="btn btn-sm btn-secondary">
-                                                    <i class="bx bx-download"></i> {{ $anexo->nome_arquivo ?? 'Ver Anexo' }}
+                                                    <i class="bx bx-download"></i> {{ $anexo->nome_arquivo ?? 'Ver anexo' }}
                                                 </a>
                                                 <small class="text-muted d-block mt-1">
                                                     Enviado em: {{ $anexo->created_at->format('d/m/Y H:i') }}
@@ -252,13 +255,49 @@
                             @endif
 
                             <div class="mb-3">
-                                <label class="form-label">Adicionar Novos Anexos (opcional)</label>
+                                <label class="form-label">Novos anexos (opcional)</label>
                                 <input type="file" name="anexos[]" class="form-control" accept=".pdf,.jpg,.jpeg,.png" multiple>
-                                <small class="text-muted">Você pode selecionar múltiplos arquivos. Formatos: PDF, JPG, PNG (máx. 5MB cada)</small>
+                                <small class="text-muted">Novos arquivos serão gravados nesta operação. Formatos: PDF, JPG, PNG (máx. 5MB cada)</small>
                                 @error('anexos.*')
                                     <div class="text-danger">{{ $message }}</div>
                                 @enderror
                             </div>
+
+                            @if(!empty($mostrarDocumentosLegado))
+                                <hr class="my-4">
+                                <h6 class="mb-2">Outros documentos (cadastro geral / sem esta operação)</h6>
+                                <p class="text-muted small mb-3">Referência apenas — não são alterados ao salvar esta ficha.</p>
+                                @php
+                                    $dLeg = $documentosLegado['documento'] ?? null;
+                                    $sLeg = $documentosLegado['selfie'] ?? null;
+                                    $aLeg = $documentosLegado['anexos'] ?? collect();
+                                @endphp
+                                <div class="card bg-light border mb-3">
+                                    <div class="card-body py-3">
+                                        @if($dLeg)
+                                            <div class="mb-2">
+                                                <span class="badge bg-secondary me-1">RG/CNH</span>
+                                                <a href="{{ $dLeg->url }}" target="_blank" class="btn btn-sm btn-outline-secondary">{{ $dLeg->nome_arquivo ?? 'Ver' }}</a>
+                                                <small class="text-muted">{{ $dLeg->created_at->format('d/m/Y H:i') }}</small>
+                                            </div>
+                                        @endif
+                                        @if($sLeg)
+                                            <div class="mb-2">
+                                                <span class="badge bg-secondary me-1">Selfie</span>
+                                                <a href="{{ $sLeg->url }}" target="_blank" class="btn btn-sm btn-outline-secondary">{{ $sLeg->nome_arquivo ?? 'Ver' }}</a>
+                                                <small class="text-muted">{{ $sLeg->created_at->format('d/m/Y H:i') }}</small>
+                                            </div>
+                                        @endif
+                                        @foreach($aLeg as $ax)
+                                            <div class="mb-2">
+                                                <span class="badge bg-secondary me-1">Anexo</span>
+                                                <a href="{{ $ax->url }}" target="_blank" class="btn btn-sm btn-outline-secondary">{{ $ax->nome_arquivo ?? 'Ver' }}</a>
+                                                <small class="text-muted">{{ $ax->created_at->format('d/m/Y H:i') }}</small>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endif
 
                             <div class="d-flex justify-content-end gap-2">
                                 <a href="{{ route('clientes.show', $cliente->id) }}" class="btn btn-secondary">

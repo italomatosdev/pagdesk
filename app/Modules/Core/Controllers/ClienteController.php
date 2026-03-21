@@ -5,6 +5,7 @@ namespace App\Modules\Core\Controllers;
 use App\Helpers\RefEncoder;
 use App\Http\Controllers\Controller;
 use App\Modules\Core\Models\Cliente;
+use App\Modules\Core\Models\ClientDocument;
 use App\Modules\Core\Models\ClienteDadosEmpresa;
 use App\Modules\Core\Models\Operacao;
 use App\Modules\Core\Models\OperationClient;
@@ -87,9 +88,9 @@ class ClienteController extends Controller
             $query->where('documento', 'like', "%{$documento}%");
         }
 
-        // Filtro por nome
+        // Filtro por nome (com operação: também busca em operacao_dados_clientes dessa operação)
         if ($request->filled('nome')) {
-            $query->where('nome', 'like', "%{$request->nome}%");
+            $this->aplicarFiltroNomeListagemClientes($query, $request->nome, $operacaoIdFiltro);
         }
 
         // Contadores (respeitam os mesmos filtros da listagem)
@@ -116,19 +117,24 @@ class ClienteController extends Controller
             $stats['pessoa_juridica'] = (clone $query)->where('tipo_pessoa', 'juridica')->count();
         }
 
-        $clientes = $query->with([
-                'operationClients' => function ($q) use ($operacoesIds, $isSuperAdmin) {
-                    if (!$isSuperAdmin && !empty($operacoesIds)) {
-                        $q->whereIn('operacao_id', $operacoesIds);
-                    }
-                    $q->with('operacao');
-                },
-                'empresasVinculadas' => function ($q) use ($empresaId) {
-                    if ($empresaId) {
-                        $q->where('empresa_id', $empresaId);
-                    }
+        $with = [
+            'operationClients' => function ($q) use ($operacoesIds, $isSuperAdmin) {
+                if (! $isSuperAdmin && ! empty($operacoesIds)) {
+                    $q->whereIn('operacao_id', $operacoesIds);
                 }
-            ])
+                $q->with('operacao');
+            },
+            'empresasVinculadas' => function ($q) use ($empresaId) {
+                if ($empresaId) {
+                    $q->where('empresa_id', $empresaId);
+                }
+            },
+        ];
+        if ($operacaoIdFiltro) {
+            $with['operacaoDadosClientes'] = fn ($q) => $q->where('operacao_id', $operacaoIdFiltro);
+        }
+
+        $clientes = $query->with($with)
             ->orderBy('nome')
             ->paginate(15)
             ->withQueryString();
@@ -177,20 +183,28 @@ class ClienteController extends Controller
             $documento = preg_replace('/[^0-9]/', '', $request->cpf);
             $query->where('documento', 'like', "%{$documento}%");
         }
-        if ($request->filled('nome')) {
-            $query->where('nome', 'like', "%{$request->nome}%");
-        }
-
+        $operacaoIdExport = null;
         $operacaoIdRequest = $request->filled('operacao_id') ? (int) $request->operacao_id : null;
         if ($operacaoIdRequest && ($isSuperAdmin || in_array($operacaoIdRequest, $operacoesIds, true))) {
+            $operacaoIdExport = $operacaoIdRequest;
             $query->whereHas('operationClients', fn ($q) => $q->where('operacao_id', $operacaoIdRequest));
+        }
+
+        if ($request->filled('nome')) {
+            $this->aplicarFiltroNomeListagemClientes($query, $request->nome, $operacaoIdExport);
         }
 
         $clientes = $query->orderBy('nome')->get();
 
+        if ($operacaoIdExport) {
+            $clientes->load([
+                'operacaoDadosClientes' => fn ($q) => $q->where('operacao_id', $operacaoIdExport),
+            ]);
+        }
+
         $filename = 'clientes_' . now()->format('Y-m-d_His') . '.csv';
 
-        return response()->streamDownload(function () use ($clientes, $isSuperAdmin) {
+        return response()->streamDownload(function () use ($clientes, $isSuperAdmin, $operacaoIdExport) {
             $out = fopen('php://output', 'w');
             fprintf($out, chr(0xEF) . chr(0xBB) . chr(0xBF)); // BOM UTF-8 para Excel
 
@@ -201,15 +215,16 @@ class ClienteController extends Controller
             fputcsv($out, $headers, ';');
 
             foreach ($clientes as $c) {
+                $ficha = $operacaoIdExport ? $c->operacaoDadosClientes->first() : null;
                 $tipo = $c->tipo_pessoa === 'fisica' ? 'PF' : 'PJ';
                 $row = [
                     $c->documento,
-                    $c->nome,
+                    $ficha?->nome ?? $c->nome,
                     $tipo,
-                    $c->telefone ?? '',
-                    $c->email ?? '',
-                    $c->cidade ?? '',
-                    $c->estado ?? '',
+                    $ficha?->telefone ?? $c->telefone ?? '',
+                    $ficha?->email ?? $c->email ?? '',
+                    $ficha?->cidade ?? $c->cidade ?? '',
+                    $ficha?->estado ?? $c->estado ?? '',
                 ];
                 if ($isSuperAdmin && $c->relationLoaded('empresa')) {
                     $row[] = $c->empresa?->nome ?? '';
@@ -760,6 +775,14 @@ class ClienteController extends Controller
             $operacaoContexto?->empresa_id
         );
 
+        $documentosOperacaoFicha = $this->documentosClienteNaOperacao($cliente->id, $oid);
+        $documentosLegado = $this->documentosClienteLegadoVisivel(
+            $cliente->id,
+            $user->empresa_id ?? null,
+            $isSuperAdmin
+        );
+        $mostrarDocumentosLegado = $this->temAlgumDocumentoNaLista($documentosLegado);
+
         return view('clientes.edit', compact(
             'cliente',
             'isSuperAdmin',
@@ -767,7 +790,10 @@ class ClienteController extends Controller
             'dadosEmpresa',
             'operacaoParaFichaId',
             'operacaoParaFichaNome',
-            'formDefaultsOperacao'
+            'formDefaultsOperacao',
+            'documentosOperacaoFicha',
+            'documentosLegado',
+            'mostrarDocumentosLegado'
         ));
     }
 
@@ -1260,6 +1286,103 @@ class ClienteController extends Controller
         });
 
         return response()->json(['results' => $results]);
+    }
+
+    /**
+     * Filtro de nome na listagem/export: com operação selecionada, busca também em `operacao_dados_clientes` (nome, telefone, e-mail).
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<\App\Modules\Core\Models\Cliente>  $query
+     */
+    private function aplicarFiltroNomeListagemClientes($query, string $nome, ?int $operacaoIdFiltro): void
+    {
+        $term = '%'.$nome.'%';
+        if ($operacaoIdFiltro) {
+            $query->where(function ($q) use ($term, $operacaoIdFiltro) {
+                $q->where('nome', 'like', $term)
+                    ->orWhereHas('operacaoDadosClientes', function ($sub) use ($operacaoIdFiltro, $term) {
+                        $sub->where('operacao_id', $operacaoIdFiltro)
+                            ->where(function ($inner) use ($term) {
+                                $inner->where('nome', 'like', $term)
+                                    ->orWhere('telefone', 'like', $term)
+                                    ->orWhere('email', 'like', $term);
+                            });
+                    });
+            });
+        } else {
+            $query->where('nome', 'like', $term);
+        }
+    }
+
+    /**
+     * Documentos salvos com `operacao_id` = contexto da ficha em edição.
+     *
+     * @return array{documento: ClientDocument|null, selfie: ClientDocument|null, anexos: Collection<int, ClientDocument>}
+     */
+    private function documentosClienteNaOperacao(int $clienteId, int $operacaoId): array
+    {
+        $um = fn (string $categoria) => ClientDocument::query()
+            ->where('cliente_id', $clienteId)
+            ->where('operacao_id', $operacaoId)
+            ->where('categoria', $categoria)
+            ->orderByDesc('id')
+            ->first();
+
+        return [
+            'documento' => $um('documento'),
+            'selfie' => $um('selfie'),
+            'anexos' => ClientDocument::query()
+                ->where('cliente_id', $clienteId)
+                ->where('operacao_id', $operacaoId)
+                ->where('categoria', 'anexo')
+                ->orderByDesc('id')
+                ->get(),
+        ];
+    }
+
+    /**
+     * Documentos sem `operacao_id` (legado), com o mesmo critério de visibilidade por empresa que a listagem do cliente.
+     *
+     * @return array{documento: ClientDocument|null, selfie: ClientDocument|null, anexos: Collection<int, ClientDocument>}
+     */
+    private function documentosClienteLegadoVisivel(int $clienteId, ?int $empresaIdUsuario, bool $isSuperAdmin): array
+    {
+        $base = function () use ($clienteId, $empresaIdUsuario, $isSuperAdmin) {
+            $q = ClientDocument::query()
+                ->where('cliente_id', $clienteId)
+                ->whereNull('operacao_id');
+
+            if (! $isSuperAdmin && $empresaIdUsuario) {
+                $q->where(function ($w) use ($empresaIdUsuario) {
+                    $w->whereNull('empresa_id')->orWhere('empresa_id', $empresaIdUsuario);
+                });
+            }
+
+            return $q;
+        };
+
+        $um = fn (string $categoria) => $base()
+            ->where('categoria', $categoria)
+            ->orderByDesc('id')
+            ->first();
+
+        return [
+            'documento' => $um('documento'),
+            'selfie' => $um('selfie'),
+            'anexos' => $base()
+                ->where('categoria', 'anexo')
+                ->orderByDesc('id')
+                ->get(),
+        ];
+    }
+
+    /**
+     * @param  array{documento: mixed, selfie: mixed, anexos: \Illuminate\Support\Collection}  $docs
+     */
+    private function temAlgumDocumentoNaLista(array $docs): bool
+    {
+        return ($docs['documento'] ?? null) !== null
+            || ($docs['selfie'] ?? null) !== null
+            || ($docs['anexos'] ?? collect())->isNotEmpty();
     }
 
     /**
