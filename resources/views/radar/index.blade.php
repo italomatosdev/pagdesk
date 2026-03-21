@@ -108,6 +108,27 @@
                                     </div>
                                 </div>
                             @endif
+                            @if(!empty($fichasPorOperacao) && is_array($fichasPorOperacao))
+                                <div class="mt-3 text-start px-2">
+                                    <small class="text-muted d-block mb-1">Contato por operação (ficha)</small>
+                                    <div class="list-group list-group-flush border rounded small">
+                                        @foreach($fichasPorOperacao as $fo)
+                                            <div class="list-group-item py-2">
+                                                <div class="fw-semibold">{{ $fo['operacao_nome'] ?? ('Operação #'.($fo['operacao_id'] ?? '')) }}</div>
+                                                @if(!empty($fo['nome']))
+                                                    <div class="text-muted">{{ $fo['nome'] }}</div>
+                                                @endif
+                                                @if(!empty($fo['telefone']))
+                                                    <div><i class="bx bx-phone me-1"></i>{{ $fo['telefone'] }}</div>
+                                                @endif
+                                                @if(!empty($fo['email']))
+                                                    <div><i class="bx bx-envelope me-1"></i>{{ $fo['email'] }}</div>
+                                                @endif
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endif
                             @if(!empty($cliente['id']))
                                 @php
                                     $oidsRadar = collect($cliente['operation_clients'] ?? [])->pluck('operacao_id')->filter()->unique()->values();

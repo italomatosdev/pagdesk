@@ -25,9 +25,10 @@ O **Radar** é descrito no código como a consulta cadastral interna do sistema 
 ### Relação com a “ficha por operação”
 
 - O Radar responde principalmente: **“este documento já existe? que dívidas ativas e atrasos existem no universo do sistema?”**
-- Os **dados cadastrais** mostrados no cartão (nome, telefone, e-mail, vínculos `operation_clients`) vêm do **modelo `Cliente`** (e dos **accessors** que misturam `ClienteDadosEmpresa`), **não** de uma ficha `operacao_dados_clientes` escolhida — porque a pergunta do Radar **não** é “qual o telefone na Operação X?”, e sim **“quem é esse CPF no sistema e qual o risco agregado?”**.
+- Os **dados cadastrais** no cartão principal (nome, documento, vínculos `operation_clients`) continuam ancorados no **`Cliente`**; **contato por operação** (nome/telefone/e-mail da ficha) é exibido em bloco separado via **`fichas_por_operacao`** retornado por `buscarPorCpf` (Fase C1).
+- A **agregação financeira** (ativos, pendências) permanece **global** no sistema, alinhada à ideia de bureau interno.
 
-**Implicação para o plano de correção:** tratar o Radar como **caso especial**: alinhar à ficha por operação **só se o produto quiser** mostrar contato por operação (ex.: abas por operação); caso contrário, manter **visão única de cadastro + agregação financeira global** e documentar essa decisão.
+**Implicação:** Radar = **risco global** + **contatos por operação** (ficha) quando o usuário tem acesso às operações correspondentes.
 
 ---
 
@@ -38,7 +39,7 @@ O **Radar** é descrito no código como a consulta cadastral interna do sistema 
 | Usuário olha o cliente **no contexto da Operação X** (empréstimo, venda, filtro de operação, `?operacao_id=`) | Preferir **`operacao_dados_clientes`** para `(cliente_id, operacao_id)` quando existir linha; fallback documentado. |
 | Identidade (CPF/CNPJ, tipo pessoa) | Continuar em **`clientes`**. |
 | Tela explicitamente **cadastro geral** (`geral=1`, ou política super admin) | Pode usar **`clientes`** + regras atuais de `ClienteDadosEmpresa` / accessors. |
-| Ferramenta **global de risco** (Radar) | Ver §1 — **agregado**; correção opcional e dependente de produto. |
+| Ferramenta **global de risco** (Radar) | Ver §1 — financeiro **agregado**; contato **por operação** via ficha na UI/API (C1). |
 
 ---
 
@@ -61,7 +62,7 @@ O **Radar** é descrito no código como a consulta cadastral interna do sistema 
 - Telas com **`$emprestimo->cliente`** / **`$parcela->emprestimo->cliente`**: em geral só **nome** na tabela; **WhatsApp** usa **`whatsapp_link`** → deriva de **`telefone`** do `Cliente` (accessor), **não** da ficha da `operacao_id` do empréstimo.
 - **`relatorios/parcelas-atrasadas` (aba Rota de cobrança)**: endereço montado a partir de **`$cliente->endereco`**, etc. — **sem** `operacao_dados_clientes` da operação do empréstimo.
 - **`clientes/index`** com filtro por operação: coluna de telefone pode vir da ficha, mas **WhatsApp** ainda usa **`$cliente->whatsapp_link`** → pode **divergir** do telefone exibido da ficha.
-- **API JSON** (`buscarPorCpf` / uso no Radar e no create empréstimo): `telefone`/`email` serializados a partir do **`Cliente`** (accessors), não por operação.
+- **API JSON** (`buscarPorCpf` / uso no Radar e no create empréstimo): `cliente.telefone` / `cliente.email` continuam vindos do **`Cliente`** (accessors); além disso existe **`fichas_por_operacao`** (ficha por operação, filtrada às operações do usuário quando não super admin).
 
 ### 3.4 Backend (notificações / mensagens)
 
@@ -94,10 +95,10 @@ O **Radar** é descrito no código como a consulta cadastral interna do sistema 
 
 | # | Item | Ação sugerida | Estado |
 |---|------|----------------|--------|
-| C1 | JSON de `buscarPorCpf` | Decidir: manter telefone “global” do cliente **ou** retornar **mapa por operação** (`operacao_id` → telefone/email da ficha) para o front escolher. | **Pendente** — hoje o payload usa `$cliente->telefone` / `email` (accessors + legado), coerente com visão **única** do Radar. |
-| C2 | Radar | Se C1 evoluir, opcionalmente exibir contatos **por operação** na UI; senão, **documentar** que o Radar mostra cadastro agregado + risco global, não ficha única. | **Documentado** — ver §1 deste doc; UI não lista WA por operação. |
+| C1 | JSON de `buscarPorCpf` | Manter `cliente.telefone` / `email` (legado) **e** retornar **`fichas_por_operacao`**: array `{ operacao_id, operacao_nome, nome, telefone, email }` por linha em `operacao_dados_clientes`, filtrado às operações do usuário (exceto super admin). | **Feito** — `ClienteController::fichasPorOperacaoParaCliente`. |
+| C2 | Radar / modais | Exibir bloco **Contato por operação (ficha)** quando houver itens em `fichas_por_operacao`. | **Feito** — `radar/index.blade.php` + `RadarController`; Swal **criar empréstimo** e **criar cliente** (consulta cruzada e mesma empresa). |
 
-**Comportamento atual (sem mudança de contrato):** `ClienteController::buscarPorCpf` devolve `cliente.telefone` e `cliente.email` após accessors; o front do Radar / modal de empréstimo usa isso como **perfil único**. Evolução futura: incluir opcionalmente `fichas_por_operacao` (array) sem remover os campos atuais, para não quebrar clientes da API.
+**Contrato da API:** `buscarPorCpf` mantém `cliente.telefone` e `cliente.email` (accessors) e acrescenta **`fichas_por_operacao`** (pode ser `[]`). Consumidores antigos ignoram a chave nova.
 
 ### Fase D — Modelo e legado
 
@@ -112,7 +113,7 @@ O **Radar** é descrito no código como a consulta cadastral interna do sistema 
 
 - **A1–A3:** QA com cliente em **duas operações** com telefone/endereço **diferentes** na ficha; conferir index (com filtro), show, relatório rota.
 - **B\*:** mesmos cenários nas telas alteradas; regressão em cliente com **uma** operação e sem linha em `operacao_dados_clientes` (fallback).
-- **C\*:** contrato da API documentado; Radar com comportamento explícito no README ou neste doc.
+- **C\*:** cliente com fichas em **duas operações** (telefones distintos): conferir `fichas_por_operacao` na API, bloco no Radar e no modal Swal do create empréstimo; usuário só com uma operação vê só essa ficha; super admin vê todas (respeitando dados existentes).
 
 ---
 

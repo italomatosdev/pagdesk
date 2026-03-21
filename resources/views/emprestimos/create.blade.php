@@ -792,6 +792,25 @@
                                 })
                                 .join('') || `<div class="text-center text-muted py-3 small">Nenhuma pendência atrasada</div>`;
                             
+                            const fichasList = data.fichas_por_operacao || [];
+                            const fichasBlock = fichasList.length
+                                ? `
+                                    <div class="card mb-3 text-start">
+                                        <div class="card-header py-2"><h6 class="mb-0 small">Contato por operação (ficha)</h6></div>
+                                        <div class="card-body py-2" style="max-height: 140px; overflow-y: auto;">
+                                            ${fichasList.map(f => `
+                                                <div class="border-bottom pb-2 mb-2">
+                                                    <div class="fw-semibold small">${f.operacao_nome || ('Operação #' + (f.operacao_id || ''))}</div>
+                                                    ${f.nome ? `<div class="text-muted small">${f.nome}</div>` : ''}
+                                                    ${f.telefone ? `<div class="small"><i class="bx bx-phone"></i> ${f.telefone}</div>` : ''}
+                                                    ${f.email ? `<div class="small"><i class="bx bx-envelope"></i> ${f.email}</div>` : ''}
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                `
+                                : '';
+                            
                             const valorTotalAtivos = (ficha.ativos_por_operacao || []).reduce((sum, item) => sum + (Number(item.total_ativo || 0)), 0);
                             
                             // Alertas de status
@@ -834,6 +853,8 @@
                                                 <i class="bx bx-id-card me-1"></i>${partes[partes.length - 1]}
                                             </small>
                                         </div>
+                                        
+                                        ${fichasBlock}
                                         
                                         <!-- Cards de Métricas -->
                                         <div class="row g-3 mb-3">

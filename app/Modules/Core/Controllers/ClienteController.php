@@ -9,6 +9,7 @@ use App\Modules\Core\Models\ClientDocument;
 use App\Modules\Core\Models\ClienteDadosEmpresa;
 use App\Modules\Core\Models\Operacao;
 use App\Modules\Core\Models\OperationClient;
+use App\Modules\Core\Models\OperacaoDadosCliente;
 use Illuminate\Support\Collection;
 use App\Models\Scopes\EmpresaScope;
 use App\Modules\Core\Services\ClienteService;
@@ -1127,6 +1128,7 @@ class ClienteController extends Controller
                 'existe' => true,
                 'cliente' => $clienteData,
                 'ficha' => $ficha,
+                'fichas_por_operacao' => $this->fichasPorOperacaoParaCliente((int) $cliente->id, $request),
                 'consulta_cruzada' => false, // Cliente da própria empresa
             ]);
         } else {
@@ -1143,6 +1145,7 @@ class ClienteController extends Controller
                     'documento' => $consultaCruzada['cliente_documento'] ?? $consultaCruzada['cliente_cpf'] ?? null,
                     'tipo_pessoa' => $consultaCruzada['cliente_tipo_pessoa'] ?? 'fisica',
                 ],
+                'fichas_por_operacao' => $this->fichasPorOperacaoParaCliente((int) $consultaCruzada['cliente_id'], $request),
                 'consulta_cruzada' => true,
                 'ficha' => [
                     'emprestimos_ativos_total' => collect($consultaCruzada['empresas_com_historico'])->sum('emprestimos_ativos.quantidade'),
@@ -1256,6 +1259,7 @@ class ClienteController extends Controller
                         'documento' => $cliente->documento_formatado,
                         'tipo_pessoa' => $cliente->tipo_pessoa,
                     ],
+                    'fichas_por_operacao' => $this->fichasPorOperacaoParaCliente((int) $cliente->id, $request),
                     'consulta_cruzada' => true,
                     'ficha' => [
                         'emprestimos_ativos_total' => 0,
@@ -1286,6 +1290,44 @@ class ClienteController extends Controller
                 ] : null,
             ], 500);
         }
+    }
+
+    /**
+     * Dados da ficha (operacao_dados_clientes) por operação — API buscarPorCpf / Radar (Fase C1).
+     * Usuários não super-admin veem apenas operações às quais estão vinculados.
+     *
+     * @return list<array{operacao_id: int, operacao_nome: ?string, nome: ?string, telefone: ?string, email: ?string}>
+     */
+    private function fichasPorOperacaoParaCliente(int $clienteId, Request $request): array
+    {
+        $query = OperacaoDadosCliente::query()
+            ->where('cliente_id', $clienteId)
+            ->with(['operacao' => static function ($q) {
+                $q->withoutGlobalScope(EmpresaScope::class)->select('id', 'nome');
+            }])
+            ->orderBy('operacao_id');
+
+        $user = $request->user();
+        if ($user && ! $user->isSuperAdmin()) {
+            $allowed = $user->getOperacoesIds();
+            if (empty($allowed)) {
+                return [];
+            }
+            $query->whereIn('operacao_id', $allowed);
+        }
+
+        return $query->get()
+            ->map(static function (OperacaoDadosCliente $f) {
+                return [
+                    'operacao_id' => (int) $f->operacao_id,
+                    'operacao_nome' => $f->operacao?->nome,
+                    'nome' => $f->nome,
+                    'telefone' => $f->telefone,
+                    'email' => $f->email,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**
