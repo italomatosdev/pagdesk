@@ -1286,10 +1286,23 @@
                                                 <span class="badge bg-danger">{{ $diasAtraso }} dias</span>
                                             </td>
                                             <td>
-                                                <a href="{{ route('emprestimos.show', $parcela->emprestimo_id) }}" 
-                                                   class="btn btn-sm btn-primary">
-                                                    <i class="bx bx-show"></i>
-                                                </a>
+                                                <div class="d-flex gap-1 flex-wrap">
+                                                    <a href="{{ route('emprestimos.show', $parcela->emprestimo_id) }}"
+                                                       class="btn btn-sm btn-primary">
+                                                        <i class="bx bx-show"></i>
+                                                    </a>
+                                                    @php
+                                                        $fichaWaAdm = ($fichasContatoParcelasVencidas ?? collect())->get($parcela->emprestimo->cliente_id.'_'.$parcela->emprestimo->operacao_id);
+                                                    @endphp
+                                                    @if(\App\Support\WhatsappLink::temWhatsappPreferindoFicha($fichaWaAdm, $parcela->emprestimo->cliente))
+                                                        <a href="{{ \App\Support\WhatsappLink::urlPreferindoFicha($fichaWaAdm, $parcela->emprestimo->cliente) }}"
+                                                           target="_blank"
+                                                           class="btn btn-sm btn-success"
+                                                           title="WhatsApp (ficha da operação quando houver)">
+                                                            <i class="bx bxl-whatsapp"></i>
+                                                        </a>
+                                                    @endif
+                                                </div>
                                             </td>
                                         </tr>
                                     @empty

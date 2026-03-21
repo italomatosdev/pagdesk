@@ -85,10 +85,10 @@ O **Radar** é descrito no código como a consulta cadastral interna do sistema 
 
 ### Fase B — Telas com `emprestimo.operacao_id`
 
-| # | Item | Ação sugerida |
-|---|------|----------------|
-| B1 | `emprestimos/show`, `parcelas/atrasadas`, `cobrancas`, `liberacoes/show`, `pagamentos/*`, etc. | Onde houver **contato ou endereço** ou **WhatsApp**, carregar ficha da operação do empréstimo e usar **fallback** `Cliente`/accessor. |
-| B2 | Dashboards (admin/gestor/consultor) | Mesma regra **apenas** onde exibir telefone/endereço/WhatsApp; nome pode permanecer como hoje se produto aceitar. |
+| # | Item | Ação sugerida | Estado |
+|---|------|----------------|--------|
+| B1 | `emprestimos/show`, `parcelas/atrasadas`, `cobrancas`, `liberacoes/show`, etc. | Onde houver **WhatsApp**, carregar ficha da operação do empréstimo e usar **fallback** `Cliente`/accessor. | **Feito** — `FichaContatoLookup` + `WhatsappLink::urlPreferindoFicha`; `pagamentos/*` sem botão WA no escopo atual. |
+| B2 | Dashboards (admin/gestor/consultor) | Mesma regra onde houver **WhatsApp**. | **Feito** — consultor (listas de parcelas); admin/gestor na tabela **Parcelas vencidas**. |
 
 ### Fase C — API e Radar
 

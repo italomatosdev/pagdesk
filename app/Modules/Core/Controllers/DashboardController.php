@@ -629,6 +629,10 @@ class DashboardController extends Controller
             ->limit(10)
             ->get();
 
+        $fichasContatoParcelasVencidas = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromParcelas($parcelasVencidas)
+        );
+
         return view('dashboard.admin', compact(
             'stats',
             'emprestimosPorStatus',
@@ -643,6 +647,7 @@ class DashboardController extends Controller
             'resumoPorOperacao',
             'emprestimosAprovados',
             'parcelasVencidas',
+            'fichasContatoParcelasVencidas',
             'operacoes',
             'operacaoId',
             'dateFrom',
@@ -946,6 +951,10 @@ class DashboardController extends Controller
             ->limit(10)
             ->get();
 
+        $fichasContatoParcelasVencidas = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromParcelas($parcelasVencidas)
+        );
+
         // Ranking de consultores (por valor emprestado)
         $rankingConsultores = Emprestimo::select('consultor_id', 
                 DB::raw('SUM(valor_total) as total_emprestado'),
@@ -1083,6 +1092,7 @@ class DashboardController extends Controller
             'liberacoesPendentes',
             'emprestimosAprovados',
             'parcelasVencidas',
+            'fichasContatoParcelasVencidas',
             'rankingConsultores',
             'operacoes',
             'operacaoId',
