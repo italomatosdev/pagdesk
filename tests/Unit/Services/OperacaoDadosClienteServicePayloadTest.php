@@ -77,6 +77,26 @@ class OperacaoDadosClienteServicePayloadTest extends TestCase
     }
 
     /** @test */
+    public function valores_formulario_para_operacao_sem_linha_usa_payload_bruto(): void
+    {
+        $cliente = new Cliente;
+        $cliente->forceFill([
+            'nome' => 'Nome Base',
+            'telefone' => '11987654321',
+            'cidade' => 'São Paulo',
+            'estado' => 'SP',
+        ]);
+
+        $vals = $this->service->valoresFormularioParaOperacao($cliente, 999_999, 42);
+
+        $this->assertSame('Nome Base', $vals['nome']);
+        $this->assertSame('11987654321', $vals['telefone']);
+        $this->assertSame('São Paulo', $vals['cidade']);
+        $this->assertSame('SP', $vals['estado']);
+        $this->assertNull($vals['data_nascimento']);
+    }
+
+    /** @test */
     public function payload_bruto_nao_usa_accessors_apenas_get_attributes(): void
     {
         $cliente = new Cliente;

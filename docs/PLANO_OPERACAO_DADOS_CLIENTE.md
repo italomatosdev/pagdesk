@@ -3,7 +3,8 @@
 **Estado atual (concluído):**
 - Tabela `operacao_dados_clientes` criada e populada (backfill 1:1 com `operation_clients`).
 - Coluna `client_documents.operacao_id` (nullable) criada; registros legados permanecem `NULL`.
-- **Cadastro por link público** grava/atualiza `operacao_dados_clientes` e anexos com `operacao_id` (Fase 2). Telas internas / listagens ainda podem usar só `clientes` até a Fase 3+.
+- **Cadastro por link público** grava/atualiza `operacao_dados_clientes` e anexos com `operacao_id` (Fase 2).
+- **CRUD interno (Fase 3 — parcial):** cadastro com operação grava ficha + `operacao_id` nos documentos; edição com `?operacao_id=` atualiza ficha e anexos da operação (link “Editar ficha” na tabela de vínculos do `show`). Listagens/buscas globais ainda podem usar só `clientes` até evolução da Fase 3/4.
 
 **Objetivo de negócio:**
 - Ficha cadastral (nome, contato, endereço, etc.) **por par** `(cliente_id, operacao_id)`.
@@ -65,6 +66,15 @@
 
 **Critério de pronto:** criar cliente internamente + editar + anexar com operação; `client_documents` novos com `operacao_id` quando aplicável.
 
+**Implementado (Fase 3 — escopo atual):**
+- `ClienteController::store`: `operacao_id_documentos` na criação; após `vincularOperacao`, `OperacaoDadosClienteService::salvarOuAtualizar` com `payloadFromFormularioValidado`. Se o CPF/CNPJ **já existir** em `clientes`, o fluxo espelha o link público: não cria novo cliente; se já vinculado à mesma operação → redirect com aviso; senão → `ClienteDadosEmpresa`, `vincularClienteEmpresa` (se preciso), `vincularOperacao`, `salvarOuAtualizar`, `processarDocumentosParaOperacao`.
+- `ClienteController::edit`: **sempre** no contexto de operação. Sem `?operacao_id=`: se uma operação acessível → redirect com o id; se várias → tela `edit-escolher-operacao`; se nenhuma → volta ao `show` com erro. Com `operacao_id` válido: formulário com ficha da operação.
+- `ClienteController::update`: `operacao_para_ficha_id` **obrigatório**; sempre `salvarOuAtualizar` na ficha da operação; uploads só via `processarDocumentosParaOperacao` (não pelo fluxo genérico de documentos do `atualizar`).
+- `resources/views/clientes/edit.blade.php`: hidden + alerta de contexto de operação.
+- `resources/views/clientes/show.blade.php`: coluna “Ficha” com link `clientes/{id}/edit?operacao_id=...`.
+- **Formulário de edição com `?operacao_id=`:** `OperacaoDadosClienteService::valoresFormularioParaOperacao` — usa linha em `operacao_dados_clientes` ou fallback `payloadBrutoFromCliente`; view usa `data_get($formDefaultsOperacao, ...)`.
+- **Pendente (evolução Fase 3/4):** listagens/buscas por operação; filtrar documentos na edição pelo `operacao_id` do contexto (opcional).
+
 ---
 
 ## Fase 4 — Convivência com `ClienteDadosEmpresa` e accessors do `Cliente`
@@ -115,7 +125,7 @@ Hoje `Cliente` usa accessors que misturam **empresa criadora** vs **`cliente_dad
 
 ## Próximo passo imediato (implementação)
 
-Implementar **Fase 3** (CRUD interno, telas `clientes/*`, uploads com `operacao_id` no contexto da operação). Fases 1 e 2 cobrem serviço + link público.
+Priorizar **listagens/buscas** considerando `operacao_dados_clientes` quando fizer sentido ao produto; em seguida **Fase 4** (accessors / convivência com `ClienteDadosEmpresa`).
 
 ---
 

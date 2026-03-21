@@ -5,9 +5,14 @@ namespace App\Modules\Core\Controllers;
 use App\Helpers\RefEncoder;
 use App\Http\Controllers\Controller;
 use App\Modules\Core\Models\Cliente;
+use App\Modules\Core\Models\ClienteDadosEmpresa;
 use App\Modules\Core\Models\Operacao;
+use App\Modules\Core\Models\OperationClient;
+use Illuminate\Support\Collection;
+use App\Models\Scopes\EmpresaScope;
 use App\Modules\Core\Services\ClienteService;
 use App\Modules\Core\Services\ClienteConsultaService;
+use App\Modules\Core\Services\OperacaoDadosClienteService;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Parcela;
 use Carbon\Carbon;
@@ -19,13 +24,20 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class ClienteController extends Controller
 {
     protected ClienteService $clienteService;
+
     protected ClienteConsultaService $consultaService;
 
-    public function __construct(ClienteService $clienteService, ClienteConsultaService $consultaService)
-    {
+    protected OperacaoDadosClienteService $operacaoDadosClienteService;
+
+    public function __construct(
+        ClienteService $clienteService,
+        ClienteConsultaService $consultaService,
+        OperacaoDadosClienteService $operacaoDadosClienteService
+    ) {
         $this->middleware('auth');
         $this->clienteService = $clienteService;
         $this->consultaService = $consultaService;
+        $this->operacaoDadosClienteService = $operacaoDadosClienteService;
     }
 
     /**
@@ -372,14 +384,75 @@ class ClienteController extends Controller
         ]);
 
         try {
-            $dadosCliente = $validated;
+            $documentoLimpo = preg_replace('/[^0-9]/', '', $validated['documento']);
+            $clienteExistente = Cliente::buscarPorDocumento($documentoLimpo);
+
             $documentos = [
                 'documento_cliente' => $documentoFile,
                 'selfie_documento' => $selfieFile,
                 'anexos' => $request->file('anexos'),
             ];
+
+            if ($clienteExistente) {
+                // Alinhado ao link público (CadastroClienteController): não criar novo registro em `clientes`.
+                $jaVinculadoOperacao = OperationClient::where('cliente_id', $clienteExistente->id)
+                    ->where('operacao_id', $operacao->id)
+                    ->exists();
+
+                if ($jaVinculadoOperacao) {
+                    return redirect()->route('clientes.show', $clienteExistente->id)
+                        ->with('info', 'Este cliente já está vinculado a esta operação. Nenhum dado foi alterado.');
+                }
+
+                $empresaId = (int) $operacao->empresa_id;
+                $dadosEmpresa = $this->montarDadosEmpresaOverrideFromFormularioInterno($validated);
+
+                ClienteDadosEmpresa::updateOrCreate(
+                    [
+                        'cliente_id' => $clienteExistente->id,
+                        'empresa_id' => $empresaId,
+                    ],
+                    $dadosEmpresa
+                );
+
+                if ((int) $clienteExistente->empresa_id !== $empresaId) {
+                    $this->clienteService->vincularClienteEmpresa($clienteExistente->id, $empresaId, auth()->id());
+                }
+
+                $this->clienteService->vincularOperacao(
+                    $clienteExistente->id,
+                    $operacao->id,
+                    0,
+                    auth()->id(),
+                    null
+                );
+
+                $this->operacaoDadosClienteService->salvarOuAtualizar(
+                    $clienteExistente->id,
+                    $operacao->id,
+                    $this->operacaoDadosClienteService->payloadFromFormularioValidado($validated),
+                    $operacao->empresa_id
+                );
+
+                $this->clienteService->processarDocumentosParaOperacao(
+                    $clienteExistente->id,
+                    $documentos,
+                    $operacao->id
+                );
+
+                \Log::info('Cliente existente vinculado à operação (cadastro interno)', [
+                    'cliente_id' => $clienteExistente->id,
+                    'operacao_id' => $operacao->id,
+                ]);
+
+                return redirect()->route('clientes.show', $clienteExistente->id)
+                    ->with('success', 'Cliente já existia no sistema. Foi vinculado a esta operação e os dados foram salvos na ficha da operação.');
+            }
+
+            $dadosCliente = $validated;
             unset($dadosCliente['documento_cliente'], $dadosCliente['selfie_documento'], $dadosCliente['anexos']);
             $dadosCliente['documentos'] = $documentos;
+            $dadosCliente['operacao_id_documentos'] = (int) $operacao->id;
 
             $cliente = $this->clienteService->cadastrar($dadosCliente);
 
@@ -391,8 +464,15 @@ class ClienteController extends Controller
                 null
             );
 
+            $this->operacaoDadosClienteService->salvarOuAtualizar(
+                $cliente->id,
+                $operacao->id,
+                $this->operacaoDadosClienteService->payloadFromFormularioValidado($validated),
+                $operacao->empresa_id
+            );
+
             \Log::info('Cliente cadastrado com sucesso', ['cliente_id' => $cliente->id]);
-            
+
             return redirect()->route('clientes.show', $cliente->id)
                 ->with('success', 'Cliente cadastrado com sucesso!');
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -607,10 +687,10 @@ class ClienteController extends Controller
     }
 
     /**
-     * Mostrar formulário de edição
-     * Acesso: Super Admin ou cliente vinculado a alguma das minhas operações.
+     * Mostrar formulário de edição — sempre no contexto de uma operação (?operacao_id=).
+     * Sem operação: redireciona se houver só uma opção; senão exibe escolha de operação.
      */
-    public function edit(int $id): View
+    public function edit(Request $request, int $id): View|RedirectResponse
     {
         $user = auth()->user();
         $isSuperAdmin = $user->isSuperAdmin();
@@ -621,22 +701,74 @@ class ClienteController extends Controller
             ->with('documentos', 'empresa')
             ->findOrFail($id);
 
-        if (!$isSuperAdmin) {
+        if (! $isSuperAdmin) {
             if (empty($operacoesIds)) {
                 abort(403, 'Você não tem acesso a este cliente.');
             }
-            if (!$cliente->operationClients()->whereIn('operacao_id', $operacoesIds)->exists()) {
+            if (! $cliente->operationClients()->whereIn('operacao_id', $operacoesIds)->exists()) {
                 abort(403, 'Você não tem acesso a este cliente.');
             }
+        }
+
+        if (! $request->filled('operacao_id')) {
+            $opcoes = $this->operacoesVinculadasParaEdicaoFicha($cliente, $user);
+
+            if ($opcoes->isEmpty()) {
+                return redirect()->route('clientes.show', $id)
+                    ->with('error', 'Este cliente não está vinculado a nenhuma operação à qual você tenha acesso. Vincule-o a uma operação antes de editar a ficha.');
+            }
+
+            if ($opcoes->count() === 1) {
+                $only = $opcoes->first();
+
+                return redirect()->route('clientes.edit', [
+                    'id' => $id,
+                    'operacao_id' => $only['operacao_id'],
+                ]);
+            }
+
+            return view('clientes.edit-escolher-operacao', [
+                'cliente' => $cliente,
+                'opcoes' => $opcoes,
+                'isSuperAdmin' => $isSuperAdmin,
+            ]);
+        }
+
+        $oid = (int) $request->query('operacao_id');
+        $temVinculo = $cliente->operationClients()->where('operacao_id', $oid)->exists();
+        $pode = $isSuperAdmin || (! empty($operacoesIds) && in_array($oid, $operacoesIds, true));
+
+        if (! $temVinculo || ! $pode) {
+            return redirect()->route('clientes.edit', $id)
+                ->with('error', 'Operação inválida, sem permissão ou sem vínculo com este cliente.');
         }
 
         $isEmpresaCriadora = $empresaId && $cliente->empresa_id == $empresaId;
         $dadosEmpresa = null;
-        if (!$isEmpresaCriadora && !$isSuperAdmin && $empresaId) {
+        if (! $isEmpresaCriadora && ! $isSuperAdmin && $empresaId) {
             $dadosEmpresa = $cliente->dadosPorEmpresa($empresaId);
         }
 
-        return view('clientes.edit', compact('cliente', 'isSuperAdmin', 'isEmpresaCriadora', 'dadosEmpresa'));
+        $operacaoParaFichaId = $oid;
+        $operacaoContexto = Operacao::withoutGlobalScope(EmpresaScope::class)
+            ->whereKey($oid)
+            ->first(['id', 'nome', 'empresa_id']);
+        $operacaoParaFichaNome = $operacaoContexto?->nome;
+        $formDefaultsOperacao = $this->operacaoDadosClienteService->valoresFormularioParaOperacao(
+            $cliente,
+            $oid,
+            $operacaoContexto?->empresa_id
+        );
+
+        return view('clientes.edit', compact(
+            'cliente',
+            'isSuperAdmin',
+            'isEmpresaCriadora',
+            'dadosEmpresa',
+            'operacaoParaFichaId',
+            'operacaoParaFichaNome',
+            'formDefaultsOperacao'
+        ));
     }
 
     /**
@@ -663,6 +795,7 @@ class ClienteController extends Controller
             'documento_cliente' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120', // 5MB
             'selfie_documento' => 'nullable|file|mimes:jpg,jpeg,png|max:5120', // 5MB
             'anexos.*' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120', // 5MB cada
+            'operacao_para_ficha_id' => 'required|integer|exists:operacoes,id',
         ]);
 
         try {
@@ -673,13 +806,22 @@ class ClienteController extends Controller
 
             $cliente = Cliente::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)->findOrFail($id);
 
-            if (!$isSuperAdmin) {
+            if (! $isSuperAdmin) {
                 if (empty($operacoesIds)) {
                     abort(403, 'Você não tem acesso a este cliente.');
                 }
-                if (!$cliente->operationClients()->whereIn('operacao_id', $operacoesIds)->exists()) {
+                if (! $cliente->operationClients()->whereIn('operacao_id', $operacoesIds)->exists()) {
                     abort(403, 'Você não tem acesso a este cliente.');
                 }
+            }
+
+            $operacaoParaFichaId = (int) $request->input('operacao_para_ficha_id');
+
+            if (! $isSuperAdmin && (empty($operacoesIds) || ! in_array($operacaoParaFichaId, $operacoesIds, true))) {
+                return back()->with('error', 'Operação inválida ou sem permissão.')->withInput();
+            }
+            if (! $cliente->operationClients()->where('operacao_id', $operacaoParaFichaId)->exists()) {
+                return back()->with('error', 'Cliente não está vinculado a esta operação.')->withInput();
             }
 
             $isEmpresaCriadora = $empresaId && $cliente->empresa_id == $empresaId;
@@ -692,13 +834,18 @@ class ClienteController extends Controller
                 'anexos' => $request->file('anexos'),
             ];
 
-            // Remover campos de arquivo dos dados do cliente
-            unset($dadosCliente['documento_cliente'], $dadosCliente['selfie_documento'], $dadosCliente['anexos']);
+            unset(
+                $dadosCliente['documento_cliente'],
+                $dadosCliente['selfie_documento'],
+                $dadosCliente['anexos'],
+                $dadosCliente['operacao_para_ficha_id']
+            );
 
-            // Adicionar documentos aos dados (apenas se houver novos uploads)
-            if ($documentos['documento_cliente'] || $documentos['selfie_documento'] || ($documentos['anexos'] && count(array_filter($documentos['anexos'])))) {
-                $dadosCliente['documentos'] = $documentos;
-            }
+            $hasNewDocs = $documentos['documento_cliente']
+                || $documentos['selfie_documento']
+                || ($documentos['anexos'] && count(array_filter($documentos['anexos'])));
+
+            $documentosParaOperacao = $hasNewDocs ? $documentos : null;
 
             // Se for a empresa criadora ou Super Admin, atualiza diretamente
             // Caso contrário, salva no override
@@ -707,7 +854,24 @@ class ClienteController extends Controller
             } else {
                 $cliente = $this->clienteService->atualizarDadosEmpresa($id, $empresaId, $dadosCliente);
             }
-            
+
+            $operacaoFicha = Operacao::withoutGlobalScope(EmpresaScope::class)->findOrFail($operacaoParaFichaId);
+            $this->operacaoDadosClienteService->salvarOuAtualizar(
+                $cliente->id,
+                $operacaoParaFichaId,
+                $this->operacaoDadosClienteService->payloadFromFormularioValidado(array_merge($validated, [
+                    'tipo_pessoa' => $cliente->tipo_pessoa,
+                ])),
+                $operacaoFicha->empresa_id
+            );
+            if ($documentosParaOperacao) {
+                $this->clienteService->processarDocumentosParaOperacao(
+                    $cliente->id,
+                    $documentosParaOperacao,
+                    $operacaoParaFichaId
+                );
+            }
+
             return redirect()->route('clientes.show', $cliente->id)
                 ->with('success', 'Cliente atualizado com sucesso!');
         } catch (\Exception $e) {
@@ -1113,5 +1277,80 @@ class ClienteController extends Controller
         });
 
         return response()->json(['results' => $results]);
+    }
+
+    /**
+     * Operações vinculadas ao cliente que o usuário pode usar para editar a ficha (por operação).
+     *
+     * @return Collection<int, array{operacao_id: int, nome: string, empresa_nome: string|null}>
+     */
+    private function operacoesVinculadasParaEdicaoFicha(Cliente $cliente, \App\Models\User $user): Collection
+    {
+        $isSuperAdmin = $user->isSuperAdmin();
+        $operacoesIds = $user->getOperacoesIds();
+
+        $q = $cliente->operationClients()->with([
+            'operacao' => fn ($oq) => $oq->withoutGlobalScope(EmpresaScope::class)->with('empresa'),
+        ]);
+
+        if (! $isSuperAdmin) {
+            if (empty($operacoesIds)) {
+                return collect();
+            }
+            $q->whereIn('operacao_id', $operacoesIds);
+        }
+
+        return $q->get()->map(function (OperationClient $oc) {
+            $nome = $oc->operacao?->nome;
+            if ($nome === null || $nome === '') {
+                return null;
+            }
+
+            return [
+                'operacao_id' => (int) $oc->operacao_id,
+                'nome' => $nome,
+                'empresa_nome' => $oc->operacao?->empresa?->nome,
+            ];
+        })->filter()->values();
+    }
+
+    /**
+     * Mesma base que {@see CadastroClienteController::store} para ClienteDadosEmpresa
+     * quando o documento já existe e a operação é de outra “visão” de empresa.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function montarDadosEmpresaOverrideFromFormularioInterno(array $validated): array
+    {
+        $dadosEmpresa = [
+            'nome' => $validated['nome'],
+            'telefone' => $validated['telefone'] ?? null,
+            'email' => $validated['email'] ?? null,
+            'data_nascimento' => $validated['data_nascimento'] ?? null,
+            'endereco' => $validated['endereco'] ?? null,
+            'numero' => $validated['numero'] ?? null,
+            'cidade' => $validated['cidade'] ?? null,
+            'estado' => $validated['estado'] ?? null,
+            'cep' => $validated['cep'] ?? null,
+            'observacoes' => $validated['observacoes'] ?? null,
+        ];
+        if (($validated['tipo_pessoa'] ?? 'fisica') === 'juridica') {
+            $dadosEmpresa['responsavel_nome'] = $validated['responsavel_nome'] ?? null;
+            $dadosEmpresa['responsavel_cpf'] = ! empty($validated['responsavel_cpf'])
+                ? preg_replace('/[^0-9]/', '', $validated['responsavel_cpf'])
+                : null;
+            $dadosEmpresa['responsavel_rg'] = $validated['responsavel_rg'] ?? null;
+            $dadosEmpresa['responsavel_cnh'] = $validated['responsavel_cnh'] ?? null;
+            $dadosEmpresa['responsavel_cargo'] = $validated['responsavel_cargo'] ?? null;
+        } else {
+            $dadosEmpresa['responsavel_nome'] = null;
+            $dadosEmpresa['responsavel_cpf'] = null;
+            $dadosEmpresa['responsavel_rg'] = null;
+            $dadosEmpresa['responsavel_cnh'] = null;
+            $dadosEmpresa['responsavel_cargo'] = null;
+        }
+
+        return $dadosEmpresa;
     }
 }

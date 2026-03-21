@@ -626,8 +626,8 @@
                                         <div class="alert alert-info mb-0 text-center">
                                             <div class="small">
                                                 <strong>Opções:</strong><br>
-                                                <strong>Usar cadastro:</strong> Vincula o cliente existente à operação atual<br>
-                                                <strong>Cadastrar novo:</strong> Cria um novo registro mesmo com CPF duplicado
+                                                <strong>Usar cadastro:</strong> Abre a ficha do cliente no sistema.<br>
+                                                <strong>Continuar preenchimento:</strong> Ao enviar o formulário com a operação selecionada, o sistema <strong>vincula</strong> este CPF/CNPJ à operação e grava a ficha da operação (não cria outro cadastro — igual ao link de cadastro).
                                             </div>
                                         </div>
                                     </div>
@@ -635,7 +635,7 @@
                                 showCancelButton: true,
                                 showDenyButton: true,
                                 confirmButtonText: 'Usar cadastro',
-                                denyButtonText: 'Cadastrar novo',
+                                denyButtonText: 'Continuar preenchimento',
                                 cancelButtonText: 'Cancelar',
                                 confirmButtonColor: '#038edc',
                                 denyButtonColor: '#f1b44c',
@@ -645,7 +645,7 @@
                                     // Usar cadastro existente - redirecionar para vincular
                                     window.location.href = `{{ url('/clientes') }}/${cliente.id}`;
                                 } else if (result.isDenied) {
-                                    // Cadastrar novo - habilitar formulário
+                                    // Preencher dados e enviar: backend vincula à operação (mesmo fluxo do link)
                                     setEtapa2Ativa(true);
                                     nomeInput?.focus();
                                 }

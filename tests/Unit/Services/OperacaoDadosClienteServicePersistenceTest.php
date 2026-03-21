@@ -144,6 +144,38 @@ class OperacaoDadosClienteServicePersistenceTest extends TestCase
         $this->service->salvarOuAtualizar(999999, $this->operacao->id, ['nome' => 'X']);
     }
 
+    /** @test */
+    public function valores_formulario_para_operacao_usa_linha_quando_existe(): void
+    {
+        $cliente = $this->criarCliente(['nome' => 'Cadastro Mestre']);
+        $this->service->salvarOuAtualizar($cliente->id, $this->operacao->id, [
+            'nome' => 'Nome Na Ficha',
+            'email' => 'ficha@operacao.test',
+        ]);
+
+        $vals = $this->service->valoresFormularioParaOperacao($cliente, $this->operacao->id, $this->empresa->id);
+
+        $this->assertSame('Nome Na Ficha', $vals['nome']);
+        $this->assertSame('ficha@operacao.test', $vals['email']);
+    }
+
+    /** @test */
+    public function valores_formulario_para_operacao_formata_cpf_responsavel_na_ficha(): void
+    {
+        $cliente = $this->criarCliente(['nome' => 'Cliente Ficha CPF']);
+        OperacaoDadosCliente::query()->create([
+            'cliente_id' => $cliente->id,
+            'operacao_id' => $this->operacao->id,
+            'empresa_id' => $this->empresa->id,
+            'nome' => $cliente->nome,
+            'responsavel_cpf' => '52998224725',
+        ]);
+
+        $vals = $this->service->valoresFormularioParaOperacao($cliente, $this->operacao->id, $this->empresa->id);
+
+        $this->assertSame('529.982.247-25', $vals['responsavel_cpf']);
+    }
+
     /**
      * @param  array<string, mixed>  $extra
      */

@@ -201,7 +201,7 @@ class CadastroClienteController extends Controller
                 $this->operacaoDadosClienteService->salvarOuAtualizar(
                     $clienteExistente->id,
                     $operacao->id,
-                    $this->payloadOperacaoDadosParaServico($validated),
+                    $this->operacaoDadosClienteService->payloadFromFormularioValidado($validated),
                     $operacao->empresa_id
                 );
 
@@ -243,7 +243,7 @@ class CadastroClienteController extends Controller
             $this->operacaoDadosClienteService->salvarOuAtualizar(
                 $cliente->id,
                 $operacao->id,
-                $this->payloadOperacaoDadosParaServico($validated),
+                $this->operacaoDadosClienteService->payloadFromFormularioValidado($validated),
                 $operacao->empresa_id
             );
 
@@ -257,46 +257,6 @@ class CadastroClienteController extends Controller
             ]);
             return back()->with('error', 'Não foi possível concluir o cadastro. Tente novamente ou entre em contato com o consultor.')->withInput();
         }
-    }
-
-    /**
-     * Campos da ficha por operação (operacao_dados_clientes) a partir do formulário validado.
-     *
-     * @param  array<string, mixed>  $validated
-     * @return array<string, mixed>
-     */
-    private function payloadOperacaoDadosParaServico(array $validated): array
-    {
-        $payload = [
-            'nome' => $validated['nome'],
-            'telefone' => $validated['telefone'] ?? null,
-            'email' => $validated['email'] ?? null,
-            'data_nascimento' => $validated['data_nascimento'] ?? null,
-            'endereco' => $validated['endereco'] ?? null,
-            'numero' => $validated['numero'] ?? null,
-            'cidade' => $validated['cidade'] ?? null,
-            'estado' => $validated['estado'] ?? null,
-            'cep' => $validated['cep'] ?? null,
-            'observacoes' => $validated['observacoes'] ?? null,
-        ];
-
-        if (($validated['tipo_pessoa'] ?? 'fisica') === 'juridica') {
-            $payload['responsavel_nome'] = $validated['responsavel_nome'] ?? null;
-            $payload['responsavel_cpf'] = ! empty($validated['responsavel_cpf'])
-                ? preg_replace('/[^0-9]/', '', $validated['responsavel_cpf'])
-                : null;
-            $payload['responsavel_rg'] = $validated['responsavel_rg'] ?? null;
-            $payload['responsavel_cnh'] = $validated['responsavel_cnh'] ?? null;
-            $payload['responsavel_cargo'] = $validated['responsavel_cargo'] ?? null;
-        } else {
-            $payload['responsavel_nome'] = null;
-            $payload['responsavel_cpf'] = null;
-            $payload['responsavel_rg'] = null;
-            $payload['responsavel_cnh'] = null;
-            $payload['responsavel_cargo'] = null;
-        }
-
-        return $payload;
     }
 
     /**

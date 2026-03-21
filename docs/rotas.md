@@ -18,7 +18,7 @@ Todas as rotas abaixo (exceto as de autenticação) requerem autenticação via 
 | GET | `/clientes/create` | `clientes.create` | ClienteController@create | Formulário de cadastro |
 | POST | `/clientes` | `clientes.store` | ClienteController@store | Cadastrar cliente |
 | GET | `/clientes/{id}` | `clientes.show` | ClienteController@show | Detalhes do cliente |
-| GET | `/clientes/{id}/edit` | `clientes.edit` | ClienteController@edit | Formulário de edição |
+| GET | `/clientes/{id}/edit` | `clientes.edit` | ClienteController@edit | Edição da ficha por operação (`?operacao_id=` ou escolha automática / tela intermédia) |
 | PUT | `/clientes/{id}` | `clientes.update` | ClienteController@update | Atualizar cliente |
 | GET | `/clientes/buscar/cpf` | `clientes.buscar.cpf` | ClienteController@buscarPorCpf | Buscar por CPF (AJAX) |
 

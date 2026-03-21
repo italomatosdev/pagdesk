@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\Services;
 
+use App\Helpers\ValidacaoDocumento;
 use App\Models\Scopes\EmpresaScope;
 use App\Modules\Core\Models\Cliente;
 use App\Modules\Core\Models\Operacao;
@@ -14,6 +15,25 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
  */
 class OperacaoDadosClienteService
 {
+    /** @var list<string> Campos exibidos no formulário interno de edição de cliente. */
+    private const CHAVES_FORMULARIO_EDICAO = [
+        'nome',
+        'telefone',
+        'email',
+        'data_nascimento',
+        'responsavel_nome',
+        'responsavel_cpf',
+        'responsavel_rg',
+        'responsavel_cnh',
+        'responsavel_cargo',
+        'endereco',
+        'numero',
+        'cidade',
+        'estado',
+        'cep',
+        'observacoes',
+    ];
+
     /** @var list<string> */
     private const CAMPOS_EDITAVEIS = [
         'empresa_id',
@@ -166,6 +186,106 @@ class OperacaoDadosClienteService
             'cep' => $a['cep'] ?? null,
             'observacoes' => $a['observacoes'] ?? null,
         ];
+    }
+
+    /**
+     * Payload para salvarOuAtualizar a partir de dados validados de formulário (link público, create/edit interno).
+     * $validated deve conter tipo_pessoa, nome, contato, endereço e campos de responsável (PJ) quando aplicável.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    public function payloadFromFormularioValidado(array $validated): array
+    {
+        $payload = [
+            'nome' => $validated['nome'],
+            'telefone' => $validated['telefone'] ?? null,
+            'email' => $validated['email'] ?? null,
+            'data_nascimento' => $validated['data_nascimento'] ?? null,
+            'endereco' => $validated['endereco'] ?? null,
+            'numero' => $validated['numero'] ?? null,
+            'cidade' => $validated['cidade'] ?? null,
+            'estado' => $validated['estado'] ?? null,
+            'cep' => $validated['cep'] ?? null,
+            'observacoes' => $validated['observacoes'] ?? null,
+        ];
+
+        if (($validated['tipo_pessoa'] ?? 'fisica') === 'juridica') {
+            $payload['responsavel_nome'] = $validated['responsavel_nome'] ?? null;
+            $payload['responsavel_cpf'] = ! empty($validated['responsavel_cpf'])
+                ? preg_replace('/[^0-9]/', '', $validated['responsavel_cpf'])
+                : null;
+            $payload['responsavel_rg'] = $validated['responsavel_rg'] ?? null;
+            $payload['responsavel_cnh'] = $validated['responsavel_cnh'] ?? null;
+            $payload['responsavel_cargo'] = $validated['responsavel_cargo'] ?? null;
+        } else {
+            $payload['responsavel_nome'] = null;
+            $payload['responsavel_cpf'] = null;
+            $payload['responsavel_rg'] = null;
+            $payload['responsavel_cnh'] = null;
+            $payload['responsavel_cargo'] = null;
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Valores para pré-preencher o formulário de edição quando há contexto de operação (?operacao_id=).
+     * Se existir linha em `operacao_dados_clientes`, usa esses dados; senão, fallback alinhado ao backfill ({@see payloadBrutoFromCliente}).
+     *
+     * @return array<string, mixed>
+     */
+    public function valoresFormularioParaOperacao(Cliente $cliente, int $operacaoId, ?int $empresaIdOperacao): array
+    {
+        $ficha = $this->obterParaOperacao((int) $cliente->id, $operacaoId);
+
+        if ($ficha) {
+            $raw = $ficha->getAttributes();
+            $out = [];
+            foreach (self::CHAVES_FORMULARIO_EDICAO as $key) {
+                $out[$key] = array_key_exists($key, $raw) ? $raw[$key] : null;
+            }
+        } else {
+            $payload = $this->payloadBrutoFromCliente($cliente, $empresaIdOperacao);
+            unset($payload['empresa_id']);
+            $out = [];
+            foreach (self::CHAVES_FORMULARIO_EDICAO as $key) {
+                $out[$key] = $payload[$key] ?? null;
+            }
+        }
+
+        $out['data_nascimento'] = $this->normalizarDataParaInputDate($out['data_nascimento'] ?? null);
+        $out['responsavel_cpf'] = $this->formatarCpfResponsavelParaExibicao($out['responsavel_cpf'] ?? null);
+
+        return $out;
+    }
+
+    private function normalizarDataParaInputDate(mixed $valor): ?string
+    {
+        if ($valor === null || $valor === '') {
+            return null;
+        }
+        if ($valor instanceof \DateTimeInterface) {
+            return $valor->format('Y-m-d');
+        }
+        try {
+            return \Carbon\Carbon::parse($valor)->format('Y-m-d');
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function formatarCpfResponsavelParaExibicao(?string $cpf): ?string
+    {
+        if ($cpf === null || $cpf === '') {
+            return null;
+        }
+        $digits = preg_replace('/\D/', '', $cpf);
+        if ($digits === '') {
+            return null;
+        }
+
+        return ValidacaoDocumento::formatarCpf($digits);
     }
 
     /**

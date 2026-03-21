@@ -181,6 +181,7 @@
                                             <th>Empresa</th>
                                         @endif
                                         <th>Operação</th>
+                                        <th class="text-nowrap">Ficha</th>
                                         <th>Limite de Crédito</th>
                                         <th>Status</th>
                                         <th>Consultor</th>
@@ -199,6 +200,15 @@
                                                 </td>
                                             @endif
                                             <td>{{ $vinculo->operacao->nome ?? '-' }}</td>
+                                            <td>
+                                                @if($vinculo->operacao_id)
+                                                    <a href="{{ route('clientes.edit', ['id' => $cliente->id, 'operacao_id' => $vinculo->operacao_id]) }}" class="btn btn-sm btn-outline-primary">
+                                                        <i class="bx bx-edit-alt"></i> Editar ficha
+                                                    </a>
+                                                @else
+                                                    —
+                                                @endif
+                                            </td>
                                             <td>R$ {{ number_format($vinculo->limite_credito, 2, ',', '.') }}</td>
                                             <td>
                                                 <span class="badge bg-{{ $vinculo->status === 'ativo' ? 'success' : 'danger' }}">
@@ -209,7 +219,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="{{ ($isSuperAdmin ?? false) ? 5 : 4 }}" class="text-center">Nenhum vínculo com operações.</td>
+                                            <td colspan="{{ ($isSuperAdmin ?? false) ? 6 : 5 }}" class="text-center">Nenhum vínculo com operações.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>

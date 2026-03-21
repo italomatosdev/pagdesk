@@ -40,6 +40,14 @@
                             @csrf
                             @method('PUT')
 
+                            <input type="hidden" name="operacao_para_ficha_id" value="{{ $operacaoParaFichaId }}">
+                            <div class="alert alert-secondary mb-3">
+                                <i class="bx bx-layer me-1"></i>
+                                Você está editando a <strong>ficha da operação</strong>@if(!empty($operacaoParaFichaNome)): <strong>{{ $operacaoParaFichaNome }}</strong>@endif.
+                                Os valores exibidos vêm da ficha da operação (se existir) ou do cadastro base; ao salvar, a ficha desta operação é atualizada e novos documentos ficam ligados a ela.
+                                <a href="{{ route('clientes.edit', $cliente->id) }}" class="alert-link ms-1">Trocar operação</a>
+                            </div>
+
                             <div class="mb-3">
                                 <label class="form-label">{{ $cliente->isPessoaFisica() ? 'CPF' : 'CNPJ' }}</label>
                                 <input type="text" class="form-control" 
@@ -50,7 +58,7 @@
                             <div class="mb-3">
                                 <label class="form-label">Nome <span class="text-danger">*</span></label>
                                 <input type="text" name="nome" class="form-control" 
-                                       value="{{ old('nome', $cliente->nome) }}" required>
+                                       value="{{ old('nome', data_get($formDefaultsOperacao, 'nome', $cliente->nome)) }}" required>
                                 @error('nome')
                                     <div class="text-danger">{{ $message }}</div>
                                 @enderror
@@ -60,19 +68,19 @@
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Telefone</label>
                                     <input type="text" name="telefone" id="telefone" class="form-control" 
-                                           value="{{ old('telefone', $cliente->telefone) }}">
+                                           value="{{ old('telefone', data_get($formDefaultsOperacao, 'telefone', $cliente->telefone)) }}">
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Email</label>
                                     <input type="email" name="email" class="form-control" 
-                                           value="{{ old('email', $cliente->email) }}">
+                                           value="{{ old('email', data_get($formDefaultsOperacao, 'email', $cliente->email)) }}">
                                 </div>
                             </div>
 
                             <div class="mb-3" id="campo-data-nascimento" style="{{ $cliente->isPessoaJuridica() ? 'display: none;' : '' }}">
                                 <label class="form-label">Data de Nascimento</label>
                                 <input type="date" name="data_nascimento" id="data_nascimento" class="form-control" 
-                                       value="{{ old('data_nascimento', $cliente->data_nascimento?->format('Y-m-d')) }}">
+                                       value="{{ old('data_nascimento', data_get($formDefaultsOperacao, 'data_nascimento', $cliente->data_nascimento?->format('Y-m-d'))) }}">
                             </div>
 
                             <div id="campos-responsavel" style="{{ $cliente->isPessoaFisica() ? 'display: none;' : '' }}">
@@ -82,7 +90,7 @@
                                 <div class="mb-3">
                                     <label class="form-label">Nome do Responsável</label>
                                     <input type="text" name="responsavel_nome" id="responsavel_nome" class="form-control"
-                                           value="{{ old('responsavel_nome', $cliente->responsavel_nome) }}" placeholder="Nome completo do responsável">
+                                           value="{{ old('responsavel_nome', data_get($formDefaultsOperacao, 'responsavel_nome', $cliente->responsavel_nome)) }}" placeholder="Nome completo do responsável">
                                     @error('responsavel_nome')
                                         <div class="text-danger">{{ $message }}</div>
                                     @enderror
@@ -93,7 +101,7 @@
                                         <label class="form-label">CPF do Responsável</label>
                                         <input type="text" name="responsavel_cpf" id="responsavel_cpf" class="form-control"
                                                placeholder="000.000.000-00"
-                                               value="{{ old('responsavel_cpf', $cliente->responsavel_cpf_formatado) }}">
+                                               value="{{ old('responsavel_cpf', data_get($formDefaultsOperacao, 'responsavel_cpf', $cliente->responsavel_cpf_formatado)) }}">
                                         @error('responsavel_cpf')
                                             <div class="text-danger">{{ $message }}</div>
                                         @enderror
@@ -101,7 +109,7 @@
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">RG do Responsável</label>
                                         <input type="text" name="responsavel_rg" id="responsavel_rg" class="form-control"
-                                               value="{{ old('responsavel_rg', $cliente->responsavel_rg) }}">
+                                               value="{{ old('responsavel_rg', data_get($formDefaultsOperacao, 'responsavel_rg', $cliente->responsavel_rg)) }}">
                                         @error('responsavel_rg')
                                             <div class="text-danger">{{ $message }}</div>
                                         @enderror
@@ -112,7 +120,7 @@
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">CNH do Responsável</label>
                                         <input type="text" name="responsavel_cnh" id="responsavel_cnh" class="form-control"
-                                               value="{{ old('responsavel_cnh', $cliente->responsavel_cnh) }}">
+                                               value="{{ old('responsavel_cnh', data_get($formDefaultsOperacao, 'responsavel_cnh', $cliente->responsavel_cnh)) }}">
                                         @error('responsavel_cnh')
                                             <div class="text-danger">{{ $message }}</div>
                                         @enderror
@@ -121,7 +129,7 @@
                                         <label class="form-label">Cargo/Função</label>
                                         <input type="text" name="responsavel_cargo" id="responsavel_cargo" class="form-control"
                                                placeholder="Ex: Diretor, Sócio, Representante Legal"
-                                               value="{{ old('responsavel_cargo', $cliente->responsavel_cargo) }}">
+                                               value="{{ old('responsavel_cargo', data_get($formDefaultsOperacao, 'responsavel_cargo', $cliente->responsavel_cargo)) }}">
                                         @error('responsavel_cargo')
                                             <div class="text-danger">{{ $message }}</div>
                                         @enderror
@@ -133,13 +141,13 @@
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label">CEP</label>
                                     <input type="text" name="cep" id="cep" class="form-control" 
-                                           value="{{ old('cep', $cliente->cep) }}">
+                                           value="{{ old('cep', data_get($formDefaultsOperacao, 'cep', $cliente->cep)) }}">
                                     <small class="text-muted">Digite o CEP e saia do campo para buscar o endereço</small>
                                 </div>
                                 <div class="col-md-8 mb-3">
                                     <label class="form-label">Endereço</label>
                                     <input type="text" name="endereco" id="endereco" class="form-control" 
-                                           value="{{ old('endereco', $cliente->endereco) }}">
+                                           value="{{ old('endereco', data_get($formDefaultsOperacao, 'endereco', $cliente->endereco)) }}">
                                 </div>
                             </div>
 
@@ -147,24 +155,24 @@
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label">Número</label>
                                     <input type="text" name="numero" id="numero" class="form-control" 
-                                           value="{{ old('numero', $cliente->numero) }}">
+                                           value="{{ old('numero', data_get($formDefaultsOperacao, 'numero', $cliente->numero)) }}">
                                 </div>
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label">Cidade</label>
                                     <input type="text" name="cidade" id="cidade" class="form-control" 
-                                           value="{{ old('cidade', $cliente->cidade) }}">
+                                           value="{{ old('cidade', data_get($formDefaultsOperacao, 'cidade', $cliente->cidade)) }}">
                                 </div>
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label">Estado</label>
                                     <input type="text" name="estado" id="estado" class="form-control" 
                                            maxlength="2" 
-                                           value="{{ old('estado', $cliente->estado) }}">
+                                           value="{{ old('estado', data_get($formDefaultsOperacao, 'estado', $cliente->estado)) }}">
                                 </div>
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label">Observações</label>
-                                <textarea name="observacoes" class="form-control" rows="3">{{ old('observacoes', $cliente->observacoes) }}</textarea>
+                                <textarea name="observacoes" class="form-control" rows="3">{{ old('observacoes', data_get($formDefaultsOperacao, 'observacoes', $cliente->observacoes)) }}</textarea>
                             </div>
 
                             <hr class="my-4">
