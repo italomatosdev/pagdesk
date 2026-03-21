@@ -224,11 +224,11 @@
                                     <div>Total a receber de juros: R$ {{ number_format($stats['valor_total_juros_a_receber'] ?? 0, 2, ',', '.') }}</div>
                                 </div>
                                 <div class="mt-2 pt-2 border-top border-light small text-muted">
-                                    <div class="fw-semibold text-body mb-1">No mês ({{ $stats['receber_mes_label'] ?? '' }} — por vencimento)</div>
-                                    <div>Total no mês: R$ {{ number_format($stats['receber_mes_total'] ?? 0, 2, ',', '.') }}</div>
+                                    <div class="fw-semibold text-body mb-1">No período ({{ $stats['receber_mes_label'] ?? '' }} — vencimento)</div>
+                                    <div>Total no período: R$ {{ number_format($stats['receber_mes_total'] ?? 0, 2, ',', '.') }}</div>
                                     <div>Contrato sem juros: R$ {{ number_format($stats['receber_mes_sem_juros_contrato'] ?? 0, 2, ',', '.') }}</div>
                                     <div>Principal (contratos com juros): R$ {{ number_format($stats['receber_mes_principal_com_juros'] ?? 0, 2, ',', '.') }}</div>
-                                    <div>Juros no mês: R$ {{ number_format($stats['receber_mes_juros'] ?? 0, 2, ',', '.') }}</div>
+                                    <div>Juros no período: R$ {{ number_format($stats['receber_mes_juros'] ?? 0, 2, ',', '.') }}</div>
                                 </div>
                             </div>
                             <div class="">
