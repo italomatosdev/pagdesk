@@ -92,10 +92,12 @@ O **Radar** é descrito no código como a consulta cadastral interna do sistema 
 
 ### Fase C — API e Radar
 
-| # | Item | Ação sugerida |
-|---|------|----------------|
-| C1 | JSON de `buscarPorCpf` | Decidir: manter telefone “global” do cliente **ou** retornar **mapa por operação** (`operacao_id` → telefone/email da ficha) para o front escolher. |
-| C2 | Radar | Se C1 evoluir, opcionalmente exibir contatos **por operação** na UI; senão, **documentar** que o Radar mostra cadastro agregado + risco global, não ficha única. |
+| # | Item | Ação sugerida | Estado |
+|---|------|----------------|--------|
+| C1 | JSON de `buscarPorCpf` | Decidir: manter telefone “global” do cliente **ou** retornar **mapa por operação** (`operacao_id` → telefone/email da ficha) para o front escolher. | **Pendente** — hoje o payload usa `$cliente->telefone` / `email` (accessors + legado), coerente com visão **única** do Radar. |
+| C2 | Radar | Se C1 evoluir, opcionalmente exibir contatos **por operação** na UI; senão, **documentar** que o Radar mostra cadastro agregado + risco global, não ficha única. | **Documentado** — ver §1 deste doc; UI não lista WA por operação. |
+
+**Comportamento atual (sem mudança de contrato):** `ClienteController::buscarPorCpf` devolve `cliente.telefone` e `cliente.email` após accessors; o front do Radar / modal de empréstimo usa isso como **perfil único**. Evolução futura: incluir opcionalmente `fichas_por_operacao` (array) sem remover os campos atuais, para não quebrar clientes da API.
 
 ### Fase D — Modelo e legado
 
@@ -118,6 +120,7 @@ O **Radar** é descrito no código como a consulta cadastral interna do sistema 
 
 - Plano macro: `docs/PLANO_OPERACAO_DADOS_CLIENTE.md`
 - Serviço: `App\Modules\Core\Services\OperacaoDadosClienteService`
+- Helpers: `App\Support\WhatsappLink`, `App\Support\FichaContatoLookup`
 - Radar: `App\Modules\Core\Controllers\RadarController.php` → `ClienteController::buscarPorCpf`
 - Model `Cliente` (accessors): `getNomeAttribute`, `getTelefoneAttribute`, `getDadosEmpresaAtual()`, etc.
 
