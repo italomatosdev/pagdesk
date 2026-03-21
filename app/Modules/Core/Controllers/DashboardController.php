@@ -60,8 +60,8 @@ class DashboardController extends Controller
     }
 
     /**
-     * Parcelas não pagas com vencimento no mês civil de referência (timezone do app).
-     * Critério alinhado às queries validadas: empréstimo ativo; divisão juros / sem juros (taxa_juros) / principal com juros.
+     * Parcelas não pagas com data_vencimento dentro do período exato [dateFrom, dateTo] (datas inclusivas, coluna DATE).
+     * Critério: empréstimo ativo; divisão juros / sem juros (taxa_juros) / principal com juros.
      *
      * @param  array<int>  $operacoesIds
      * @return array{
@@ -72,15 +72,15 @@ class DashboardController extends Controller
      *     receber_mes_label: string,
      * }
      */
-    protected function estatisticasReceberPorMesVencimento(
+    protected function estatisticasReceberPorPeriodoVencimento(
         ?int $operacaoId,
         array $operacoesIds,
-        ?Carbon $mesReferencia = null,
+        Carbon $dateFrom,
+        Carbon $dateTo,
         ?int $consultorId = null,
     ): array {
-        $mes = ($mesReferencia ?? Carbon::now())->copy()->startOfMonth();
-        $mesIni = $mes->toDateString();
-        $mesFim = $mes->copy()->addMonth()->toDateString();
+        $perIni = $dateFrom->copy()->startOfDay()->toDateString();
+        $perFim = $dateTo->copy()->startOfDay()->toDateString();
 
         $q = Parcela::query()
             ->join('emprestimos as e', function ($join) {
@@ -90,8 +90,7 @@ class DashboardController extends Controller
             ->where('parcelas.status', '!=', 'paga')
             ->whereNull('parcelas.deleted_at')
             ->where('e.status', 'ativo')
-            ->where('parcelas.data_vencimento', '>=', $mesIni)
-            ->where('parcelas.data_vencimento', '<', $mesFim);
+            ->whereBetween('parcelas.data_vencimento', [$perIni, $perFim]);
 
         if ($consultorId !== null) {
             $q->where('e.consultor_id', $consultorId);
@@ -112,7 +111,14 @@ class DashboardController extends Controller
             'COALESCE(SUM(CASE WHEN COALESCE(e.taxa_juros, 0) <> 0 AND parcelas.valor > 0 THEN (COALESCE(parcelas.valor_amortizacao, parcelas.valor) / parcelas.valor) * (parcelas.valor - COALESCE(parcelas.valor_pago, 0)) ELSE 0 END), 0) as receber_mes_principal_com_juros'
         )->first();
 
-        $label = $mes->copy()->locale(app()->getLocale())->translatedFormat('F Y');
+        $locale = app()->getLocale();
+        if ($perIni === $perFim) {
+            $label = $dateFrom->copy()->locale($locale)->translatedFormat('d MMM Y');
+        } else {
+            $iniFmt = $dateFrom->copy()->locale($locale)->translatedFormat('d MMM Y');
+            $fimFmt = $dateTo->copy()->locale($locale)->translatedFormat('d MMM Y');
+            $label = $iniFmt.' — '.$fimFmt;
+        }
 
         return [
             'receber_mes_total' => (float) ($row->receber_mes_total ?? 0),
@@ -250,7 +256,7 @@ class DashboardController extends Controller
 
         $ops = $operacoesIds;
         sort($ops);
-        $cacheKey = 'dashboard:admin:op:'.($operacaoId ?? 'all').':ops:'.md5(implode(',', $ops)).':d:'.$dateFrom->format('Y-m-d').':'.$dateTo->format('Y-m-d').':vm:'.Carbon::now()->format('Y-m');
+        $cacheKey = 'dashboard:admin:op:'.($operacaoId ?? 'all').':ops:'.md5(implode(',', $ops)).':d:'.$dateFrom->format('Y-m-d').':'.$dateTo->format('Y-m-d');
         $stats = Cache::remember($cacheKey, self::DASHBOARD_CACHE_TTL, function () use (
             $aplicarFiltroOperacaoEmprestimo,
             $aplicarFiltroOperacaoParcela,
@@ -314,7 +320,7 @@ class DashboardController extends Controller
             $valorTotalJurosAReceber = (float) (Parcela::where('status', '!=', 'paga')
                 ->when(true, $aplicarFiltroOperacaoParcela)
                 ->selectRaw('COALESCE(SUM(CASE WHEN valor > 0 THEN (COALESCE(valor_juros, 0) / valor) * (valor - COALESCE(valor_pago, 0)) ELSE 0 END), 0) as tot')->value('tot') ?? 0);
-            $receberMesVencimento = $this->estatisticasReceberPorMesVencimento($operacaoId, $operacoesIds);
+            $receberMesVencimento = $this->estatisticasReceberPorPeriodoVencimento($operacaoId, $operacoesIds, $dateFrom, $dateTo);
             $valorLiberadoHoje = LiberacaoEmprestimo::where('status', 'liberado')
                 ->whereBetween('liberado_em', [$dateFrom, $dateTo])
                 ->when(true, $aplicarFiltroOperacaoLiberacao)
@@ -834,7 +840,7 @@ class DashboardController extends Controller
 
         $opsGestor = $operacoesIds;
         sort($opsGestor);
-        $cacheKeyGestor = 'dashboard:gestor:op:'.($operacaoId ?? 'all').':ops:'.md5(implode(',', $opsGestor)).':d:'.$dateFrom->format('Y-m-d').':'.$dateTo->format('Y-m-d').':vm:'.Carbon::now()->format('Y-m');
+        $cacheKeyGestor = 'dashboard:gestor:op:'.($operacaoId ?? 'all').':ops:'.md5(implode(',', $opsGestor)).':d:'.$dateFrom->format('Y-m-d').':'.$dateTo->format('Y-m-d');
         $stats = Cache::remember($cacheKeyGestor, self::DASHBOARD_CACHE_TTL, function () use (
             $aplicarFiltroOperacaoEmprestimo,
             $aplicarFiltroOperacaoParcela,
@@ -871,7 +877,7 @@ class DashboardController extends Controller
             $valorTotalJurosAReceber = (float) (Parcela::where('status', '!=', 'paga')
                 ->when(true, $aplicarFiltroOperacaoParcela)
                 ->selectRaw('COALESCE(SUM(CASE WHEN valor > 0 THEN (COALESCE(valor_juros, 0) / valor) * (valor - COALESCE(valor_pago, 0)) ELSE 0 END), 0) as tot')->value('tot') ?? 0);
-            $receberMesVencimento = $this->estatisticasReceberPorMesVencimento($operacaoId, $operacoesIds);
+            $receberMesVencimento = $this->estatisticasReceberPorPeriodoVencimento($operacaoId, $operacoesIds, $dateFrom, $dateTo);
             $valorLiberadoHoje = LiberacaoEmprestimo::where('status', 'liberado')
                 ->whereBetween('liberado_em', [$dateFrom, $dateTo])
                 ->when(true, $aplicarFiltroOperacaoLiberacao)
@@ -1324,7 +1330,7 @@ class DashboardController extends Controller
             ->where('status', '!=', 'paga')
             ->when(true, $aplicarFiltroOperacaoParcela)
             ->selectRaw('COALESCE(SUM(CASE WHEN valor > 0 THEN (COALESCE(valor_juros, 0) / valor) * (valor - COALESCE(valor_pago, 0)) ELSE 0 END), 0) as tot')->value('tot') ?? 0);
-        $receberMesVencimento = $this->estatisticasReceberPorMesVencimento($operacaoId, $operacoesIds, null, $user->id);
+        $receberMesVencimento = $this->estatisticasReceberPorPeriodoVencimento($operacaoId, $operacoesIds, $dateFrom, $dateTo, $user->id);
 
         // Saldo em caixa (entradas - saídas)
         $entradas = CashLedgerEntry::where('consultor_id', $user->id)
