@@ -77,7 +77,7 @@
                                         <tr>
                                             <td>{{ $s->id }}</td>
                                             <td>@if($emp)<a href="{{ route('emprestimos.show', $emp->id) }}">#{{ $emp->id }}</a>@else-@endif</td>
-                                            <td>{{ $emp?->cliente?->nome ?? '-' }}</td>
+                                            <td>{{ \App\Support\ClienteNomeExibicao::fromParcelaMap($s->parcela, $fichasContatoPorClienteOperacao ?? collect()) }}</td>
                                             <td>{{ $emp?->operacao?->nome ?? '-' }}</td>
                                             <td>#{{ $parcela->numero ?? $parcela->id }}</td>
                                             <td>R$ {{ number_format($principalPagamento, 2, ',', '.') }}</td>

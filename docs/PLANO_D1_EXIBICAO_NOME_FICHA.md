@@ -22,13 +22,17 @@
 | Cobranças / parcelas atrasadas | `cobrancas/index`, `parcelas/atrasadas` (`fromParcelaMap` + mapa existente) |
 | Relatório | `relatorios/parcelas-atrasadas` — aba **tabela** com `fromParcelaMap` + `fichasPorClienteOperacao`; aba rota já usava ficha no nome |
 
-### Onda 2 — Pendente (próximas PRs)
+### Onda 2 — **Feito** (listagens, dashboards, relatórios, vendas)
 
-- `liberacoes/index`, `liberacoes/consultor`, listagens de solicitações (`liberacoes/*`)
-- `aprovacoes/index`, `emprestimos/retroativo-pendentes`, `garantias/*`, `cheques/index`
-- `dashboard/*` (admin, gestor, consultor), `vendas/*`, `caixa/*`, `prestacoes/*`
-- Relatórios `juros-quitacoes`, `quitacoes` (carregar mapa ou query por linha)
-- `emprestimos/create` (resumo com empréstimo origem)
+| Área | Arquivos |
+|------|----------|
+| Liberações / aprovações / retroativo | `LiberacaoController` (várias listagens + mapa), `AprovacaoController`, `EmprestimoController@indexPendentesRetroativo`, views em `liberacoes/*`, `aprovacoes/index`, `retroativo-pendentes` |
+| Garantias / cheques (lista) | `GarantiaController@index` + `@show`, `ChequeController@index` + `@hoje`, `garantias/*`, `cheques/index` |
+| Dashboard | `DashboardController` (admin, gestor, consultor): mapa unificado `fichasContatoPorClienteOperacao`, blades `dashboard/*` |
+| Vendas | `VendaController@index` + `@show`, `vendas/index`, `vendas/show` (`pairsFromVendas` em `FichaContatoLookup`) |
+| Relatórios quitação | `RelatorioController` (`quitacoes`, `jurosQuitacoes`), `relatorios/quitacoes`, `relatorios/juros-quitacoes` |
+
+**Ainda pendente (onda 3 ou escopo separado):** `caixa/*`, `prestacoes/*`, `emprestimos/create` (resumo com empréstimo origem), outras telas fora da lista acima.
 
 ### Critério de pronto por tela
 

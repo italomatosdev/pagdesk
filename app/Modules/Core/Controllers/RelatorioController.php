@@ -9,6 +9,7 @@ use App\Modules\Core\Models\OperacaoDadosCliente;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\Parcela;
+use App\Support\FichaContatoLookup;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Carbon\Carbon;
@@ -431,6 +432,10 @@ class RelatorioController extends Controller
             $e->data_quitacao = $e->parcelas->max('data_pagamento');
         });
 
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromEmprestimos($emprestimos)
+        );
+
         return view('relatorios.quitacoes', compact(
             'dateFrom',
             'dateTo',
@@ -440,7 +445,8 @@ class RelatorioController extends Controller
             'consultoresIds',
             'frequencia',
             'tipoQuitacao',
-            'emprestimos'
+            'emprestimos',
+            'fichasContatoPorClienteOperacao'
         ));
     }
 
@@ -757,6 +763,10 @@ class RelatorioController extends Controller
         $totais['juros_atraso'] = round($totais['juros_atraso'], 2);
         $totais['total_juros'] = round($totais['total_juros'], 2);
 
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromEmprestimos($emprestimos)
+        );
+
         return view('relatorios.juros-quitacoes', compact(
             'dateFrom',
             'dateTo',
@@ -770,7 +780,8 @@ class RelatorioController extends Controller
             'emprestimos',
             'totais',
             'tipoLabels',
-            'freqLabels'
+            'freqLabels',
+            'fichasContatoPorClienteOperacao'
         ));
     }
 }

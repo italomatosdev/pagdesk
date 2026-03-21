@@ -140,7 +140,7 @@
                                     <tr>
                                         <td>
                                             @if($e->cliente)
-                                                <a href="{{ \App\Support\ClienteUrl::show($e->cliente_id, $e->operacao_id) }}">{{ $e->cliente->nome }}</a>
+                                                <a href="{{ \App\Support\ClienteUrl::show($e->cliente_id, $e->operacao_id) }}">{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($e, $fichasContatoPorClienteOperacao ?? collect()) }}</a>
                                             @else
                                                 -
                                             @endif

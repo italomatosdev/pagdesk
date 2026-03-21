@@ -78,7 +78,7 @@
                                         <tr>
                                             <td>{{ $p->id }}</td>
                                             <td><a href="{{ route('emprestimos.show', $emp->id) }}">#{{ $emp->id }}</a></td>
-                                            <td>{{ $emp->cliente->nome ?? '-' }}</td>
+                                            <td>{{ \App\Support\ClienteNomeExibicao::fromParcelaMap($p->parcela, $fichasContatoPorClienteOperacao ?? collect()) }}</td>
                                             <td>{{ $emp->operacao->nome ?? '-' }}</td>
                                             <td>#{{ $parcela->numero ?? $p->parcela_id }}</td>
                                             <td>R$ {{ number_format($principalParcela, 2, ',', '.') }}</td>

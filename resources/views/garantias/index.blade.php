@@ -202,7 +202,7 @@
                                         </td>
                                         <td>
                                             <a href="{{ \App\Support\ClienteUrl::show($garantia->emprestimo->cliente_id, $garantia->emprestimo->operacao_id) }}">
-                                                {{ $garantia->emprestimo->cliente->nome }}
+                                                {{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($garantia->emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}
                                             </a>
                                         </td>
                                         <td>

@@ -62,7 +62,7 @@
                                         <tr>
                                             <td>#{{ $emprestimo->id }}</td>
                                             <td>
-                                                <a href="{{ \App\Support\ClienteUrl::show($emprestimo->cliente_id, $emprestimo->operacao_id) }}">{{ $emprestimo->cliente->nome }}</a>
+                                                <a href="{{ \App\Support\ClienteUrl::show($emprestimo->cliente_id, $emprestimo->operacao_id) }}">{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}</a>
                                             </td>
                                             <td>{{ $emprestimo->operacao->nome }}</td>
                                             <td>{{ ($tipoLabels ?? [
@@ -82,7 +82,7 @@
                                                     <form action="{{ route('aprovacoes.aprovar', $emprestimo->id) }}" 
                                                           method="POST" class="d-inline form-aprovar-emprestimo"
                                                           data-emprestimo-id="{{ $emprestimo->id }}"
-                                                          data-cliente="{{ $emprestimo->cliente->nome }}"
+                                                          data-cliente="{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}"
                                                           data-valor="{{ number_format($emprestimo->valor_total, 2, ',', '.') }}">
                                                         @csrf
                                                         <button type="submit" class="btn btn-sm btn-success">
@@ -108,7 +108,7 @@
                                                                   method="POST" 
                                                                   class="form-rejeitar-emprestimo"
                                                                   data-emprestimo-id="{{ $emprestimo->id }}"
-                                                                  data-cliente="{{ $emprestimo->cliente->nome }}">
+                                                                  data-cliente="{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}">
                                                                 @csrf
                                                                 <div class="modal-header">
                                                                     <h5 class="modal-title">Rejeitar Empréstimo #{{ $emprestimo->id }}</h5>

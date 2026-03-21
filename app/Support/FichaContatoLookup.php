@@ -59,4 +59,14 @@ final class FichaContatoLookup
             ->filter(fn ($e) => (int) $e->cliente_id > 0 && (int) $e->operacao_id > 0)
             ->map(fn ($e) => [(int) $e->cliente_id, (int) $e->operacao_id]);
     }
+
+    /**
+     * @return Collection<int, array{0: int, 1: int}>
+     */
+    public static function pairsFromVendas(iterable $vendas): Collection
+    {
+        return collect($vendas)
+            ->filter(fn ($v) => (int) $v->cliente_id > 0 && (int) $v->operacao_id > 0)
+            ->map(fn ($v) => [(int) $v->cliente_id, (int) $v->operacao_id]);
+    }
 }

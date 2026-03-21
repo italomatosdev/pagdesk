@@ -75,7 +75,7 @@
                                                 </a>
                                             </td>
                                             <td>
-                                                <a href="{{ \App\Support\ClienteUrl::show($liberacao->emprestimo->cliente_id, $liberacao->emprestimo->operacao_id) }}">{{ $liberacao->emprestimo->cliente->nome }}</a>
+                                                <a href="{{ \App\Support\ClienteUrl::show($liberacao->emprestimo->cliente_id, $liberacao->emprestimo->operacao_id) }}">{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($liberacao->emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}</a>
                                             </td>
                                             <td>{{ $liberacao->emprestimo->operacao->nome }}</td>
                                             <td class="h6 text-primary">
@@ -168,7 +168,7 @@
                                                   method="POST" enctype="multipart/form-data"
                                                   class="form-confirmar-pagamento-cliente"
                                                   data-valor="{{ number_format($liberacao->valor_liberado, 2, ',', '.') }}"
-                                                  data-cliente="{{ $liberacao->emprestimo->cliente->nome }}"
+                                                  data-cliente="{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($liberacao->emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}"
                                                   data-emprestimo-id="{{ $liberacao->emprestimo_id }}">
                                                 @csrf
                                                 <div class="modal-header">
@@ -178,7 +178,7 @@
                                                 <div class="modal-body">
                                                     <div class="alert alert-info">
                                                         <strong>Valor:</strong> R$ {{ number_format($liberacao->valor_liberado, 2, ',', '.') }}<br>
-                                                        <strong>Cliente:</strong> {{ $liberacao->emprestimo->cliente->nome }}<br>
+                                                        <strong>Cliente:</strong> {{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($liberacao->emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}<br>
                                                         <strong>Empréstimo:</strong> #{{ $liberacao->emprestimo_id }}
                                                     </div>
                                                     <div class="mb-3">

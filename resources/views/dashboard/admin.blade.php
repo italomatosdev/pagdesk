@@ -841,7 +841,7 @@
                                     @forelse($emprestimosRecentes as $emprestimo)
                                         <tr>
                                             <td>#{{ $emprestimo->id }}</td>
-                                            <td>{{ $emprestimo->cliente->nome }}</td>
+                                            <td>{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}</td>
                                             <td>R$ {{ number_format($emprestimo->valor_total, 2, ',', '.') }}</td>
                                             <td>
                                                 @php
@@ -1229,7 +1229,7 @@
                                     @forelse($emprestimosAprovados as $emprestimo)
                                         <tr>
                                             <td>#{{ $emprestimo->id }}</td>
-                                            <td>{{ $emprestimo->cliente->nome }}</td>
+                                            <td>{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}</td>
                                             <td>{{ $emprestimo->consultor->name ?? '-' }}</td>
                                             <td>R$ {{ number_format($emprestimo->valor_total, 2, ',', '.') }}</td>
                                             <td>{{ $emprestimo->aprovado_em ? $emprestimo->aprovado_em->format('d/m/Y H:i') : '-' }}</td>
@@ -1276,7 +1276,7 @@
                                 <tbody>
                                     @forelse($parcelasVencidas as $parcela)
                                         <tr class="table-danger">
-                                            <td>{{ $parcela->emprestimo->cliente->nome }}</td>
+                                            <td>{{ \App\Support\ClienteNomeExibicao::fromParcelaMap($parcela, $fichasContatoPorClienteOperacao ?? collect()) }}</td>
                                             <td>R$ {{ number_format($parcela->valor - $parcela->valor_pago, 2, ',', '.') }}</td>
                                             <td>{{ $parcela->data_vencimento->format('d/m/Y') }}</td>
                                             <td>
@@ -1292,7 +1292,7 @@
                                                         <i class="bx bx-show"></i>
                                                     </a>
                                                     @php
-                                                        $fichaWaAdm = ($fichasContatoParcelasVencidas ?? collect())->get($parcela->emprestimo->cliente_id.'_'.$parcela->emprestimo->operacao_id);
+                                                        $fichaWaAdm = ($fichasContatoPorClienteOperacao ?? collect())->get($parcela->emprestimo->cliente_id.'_'.$parcela->emprestimo->operacao_id);
                                                     @endphp
                                                     @if(\App\Support\WhatsappLink::temWhatsappPreferindoFicha($fichaWaAdm, $parcela->emprestimo->cliente))
                                                         <a href="{{ \App\Support\WhatsappLink::urlPreferindoFicha($fichaWaAdm, $parcela->emprestimo->cliente) }}"

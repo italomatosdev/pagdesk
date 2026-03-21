@@ -7,6 +7,8 @@ use App\Modules\Core\Models\Operacao;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\EmprestimoGarantia;
 use App\Modules\Loans\Models\EmprestimoGarantiaAnexo;
+use App\Support\ClienteNomeExibicao;
+use App\Support\FichaContatoLookup;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
@@ -98,6 +100,10 @@ class GarantiaController extends Controller
 
         $garantias = $query->orderBy('created_at', 'desc')->paginate(20)->withQueryString();
 
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromEmprestimos($garantias->map(fn ($g) => $g->emprestimo)->filter())
+        );
+
         $operacoes = !empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
             : collect([]);
@@ -114,7 +120,7 @@ class GarantiaController extends Controller
             'outros' => EmprestimoGarantia::where('categoria', 'outros')->whereHas('emprestimo', $statsQuery)->count(),
         ];
 
-        return view('garantias.index', compact('garantias', 'operacoes', 'stats'));
+        return view('garantias.index', compact('garantias', 'operacoes', 'stats', 'fichasContatoPorClienteOperacao'));
     }
 
     /**
@@ -137,7 +143,9 @@ class GarantiaController extends Controller
             }
         }
 
-        return view('garantias.show', compact('garantia'));
+        $nomeClienteExibicao = ClienteNomeExibicao::forEmprestimo($garantia->emprestimo);
+
+        return view('garantias.show', compact('garantia', 'nomeClienteExibicao'));
     }
 
     /**

@@ -993,6 +993,10 @@ class EmprestimoController extends Controller
         }
         $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromEmprestimos($solicitacoes->map(fn ($s) => $s->emprestimo)->filter())
+        );
+
         if ($user->isSuperAdmin()) {
             $operacoes = \App\Modules\Core\Models\Operacao::where('ativo', true)->orderBy('nome')->get();
         } else {
@@ -1002,7 +1006,7 @@ class EmprestimoController extends Controller
                 : collect([]);
         }
 
-        return view('emprestimos.retroativo-pendentes', compact('solicitacoes', 'operacoes', 'operacaoId'));
+        return view('emprestimos.retroativo-pendentes', compact('solicitacoes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }
 
     /**

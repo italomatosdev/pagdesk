@@ -629,8 +629,14 @@ class DashboardController extends Controller
             ->limit(10)
             ->get();
 
-        $fichasContatoParcelasVencidas = FichaContatoLookup::mapByClienteOperacaoPairs(
-            FichaContatoLookup::pairsFromParcelas($parcelasVencidas)
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromEmprestimos($emprestimosRecentes)
+                ->concat(FichaContatoLookup::pairsFromEmprestimos($aprovacoesPendentes))
+                ->concat(FichaContatoLookup::pairsFromEmprestimos($emprestimosAprovados))
+                ->concat(FichaContatoLookup::pairsFromEmprestimos(
+                    $liberacoesPendentes->map(fn ($l) => $l->emprestimo)->filter()
+                ))
+                ->concat(FichaContatoLookup::pairsFromParcelas($parcelasVencidas))
         );
 
         return view('dashboard.admin', compact(
@@ -647,7 +653,7 @@ class DashboardController extends Controller
             'resumoPorOperacao',
             'emprestimosAprovados',
             'parcelasVencidas',
-            'fichasContatoParcelasVencidas',
+            'fichasContatoPorClienteOperacao',
             'operacoes',
             'operacaoId',
             'dateFrom',
@@ -951,8 +957,12 @@ class DashboardController extends Controller
             ->limit(10)
             ->get();
 
-        $fichasContatoParcelasVencidas = FichaContatoLookup::mapByClienteOperacaoPairs(
-            FichaContatoLookup::pairsFromParcelas($parcelasVencidas)
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromEmprestimos(
+                $liberacoesPendentes->map(fn ($l) => $l->emprestimo)->filter()
+            )
+                ->concat(FichaContatoLookup::pairsFromEmprestimos($emprestimosAprovados))
+                ->concat(FichaContatoLookup::pairsFromParcelas($parcelasVencidas))
         );
 
         // Ranking de consultores (por valor emprestado)
@@ -1092,7 +1102,7 @@ class DashboardController extends Controller
             'liberacoesPendentes',
             'emprestimosAprovados',
             'parcelasVencidas',
-            'fichasContatoParcelasVencidas',
+            'fichasContatoPorClienteOperacao',
             'rankingConsultores',
             'operacoes',
             'operacaoId',
@@ -1363,6 +1373,10 @@ class DashboardController extends Controller
         $parcelasParaFichaContato = $cobrancasHoje->concat($parcelasAtrasadas)->concat($proximasCobrancasLista);
         $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
             FichaContatoLookup::pairsFromParcelas($parcelasParaFichaContato)
+                ->concat(FichaContatoLookup::pairsFromEmprestimos($meusEmprestimos))
+                ->concat(FichaContatoLookup::pairsFromEmprestimos(
+                    $minhasLiberacoes->map(fn ($l) => $l->emprestimo)->filter()
+                ))
         );
 
         return view('dashboard.consultor', compact(
