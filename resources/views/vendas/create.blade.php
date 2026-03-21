@@ -311,6 +311,19 @@
             var clienteSelectEl = document.getElementById('cliente-select');
             var clienteJaSelecionado = clienteSelectEl && clienteSelectEl.options.length > 0 && clienteSelectEl.options[0].value;
             var msgOperacaoObrigatoriaVenda = 'Selecione a operação antes de buscar o cliente.';
+            function avisoSelect2ClienteVenda(texto) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Atenção',
+                        text: texto,
+                        confirmButtonText: 'OK',
+                        confirmButtonColor: '#038edc'
+                    });
+                } else {
+                    alert(texto);
+                }
+            }
             function getOperacaoIdVenda() {
                 var opEl = document.getElementById('operacao-select');
                 return opEl && opEl.value ? String(opEl.value) : '';
@@ -335,7 +348,7 @@
                     },
                     transport: function(params, success, failure) {
                         if (!getOperacaoIdVenda()) {
-                            alert(msgOperacaoObrigatoriaVenda);
+                            avisoSelect2ClienteVenda(msgOperacaoObrigatoriaVenda);
                             failure('no_operacao');
                             return;
                         }
@@ -346,7 +359,7 @@
                     },
                     processResults: function(data, params) {
                         if (data.error) {
-                            alert(data.error);
+                            avisoSelect2ClienteVenda(data.error);
                             return { results: [], pagination: { more: false } };
                         }
                         params.page = params.page || 1;
@@ -363,7 +376,7 @@
             $('#cliente-select').on('select2:opening', function(e) {
                 if (!getOperacaoIdVenda()) {
                     e.preventDefault();
-                    alert(msgOperacaoObrigatoriaVenda);
+                    avisoSelect2ClienteVenda(msgOperacaoObrigatoriaVenda);
                 }
             });
             var operacaoSelVenda = document.getElementById('operacao-select');

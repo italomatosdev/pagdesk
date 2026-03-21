@@ -656,6 +656,19 @@
                 if (clienteSelect && !isNegociacao) {
                     const clienteJaSelecionado = clienteSelect.options.length > 0 && clienteSelect.options[0].value;
                     const msgOperacaoObrigatoria = 'Selecione a operação antes de buscar o cliente.';
+                    const avisoSelect2Cliente = (texto) => {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Atenção',
+                                text: texto,
+                                confirmButtonText: 'OK',
+                                confirmButtonColor: '#038edc'
+                            });
+                        } else {
+                            alert(texto);
+                        }
+                    };
                     const getOperacaoId = () => {
                         const opEl = document.querySelector('select[name="operacao_id"]');
                         return opEl && opEl.value ? String(opEl.value) : '';
@@ -694,7 +707,7 @@
                             },
                             transport: function (params, success, failure) {
                                 if (!getOperacaoId()) {
-                                    alert(msgOperacaoObrigatoria);
+                                    avisoSelect2Cliente(msgOperacaoObrigatoria);
                                     failure('no_operacao');
                                     return;
                                 }
@@ -705,7 +718,7 @@
                             },
                             processResults: function (data, params) {
                                 if (data.error) {
-                                    alert(data.error);
+                                    avisoSelect2Cliente(data.error);
                                     return { results: [], pagination: { more: false } };
                                 }
                                 params.page = params.page || 1;
@@ -731,7 +744,7 @@
                     $('#cliente-select').on('select2:opening', function (e) {
                         if (!getOperacaoId()) {
                             e.preventDefault();
-                            alert(msgOperacaoObrigatoria);
+                            avisoSelect2Cliente(msgOperacaoObrigatoria);
                         }
                     });
 
