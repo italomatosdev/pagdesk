@@ -78,7 +78,7 @@ class VendaController extends Controller
         $vendas = $query->orderByDesc('data_venda')->orderByDesc('id')->paginate(20)->withQueryString();
 
         $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
-            FichaContatoLookup::pairsFromVendas($vendas)
+            FichaContatoLookup::pairsFromVendas($vendas->getCollection())
         );
 
         if ($user->isSuperAdmin()) {

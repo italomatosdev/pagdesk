@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Modules\Core\Models\OperacaoDadosCliente;
+use App\Modules\Core\Models\Venda;
 use Illuminate\Support\Collection;
 
 /**
@@ -66,8 +67,10 @@ final class FichaContatoLookup
     public static function pairsFromVendas(iterable $vendas): Collection
     {
         return collect($vendas)
-            ->filter(fn ($v) => (int) $v->cliente_id > 0 && (int) $v->operacao_id > 0)
-            ->map(fn ($v) => [(int) $v->cliente_id, (int) $v->operacao_id]);
+            ->filter(fn ($v) => $v instanceof Venda
+                && (int) $v->cliente_id > 0
+                && (int) $v->operacao_id > 0)
+            ->map(fn (Venda $v) => [(int) $v->cliente_id, (int) $v->operacao_id]);
     }
 
     /**
