@@ -71,7 +71,7 @@
                                         <tr>
                                             <td>
                                                 <a href="{{ route('emprestimos.show', $s->emprestimo_id) }}">#{{ $s->emprestimo_id }}</a>
-                                                <br><small class="text-muted">{{ $s->emprestimo->cliente->nome ?? '-' }}</small>
+                                                <br><small class="text-muted">{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($s->emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}</small>
                                             </td>
                                             <td>{{ $s->solicitante->name ?? '-' }}</td>
                                             <td>R$ {{ number_format($s->saldo_devedor, 2, ',', '.') }}</td>
@@ -110,7 +110,7 @@
                                                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                                         </div>
                                                         <div class="modal-body">
-                                                            <p>Empréstimo #{{ $s->emprestimo_id }} – {{ $s->emprestimo->cliente->nome ?? '' }}. Valor solicitado: R$ {{ number_format($s->valor_solicitado, 2, ',', '.') }}.</p>
+                                                            <p>Empréstimo #{{ $s->emprestimo_id }} – {{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($s->emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}. Valor solicitado: R$ {{ number_format($s->valor_solicitado, 2, ',', '.') }}.</p>
                                                             @if($s->motivo_desconto)
                                                                 <div class="alert alert-info py-2">
                                                                     <strong>Motivo informado pelo solicitante:</strong>

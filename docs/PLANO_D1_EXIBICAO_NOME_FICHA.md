@@ -41,7 +41,15 @@
 | Empréstimo create (negociação) | `EmprestimoController@create` — `nomeClienteExibicaoOrigem`; `emprestimos/create` (alerta do empréstimo origem) |
 | Suporte | `FichaContatoLookup::mapFromCashLedgerEntries` |
 
-**Ainda pendente (fora do escopo D1 curto):** outras telas pontuais não mapeadas; `caixa/index` não lista nome de cliente (coluna descrição/referência sem nome).
+### Pontual (pós-onda 3) — **Feito**
+
+| Área | Arquivos |
+|------|----------|
+| Quitação pendente | `QuitacaoController@indexPendentes`, `quitacao/pendentes` — mapa + `fromEmprestimoMap` |
+| Busca global | `SearchController@buscar` — subtítulo de empréstimo com `fromEmprestimoMap` |
+| Kanban | `KanbanService` — campo `cliente` dos cards (empréstimo / liberação / parcela) com mapa em lote |
+
+**Ainda fora do escopo D1 curto:** mural devedores (sem operação única), cadastro de cliente, `caixa/index` sem coluna cliente; commands/logs internos.
 
 ### Critério de pronto por tela
 
