@@ -800,7 +800,6 @@ class ClienteController extends Controller
 
         try {
             $user = auth()->user();
-            $empresaId = $user->empresa_id ?? null;
             $isSuperAdmin = $user->isSuperAdmin();
             $operacoesIds = $isSuperAdmin ? [] : $user->getOperacoesIds();
 
@@ -824,36 +823,20 @@ class ClienteController extends Controller
                 return back()->with('error', 'Cliente não está vinculado a esta operação.')->withInput();
             }
 
-            $isEmpresaCriadora = $empresaId && $cliente->empresa_id == $empresaId;
+            // Cadastro editável por operação: não gravar nome/contato/endereço em `clientes` nem em `cliente_dados_empresa`
+            // neste fluxo — apenas em `operacao_dados_clientes` (+ documentos com operacao_id).
 
-            // Separar dados do cliente dos documentos
-            $dadosCliente = $validated;
             $documentos = [
                 'documento_cliente' => $request->file('documento_cliente'),
                 'selfie_documento' => $request->file('selfie_documento'),
                 'anexos' => $request->file('anexos'),
             ];
 
-            unset(
-                $dadosCliente['documento_cliente'],
-                $dadosCliente['selfie_documento'],
-                $dadosCliente['anexos'],
-                $dadosCliente['operacao_para_ficha_id']
-            );
-
             $hasNewDocs = $documentos['documento_cliente']
                 || $documentos['selfie_documento']
                 || ($documentos['anexos'] && count(array_filter($documentos['anexos'])));
 
             $documentosParaOperacao = $hasNewDocs ? $documentos : null;
-
-            // Se for a empresa criadora ou Super Admin, atualiza diretamente
-            // Caso contrário, salva no override
-            if ($isEmpresaCriadora || $user->isSuperAdmin()) {
-                $cliente = $this->clienteService->atualizar($id, $dadosCliente);
-            } else {
-                $cliente = $this->clienteService->atualizarDadosEmpresa($id, $empresaId, $dadosCliente);
-            }
 
             $operacaoFicha = Operacao::withoutGlobalScope(EmpresaScope::class)->findOrFail($operacaoParaFichaId);
             $this->operacaoDadosClienteService->salvarOuAtualizar(
@@ -873,9 +856,9 @@ class ClienteController extends Controller
             }
 
             return redirect()->route('clientes.show', $cliente->id)
-                ->with('success', 'Cliente atualizado com sucesso!');
+                ->with('success', 'Ficha da operação atualizada com sucesso!');
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao atualizar cliente: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Erro ao atualizar a ficha da operação: ' . $e->getMessage())->withInput();
         }
     }
 

@@ -30,8 +30,8 @@
                                     <i class="bx bx-info-circle me-2"></i>Cliente de Outra Empresa
                                 </h6>
                                 <p class="mb-0">
-                                    Este cliente foi cadastrado por <strong>{{ $cliente->empresa->nome ?? 'outra empresa' }}</strong>. 
-                                    As alterações que você fizer serão salvas apenas para sua empresa e não afetarão os dados originais.
+                                    Este cliente foi cadastrado por <strong>{{ $cliente->empresa->nome ?? 'outra empresa' }}</strong>.
+                                    As alterações nesta tela são salvas <strong>só na ficha desta operação</strong> (não alteram o cadastro mestre do cliente).
                                 </p>
                             </div>
                         @endif
@@ -44,7 +44,7 @@
                             <div class="alert alert-secondary mb-3">
                                 <i class="bx bx-layer me-1"></i>
                                 Você está editando a <strong>ficha da operação</strong>@if(!empty($operacaoParaFichaNome)): <strong>{{ $operacaoParaFichaNome }}</strong>@endif.
-                                Os valores exibidos vêm da ficha da operação (se existir) ou do cadastro base; ao salvar, a ficha desta operação é atualizada e novos documentos ficam ligados a ela.
+                                Os valores exibidos vêm da ficha desta operação (se existir) ou do cadastro base só como referência; ao salvar, <strong>apenas a ficha desta operação</strong> é gravada — o cadastro mestre na tabela de clientes (nome global, etc.) <strong>não é alterado</strong> por esta tela. Novos documentos ficam ligados a esta operação.
                                 <a href="{{ route('clientes.edit', $cliente->id) }}" class="alert-link ms-1">Trocar operação</a>
                             </div>
 
@@ -265,7 +265,7 @@
                                     <i class="bx bx-x"></i> Cancelar
                                 </a>
                                 <button type="submit" class="btn btn-primary">
-                                    <i class="bx bx-check"></i> Atualizar Cliente
+                                    <i class="bx bx-check"></i> Salvar ficha da operação
                                 </button>
                             </div>
                         </form>
@@ -398,8 +398,8 @@
                         }
                         
                         Swal.fire({
-                            title: 'Salvar Alterações?',
-                            html: `Deseja salvar as alterações no cliente <strong>${nome}</strong>?`,
+                            title: 'Salvar ficha da operação?',
+                            html: `Deseja salvar as alterações na ficha desta operação para <strong>${nome}</strong>?`,
                             icon: 'question',
                             showCancelButton: true,
                             confirmButtonColor: '#038edc',

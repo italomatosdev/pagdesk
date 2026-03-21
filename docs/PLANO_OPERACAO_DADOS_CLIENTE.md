@@ -69,7 +69,7 @@
 **Implementado (Fase 3 — escopo atual):**
 - `ClienteController::store`: `operacao_id_documentos` na criação; após `vincularOperacao`, `OperacaoDadosClienteService::salvarOuAtualizar` com `payloadFromFormularioValidado`. Se o CPF/CNPJ **já existir** em `clientes`, o fluxo espelha o link público: não cria novo cliente; se já vinculado à mesma operação → redirect com aviso; senão → `ClienteDadosEmpresa`, `vincularClienteEmpresa` (se preciso), `vincularOperacao`, `salvarOuAtualizar`, `processarDocumentosParaOperacao`.
 - `ClienteController::edit`: **sempre** no contexto de operação. Sem `?operacao_id=`: se uma operação acessível → redirect com o id; se várias → tela `edit-escolher-operacao`; se nenhuma → volta ao `show` com erro. Com `operacao_id` válido: formulário com ficha da operação.
-- `ClienteController::update`: `operacao_para_ficha_id` **obrigatório**; sempre `salvarOuAtualizar` na ficha da operação; uploads só via `processarDocumentosParaOperacao` (não pelo fluxo genérico de documentos do `atualizar`).
+- `ClienteController::update`: `operacao_para_ficha_id` **obrigatório**; sempre `salvarOuAtualizar` na ficha da operação; uploads só via `processarDocumentosParaOperacao`. **Não** atualiza `clientes` nem `cliente_dados_empresa` neste fluxo — só a ficha por operação (+ documentos com `operacao_id`).
 - `resources/views/clientes/edit.blade.php`: hidden + alerta de contexto de operação.
 - `resources/views/clientes/show.blade.php`: coluna “Ficha” com link `clientes/{id}/edit?operacao_id=...`.
 - **Formulário de edição com `?operacao_id=`:** `OperacaoDadosClienteService::valoresFormularioParaOperacao` — usa linha em `operacao_dados_clientes` ou fallback `payloadBrutoFromCliente`; view usa `data_get($formDefaultsOperacao, ...)`.
