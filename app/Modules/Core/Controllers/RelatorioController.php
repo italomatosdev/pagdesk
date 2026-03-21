@@ -5,6 +5,7 @@ namespace App\Modules\Core\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Cash\Models\CashLedgerEntry;
 use App\Modules\Core\Models\Operacao;
+use App\Modules\Core\Models\OperacaoDadosCliente;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\Parcela;
@@ -313,6 +314,29 @@ class RelatorioController extends Controller
             $parcela->saldo_receber = (float) $parcela->valor - (float) ($parcela->valor_pago ?? 0);
         });
 
+        // Fichas por (cliente_id, operacao_id) para endereço na aba Rota (Fase 4 — dados por operação)
+        $pairRows = $parcelas->filter(fn ($p) => $p->emprestimo && $p->emprestimo->cliente_id && $p->emprestimo->operacao_id)
+            ->map(fn ($p) => [
+                'cliente_id' => (int) $p->emprestimo->cliente_id,
+                'operacao_id' => (int) $p->emprestimo->operacao_id,
+            ])
+            ->unique(fn ($r) => $r['cliente_id'].'_'.$r['operacao_id'])
+            ->values();
+
+        $fichasPorClienteOperacao = collect();
+        if ($pairRows->isNotEmpty()) {
+            $q = OperacaoDadosCliente::query();
+            $q->where(function ($outer) use ($pairRows) {
+                foreach ($pairRows as $r) {
+                    $outer->orWhere(function ($w) use ($r) {
+                        $w->where('cliente_id', $r['cliente_id'])
+                            ->where('operacao_id', $r['operacao_id']);
+                    });
+                }
+            });
+            $fichasPorClienteOperacao = $q->get()->keyBy(fn ($f) => $f->cliente_id.'_'.$f->operacao_id);
+        }
+
         return view('relatorios.parcelas-atrasadas', compact(
             'dataRef',
             'vencimentoDe',
@@ -322,7 +346,8 @@ class RelatorioController extends Controller
             'consultores',
             'consultoresIds',
             'diasAtrasoMin',
-            'parcelas'
+            'parcelas',
+            'fichasPorClienteOperacao'
         ));
     }
 

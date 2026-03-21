@@ -159,6 +159,12 @@
                                     @forelse($clientes as $cliente)
                                         @php
                                             $fichaLista = (!empty($operacaoIdFiltro)) ? $cliente->operacaoDadosClientes->first() : null;
+                                            $waUrlLista = null;
+                                            if ($fichaLista && \App\Support\WhatsappLink::hasValidTelefone($fichaLista->telefone)) {
+                                                $waUrlLista = \App\Support\WhatsappLink::urlFromTelefone($fichaLista->telefone);
+                                            } elseif ($cliente->temWhatsapp()) {
+                                                $waUrlLista = $cliente->whatsapp_link;
+                                            }
                                         @endphp
                                         <tr>
                                             <td>{{ $cliente->id }}</td>
@@ -204,11 +210,11 @@
                                                        class="btn btn-sm btn-warning" title="Editar">
                                                         <i class="bx bx-edit"></i>
                                                     </a>
-                                                    @if($cliente->temWhatsapp())
-                                                        <a href="{{ $cliente->whatsapp_link }}" 
-                                                           target="_blank" 
-                                                           class="btn btn-sm btn-success" 
-                                                           title="Falar no WhatsApp">
+                                                    @if($waUrlLista)
+                                                        <a href="{{ $waUrlLista }}"
+                                                           target="_blank"
+                                                           class="btn btn-sm btn-success"
+                                                           title="Falar no WhatsApp{{ $fichaLista?->telefone ? ' (número da ficha desta operação)' : '' }}">
                                                             <i class="bx bxl-whatsapp"></i>
                                                         </a>
                                                     @endif
