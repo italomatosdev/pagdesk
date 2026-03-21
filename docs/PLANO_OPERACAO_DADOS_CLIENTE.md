@@ -1,0 +1,117 @@
+# Plano: dados de cliente por operação + anexos com `operacao_id`
+
+**Estado atual (concluído):**
+- Tabela `operacao_dados_clientes` criada e populada (backfill 1:1 com `operation_clients`).
+- Coluna `client_documents.operacao_id` (nullable) criada; registros legados permanecem `NULL`.
+- A **UI/API** ainda não usa `operacao_dados_clientes` como fonte principal (Fase 2+); o **serviço** da Fase 1 já existe no código.
+
+**Objetivo de negócio:**
+- Ficha cadastral (nome, contato, endereço, etc.) **por par** `(cliente_id, operacao_id)`.
+- Identidade (`documento` / CPF-CNPJ) permanece em `clientes`.
+- Anexos podem ser **por operação** quando `operacao_id` estiver preenchido; legado continua com `operacao_id = NULL`.
+
+---
+
+## Fase 1 — Camada de resolução de dados (core)
+
+**Entregável:** um único lugar que responde “quais dados exibir/editar para este cliente nesta operação?”.
+
+1. **Criar serviço** (ex.: `OperacaoDadosClienteService` ou métodos em `ClienteService`):
+   - `obterParaOperacao(int $clienteId, int $operacaoId): ?OperacaoDadosCliente` (eager safe).
+   - `salvarOuAtualizar(int $clienteId, int $operacaoId, array $dados, ?int $empresaIdOperacao): OperacaoDadosCliente`.
+   - Regras:
+     - Se existir linha em `operacao_dados_clientes` → usar para **exibição/edição** nesse contexto.
+     - Se não existir (edge) → fallback: copiar de `clientes` ou criar linha on-read/on-write (definir política mínima).
+
+2. **Não remover ainda** a lógica de `ClienteDadosEmpresa` + accessors em `Cliente` até a Fase 4 decidir o destino (convivência ou deprecação gradual).
+
+**Critério de pronto:** testes unitários ou de feature mínimos no serviço; chamadas futuras passam por ele.
+
+**Implementado (Fase 1):**
+- `App\Modules\Core\Services\OperacaoDadosClienteService` — `obterParaOperacao`, `garantirRegistro`, `salvarOuAtualizar`, `payloadBrutoFromCliente`.
+- Testes: `OperacaoDadosClienteServicePayloadTest.php` (sem banco); `OperacaoDadosClienteServicePersistenceTest.php` (`DatabaseTransactions`, grupo `database`).
+- **PHPUnit:** rode **no host** (`composer install` + `./vendor/bin/phpunit ...`). O `phpunit.xml` força `DB_HOST=127.0.0.1` e `DB_DATABASE=cred` para o PHP da máquina não depender de `host.docker.internal` (que só resolve **dentro** do Docker). MySQL precisa estar acessível em `127.0.0.1` (ex.: serviço local ou porta publicada do container). CI/outro host: ajuste variáveis ou use `.env.testing`.
+- `operacao-dados-clientes:backfill` usa `payloadBrutoFromCliente` do serviço.
+
+---
+
+## Fase 2 — Cadastro público via link (`CadastroClienteController`)
+
+**Arquivo-chave:** `app/Modules/Core/Controllers/CadastroClienteController.php`.
+
+1. **Cliente novo:** após `cadastrar()` + `vincularOperacao()`, criar/atualizar **`operacao_dados_clientes`** com os dados do formulário (mesma operação do `ref`).
+2. **Cliente existente, mesma operação** (já vinculado): além de atualizar `clientes` (comportamento atual), **atualizar** `operacao_dados_clientes` para essa operação (alinhado à regra “ficha por operação”).
+3. **Cliente existente, outra operação** (fluxo “CPF já em outra operação”):
+   - **Parar** de depender só de `ClienteDadosEmpresa` como único override se a regra for “sempre por operação”.
+   - Gravar em **`operacao_dados_clientes`** para `(cliente_id, operacao_id)` do link.
+   - Manter `clientes` conforme política acordada (ex.: não sobrescrever identidade; opcionalmente sincronizar “cadastro mestre” só se produto pedir).
+4. **Anexos (opcional nesta fase ou Fase 3):** ao criar `ClientDocument` neste fluxo, passar **`operacao_id`** da operação do link.
+
+**Critério de pronto:** fluxos manuais: primeiro cadastro, segundo link mesma operação, segundo link outra operação; conferir linhas em `operacao_dados_clientes` e `operation_clients`.
+
+---
+
+## Fase 3 — CRUD interno (consultor/gestor/admin): criar/editar/listar cliente
+
+1. **`ClienteController` + `ClienteService::cadastrar` / atualizações:** ao vincular ou criar cliente já com operação, garantir **linha em `operacao_dados_clientes`** para cada operação relevante.
+2. **Telas `clientes/*`:** ao exibir/editar cliente **no contexto de uma operação** (quando houver `operacao_id` na rota ou no vínculo selecionado), carregar dados do serviço da Fase 1, não só `Cliente` “cru”.
+3. **`Cliente::documentos()` / upload:** ao anexar arquivo com contexto de operação, preencher **`operacao_id`**.
+4. **Listagens e buscas:** onde o nome/telefone importam “por rota”, considerar join ou subconsulta em `operacao_dados_clientes` filtrando por `operacao_id` (definir com calma para não quebrar busca global).
+
+**Critério de pronto:** criar cliente internamente + editar + anexar com operação; `client_documents` novos com `operacao_id` quando aplicável.
+
+---
+
+## Fase 4 — Convivência com `ClienteDadosEmpresa` e accessors do `Cliente`
+
+Hoje `Cliente` usa accessors que misturam **empresa criadora** vs **`cliente_dados_empresa`**.
+
+1. **Documentar regra alvo:** para usuário vendo cliente na **Operação X**, a fonte é **`operacao_dados_clientes`** (par cliente + operação X).
+2. **Refatorar gradualmente:**
+   - Onde a tela já tem `operacao_id`, passar a usar o serviço da Fase 1.
+   - Reduzir dependência de accessors “mágicos” para telas sensíveis, ou estender accessors com parâmetro implícito (difícil) — preferir **DTO/view model** por tela.
+3. **Decisão explícita:** manter `ClienteDadosEmpresa` só para casos legados / outra empresa, ou migrar dados para `operacao_dados_clientes` e depreciar (fora do escopo imediato).
+
+**Critério de pronto:** nenhuma regressão nas telas críticas; super admin / multi-empresa validado.
+
+---
+
+## Fase 5 — Backfill opcional de `client_documents.operacao_id`
+
+**Somente se** produto exigir histórico classificado por operação.
+
+1. Definir regra (ex.: cliente com **uma** operação → preencher; com **várias** → `NULL` ou escolher operação “principal”).
+2. Comando Artisan idempotente + `--dry-run`.
+3. Rodar em staging, depois produção.
+
+**Critério de pronto:** contagem de documentos com `operacao_id` coerente com a regra; UI filtra corretamente.
+
+---
+
+## Fase 6 — Documentação e operação
+
+1. Atualizar `docs/` (fluxo de cadastro, backup, troubleshooting).
+2. Atualizar `README` ou runbook: ordem deploy (migrate → backfill `operacao_dados_clientes` já feito; futuros backfills documentados).
+
+---
+
+## Ordem de execução recomendada
+
+| Ordem | Fase | Risco |
+|------:|------|--------|
+| 1 | Fase 1 — Serviço de resolução | Baixo |
+| 2 | Fase 2 — Link público | Médio (impacto direto no cliente final) |
+| 3 | Fase 3 — CRUD interno + anexos | Médio |
+| 4 | Fase 4 — Accessors / empresa | Alto (efeitos colaterais) |
+| 5 | Fase 5 — Backfill anexos | Baixo/Médio (depende da regra) |
+| 6 | Fase 6 — Docs | Baixo |
+
+---
+
+## Próximo passo imediato (implementação)
+
+Implementar **Fase 2** (`CadastroClienteController` + anexos com `operacao_id` quando couber). Fase 1 já está no repositório.
+
+---
+
+*Documento vivo — ajustar conforme decisões de produto (especialmente Fase 4 e Fase 5).*

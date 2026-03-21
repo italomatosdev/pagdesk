@@ -7,6 +7,7 @@ use App\Modules\Core\Models\Cliente;
 use App\Modules\Core\Models\Operacao;
 use App\Modules\Core\Models\OperacaoDadosCliente;
 use App\Modules\Core\Models\OperationClient;
+use App\Modules\Core\Services\OperacaoDadosClienteService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -66,7 +67,8 @@ class BackfillOperacaoDadosClientesCommand extends Command
                 continue;
             }
 
-            $payload = $this->payloadFromCliente($cliente, $operacao->empresa_id);
+            $payload = app(OperacaoDadosClienteService::class)
+                ->payloadBrutoFromCliente($cliente, $operacao->empresa_id);
 
             $existing = OperacaoDadosCliente::query()
                 ->where('cliente_id', $oc->cliente_id)
@@ -133,34 +135,5 @@ class BackfillOperacaoDadosClientesCommand extends Command
         }
 
         return self::SUCCESS;
-    }
-
-    /**
-     * Usa atributos brutos de clientes (sem accessors de ClienteDadosEmpresa).
-     *
-     * @return array<string, mixed>
-     */
-    private function payloadFromCliente(Cliente $cliente, ?int $empresaIdOperacao): array
-    {
-        $a = $cliente->getAttributes();
-
-        return [
-            'empresa_id' => $empresaIdOperacao,
-            'nome' => $a['nome'] ?? '',
-            'telefone' => $a['telefone'] ?? null,
-            'email' => $a['email'] ?? null,
-            'data_nascimento' => $a['data_nascimento'] ?? null,
-            'responsavel_nome' => $a['responsavel_nome'] ?? null,
-            'responsavel_cpf' => $a['responsavel_cpf'] ?? null,
-            'responsavel_rg' => $a['responsavel_rg'] ?? null,
-            'responsavel_cnh' => $a['responsavel_cnh'] ?? null,
-            'responsavel_cargo' => $a['responsavel_cargo'] ?? null,
-            'endereco' => $a['endereco'] ?? null,
-            'numero' => $a['numero'] ?? null,
-            'cidade' => $a['cidade'] ?? null,
-            'estado' => $a['estado'] ?? null,
-            'cep' => $a['cep'] ?? null,
-            'observacoes' => $a['observacoes'] ?? null,
-        ];
     }
 }
