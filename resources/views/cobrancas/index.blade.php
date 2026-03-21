@@ -154,7 +154,7 @@
                                 <tbody>
                                     @forelse($vencendoHoje as $parcela)
                                         <tr>
-                                            <td>{{ $parcela->emprestimo->cliente->nome }}</td>
+                                            <td>{{ \App\Support\ClienteNomeExibicao::fromParcelaMap($parcela, $fichasContatoPorClienteOperacao ?? collect()) }}</td>
                                             <td>
                                                 <a href="{{ route('emprestimos.show', $parcela->emprestimo->id) }}">#{{ $parcela->emprestimo->id }}</a>
                                             </td>
@@ -219,7 +219,7 @@
                                 <tbody>
                                     @forelse($atrasadas as $parcela)
                                         <tr class="{{ $parcela->dias_atraso > 30 ? 'table-danger' : '' }}">
-                                            <td>{{ $parcela->emprestimo->cliente->nome }}</td>
+                                            <td>{{ \App\Support\ClienteNomeExibicao::fromParcelaMap($parcela, $fichasContatoPorClienteOperacao ?? collect()) }}</td>
                                             <td>
                                                 <a href="{{ route('emprestimos.show', $parcela->emprestimo->id) }}">#{{ $parcela->emprestimo->id }}</a>
                                             </td>

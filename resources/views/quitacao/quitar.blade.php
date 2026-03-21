@@ -24,7 +24,7 @@
                     @endif
 
                     <div class="alert alert-info mb-3">
-                        <strong>Empréstimo #{{ $emprestimo->id }}</strong> – {{ $emprestimo->cliente->nome }}<br>
+                        <strong>Empréstimo #{{ $emprestimo->id }}</strong> – {{ $nomeClienteExibicao ?? ($emprestimo->cliente->nome ?? 'Cliente') }}<br>
                         <strong>Operação:</strong> {{ $emprestimo->operacao->nome }}<br>
                         <strong>Saldo devedor:</strong>
                         <span class="h5 text-primary ms-1">R$ {{ number_format($saldoDevedor, 2, ',', '.') }}</span>

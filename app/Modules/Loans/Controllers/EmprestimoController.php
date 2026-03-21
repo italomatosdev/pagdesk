@@ -7,6 +7,7 @@ use App\Modules\Core\Models\Cliente;
 use App\Modules\Core\Models\Operacao;
 use App\Modules\Core\Services\ClienteService;
 use App\Modules\Core\Services\OperacaoDadosClienteService;
+use App\Support\ClienteNomeExibicao;
 use App\Support\FichaContatoLookup;
 use App\Support\NotificacaoClienteDisplayName;
 use App\Modules\Loans\Models\Emprestimo;
@@ -240,9 +241,13 @@ class EmprestimoController extends Controller
 
         $emprestimos = $query->orderBy('created_at', 'desc')->get();
 
+        $fichasContatoExport = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromEmprestimos($emprestimos)
+        );
+
         $filename = 'emprestimos_' . now()->format('Y-m-d_His') . '.csv';
 
-        return response()->streamDownload(function () use ($emprestimos) {
+        return response()->streamDownload(function () use ($emprestimos, $fichasContatoExport) {
             $out = fopen('php://output', 'w');
             fprintf($out, chr(0xEF) . chr(0xBB) . chr(0xBF));
 
@@ -251,7 +256,7 @@ class EmprestimoController extends Controller
             foreach ($emprestimos as $e) {
                 fputcsv($out, [
                     $e->id,
-                    $e->cliente?->nome ?? '',
+                    ClienteNomeExibicao::fromEmprestimoMap($e, $fichasContatoExport),
                     $e->operacao?->nome ?? '',
                     number_format((float) $e->valor_total, 2, ',', '.'),
                     $e->status,
@@ -703,9 +708,12 @@ class EmprestimoController extends Controller
             (int) $emprestimo->operacao_id
         );
 
+        $nomeClienteExibicao = ClienteNomeExibicao::fromFicha($fichaContatoEmprestimo, $emprestimo->cliente);
+
         return view('emprestimos.show', compact(
             'emprestimo',
             'fichaContatoEmprestimo',
+            'nomeClienteExibicao',
             'temRenovacaoAbatePendente',
             'solicitacoesRenovacaoAbate',
             'podeVerAcoesGestorAdmin',

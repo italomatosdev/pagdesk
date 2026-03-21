@@ -7,6 +7,7 @@ use App\Modules\Core\Models\Operacao;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\SolicitacaoQuitacao;
 use App\Modules\Loans\Services\QuitacaoService;
+use App\Support\ClienteNomeExibicao;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -54,6 +55,7 @@ class QuitacaoController extends Controller
             'emprestimo' => $emprestimo,
             'saldoDevedor' => $saldoDevedor,
             'parcelasAbertas' => $parcelasAbertas,
+            'nomeClienteExibicao' => ClienteNomeExibicao::forEmprestimo($emprestimo),
         ]);
     }
 

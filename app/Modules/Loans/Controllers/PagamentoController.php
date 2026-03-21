@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\Parcela;
 use App\Modules\Loans\Services\PagamentoService;
+use App\Support\ClienteNomeExibicao;
 use App\Support\NotificacaoClienteDisplayName;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -44,7 +45,11 @@ class PagamentoController extends Controller
             }
         }
 
-        return view('pagamentos.create', compact('parcela', 'returnTo', 'renovar', 'renovacaoTipo', 'executarGarantia'));
+        $nomeClienteExibicao = $parcela
+            ? ClienteNomeExibicao::forEmprestimo($parcela->emprestimo)
+            : null;
+
+        return view('pagamentos.create', compact('parcela', 'returnTo', 'renovar', 'renovacaoTipo', 'executarGarantia', 'nomeClienteExibicao'));
     }
 
     /**
@@ -512,6 +517,7 @@ class PagamentoController extends Controller
             'operacao' => $operacao,
             'saldoDevedor' => $saldoDevedor,
             'valorEmprestado' => (float) $emprestimo->valor_total,
+            'nomeClienteExibicao' => ClienteNomeExibicao::forEmprestimo($emprestimo),
         ]);
     }
 
@@ -638,6 +644,7 @@ class PagamentoController extends Controller
             'emprestimo' => $emprestimo,
             'parcelasAbertas' => $parcelasAbertas,
             'operacao' => $operacao,
+            'nomeClienteExibicao' => ClienteNomeExibicao::forEmprestimo($emprestimo),
         ]);
     }
 

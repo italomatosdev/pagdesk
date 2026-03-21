@@ -33,7 +33,7 @@
                             <h6 class="card-subtitle mb-3 text-muted">Resumo do cheque</h6>
                             <div class="row">
                                 <div class="col-md-6">
-                                    <p class="mb-1"><strong>Cliente:</strong> {{ $emprestimo->cliente->nome ?? '-' }}</p>
+                                    <p class="mb-1"><strong>Cliente:</strong> {{ $nomeClienteExibicao ?? ($emprestimo->cliente->nome ?? '-') }}</p>
                                     <p class="mb-1"><strong>Empréstimo:</strong> #{{ $emprestimo->id }}</p>
                                 </div>
                                 <div class="col-md-6">

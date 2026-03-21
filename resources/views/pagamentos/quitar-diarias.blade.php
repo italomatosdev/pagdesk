@@ -26,7 +26,7 @@
                     @endif
 
                     <div class="alert alert-info mb-3">
-                        <strong>Empréstimo #{{ $emprestimo->id }}</strong> – {{ $emprestimo->cliente->nome ?? 'Cliente' }}<br>
+                        <strong>Empréstimo #{{ $emprestimo->id }}</strong> – {{ $nomeClienteExibicao ?? ($emprestimo->cliente->nome ?? 'Cliente') }}<br>
                         <strong>Parcelas pendentes:</strong> {{ $parcelasPendentes->count() }}<br>
                         Um único comprovante será associado a todos os pagamentos. Você pode quitar <strong>sem juros de atraso</strong> ou <strong>com juros</strong> (automático, manual ou valor fixo).
                     </div>

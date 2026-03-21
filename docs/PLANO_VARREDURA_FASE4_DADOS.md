@@ -104,7 +104,7 @@ O **Radar** é descrito no código como a consulta cadastral interna do sistema 
 
 | # | Item | Ação sugerida | Estado |
 |---|------|----------------|--------|
-| D1 | Accessors `Cliente` + `ClienteDadosEmpresa` | Decisão de produto: convivência até migração, ou reduzir override em telas sensíveis passando a **DTO/view model** com fonte explícita. | Pendente (produto) |
+| D1 | Exibição com **operação conhecida** | Nome (e extensível a outros campos) via **`ClienteNomeExibicao`** + ficha `operacao_dados_clientes`; accessors do `Cliente` permanecem para cadastro legado. Ver **`docs/PLANO_D1_EXIBICAO_NOME_FICHA.md`**. | **Em execução** — onda 1 feita (empréstimo show/index/export, liberação show, pagamentos/quitação/cheque, cobranças, parcelas atrasadas, relatório parcelas atrasadas aba tabela); onda 2 = listagens/dashboards restantes. |
 | D2 | Notificações | Incluir **nome da ficha** (`operacao_dados_clientes.nome`) da operação do empréstimo quando existir; senão `Cliente->nome`. | **Feito** — `NotificacaoClienteDisplayName::forEmprestimo` em empréstimos, pagamentos, liberações, quitação e negociação. |
 
 ---
@@ -121,7 +121,7 @@ O **Radar** é descrito no código como a consulta cadastral interna do sistema 
 
 - Plano macro: `docs/PLANO_OPERACAO_DADOS_CLIENTE.md`
 - Serviço: `App\Modules\Core\Services\OperacaoDadosClienteService`
-- Helpers: `App\Support\WhatsappLink`, `App\Support\FichaContatoLookup`, `App\Support\NotificacaoClienteDisplayName` (D2)
+- Helpers: `App\Support\WhatsappLink`, `App\Support\FichaContatoLookup`, `App\Support\ClienteNomeExibicao` (D1 UI), `App\Support\NotificacaoClienteDisplayName` (D2 — delega a `ClienteNomeExibicao`)
 - Radar: `App\Modules\Core\Controllers\RadarController.php` → `ClienteController::buscarPorCpf`
 - Model `Cliente` (accessors): `getNomeAttribute`, `getTelefoneAttribute`, `getDadosEmpresaAtual()`, etc.
 

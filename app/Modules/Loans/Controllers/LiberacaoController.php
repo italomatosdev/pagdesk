@@ -11,6 +11,7 @@ use App\Modules\Loans\Models\SolicitacaoPagamentoJurosContratoReduzido;
 use App\Modules\Loans\Models\SolicitacaoPagamentoJurosParcial;
 use App\Modules\Loans\Models\SolicitacaoRenovacaoAbate;
 use App\Modules\Core\Services\OperacaoDadosClienteService;
+use App\Support\ClienteNomeExibicao;
 use App\Modules\Loans\Services\EmprestimoService;
 use App\Modules\Loans\Services\LiberacaoService;
 use App\Modules\Loans\Services\PagamentoService;
@@ -229,12 +230,15 @@ class LiberacaoController extends Controller
             (int) $liberacao->emprestimo->operacao_id
         );
 
+        $nomeClienteExibicao = ClienteNomeExibicao::fromFicha($fichaContatoLiberacao, $liberacao->emprestimo->cliente);
+
         return view('liberacoes.show', compact(
             'liberacao',
             'podeAprovarLiberacao',
             'podeConfirmarPagamentoCliente',
             'ehGestorAdminConfirmando',
-            'fichaContatoLiberacao'
+            'fichaContatoLiberacao',
+            'nomeClienteExibicao'
         ));
     }
 

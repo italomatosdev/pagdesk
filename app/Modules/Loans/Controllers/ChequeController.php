@@ -442,7 +442,9 @@ class ChequeController extends Controller
                 ->with('error', 'Apenas administradores e gestores podem registrar pagamento.');
         }
 
-        return view('cheques.pagar', compact('cheque', 'emprestimo'));
+        $nomeClienteExibicao = \App\Support\ClienteNomeExibicao::forEmprestimo($emprestimo);
+
+        return view('cheques.pagar', compact('cheque', 'emprestimo', 'nomeClienteExibicao'));
     }
 
     /**

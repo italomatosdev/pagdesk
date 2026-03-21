@@ -24,7 +24,7 @@
                     @endif
 
                     <div class="alert alert-info mb-3">
-                        <strong>Empréstimo #{{ $emprestimo->id }}</strong> – {{ $emprestimo->cliente->nome ?? 'Cliente' }}<br>
+                        <strong>Empréstimo #{{ $emprestimo->id }}</strong> – {{ $nomeClienteExibicao ?? ($emprestimo->cliente->nome ?? 'Cliente') }}<br>
                         Selecione <strong>pelo menos duas</strong> parcelas em aberto. O valor total é a <strong>soma</strong> do que falta em cada uma + juros de atraso (conforme opção abaixo). Um único comprovante vale para todos os pagamentos.
                     </div>
 

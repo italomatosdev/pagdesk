@@ -141,7 +141,7 @@
                                             <tr>
                                                 <td>
                                                     @if($p->emprestimo && $p->emprestimo->cliente)
-                                                        <a href="{{ \App\Support\ClienteUrl::show($p->emprestimo->cliente_id, $p->emprestimo->operacao_id) }}">{{ $p->emprestimo->cliente->nome }}</a>
+                                                        <a href="{{ \App\Support\ClienteUrl::show($p->emprestimo->cliente_id, $p->emprestimo->operacao_id) }}">{{ \App\Support\ClienteNomeExibicao::fromParcelaMap($p, $fichasPorClienteOperacao ?? collect()) }}</a>
                                                     @else
                                                         -
                                                     @endif

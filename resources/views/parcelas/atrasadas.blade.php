@@ -151,7 +151,7 @@
                                             <td>
                                                 <a href="{{ \App\Support\ClienteUrl::show($parcela->emprestimo->cliente_id, $parcela->emprestimo->operacao_id) }}"
                                                    class="text-primary">
-                                                    {{ $parcela->emprestimo->cliente->nome }}
+                                                    {{ \App\Support\ClienteNomeExibicao::fromParcelaMap($parcela, $fichasContatoPorClienteOperacao ?? collect()) }}
                                                 </a>
                                             </td>
                                             <td>

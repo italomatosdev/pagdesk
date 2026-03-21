@@ -195,7 +195,7 @@
                                             <td>#{{ $emprestimo->id }}</td>
                                             <td>
                                                 @if($emprestimo->cliente)
-                                                    <a href="{{ \App\Support\ClienteUrl::show($emprestimo->cliente_id, $emprestimo->operacao_id) }}">{{ $emprestimo->cliente->nome }}</a>
+                                                    <a href="{{ \App\Support\ClienteUrl::show($emprestimo->cliente_id, $emprestimo->operacao_id) }}">{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($emprestimo, $fichasContatoPorClienteOperacao) }}</a>
                                                 @else
                                                     —
                                                 @endif
