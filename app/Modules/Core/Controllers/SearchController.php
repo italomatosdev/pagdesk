@@ -47,7 +47,7 @@ class SearchController extends Controller
                     'id' => $cliente->id,
                     'title' => $cliente->nome,
                     'subtitle' => $cliente->cpf_formatado,
-                    'url' => ClienteUrl::show($cliente->id, $this->resolveSingleOperacaoIdParaClienteNaBusca($cliente, $user)),
+                    'url' => ClienteUrl::showForUser($cliente, $user),
                     'icon' => 'bx-user',
                     'badge' => 'Cliente'
                 ];
@@ -159,28 +159,6 @@ class SearchController extends Controller
         // Não exige vínculo em operation_clients para que todos os clientes da empresa apareçam.
 
         return $query->with('operationClients')->orderBy('nome')->limit(5)->get();
-    }
-
-    /**
-     * Se o usuário enxerga exatamente um vínculo cliente–operação, usa essa operação na URL da ficha.
-     */
-    private function resolveSingleOperacaoIdParaClienteNaBusca(Cliente $cliente, User $user): ?int
-    {
-        $ocs = $cliente->relationLoaded('operationClients')
-            ? $cliente->operationClients
-            : $cliente->operationClients()->get();
-
-        if (! $user->isSuperAdmin()) {
-            $allowed = $user->getOperacoesIds();
-            if (empty($allowed)) {
-                return null;
-            }
-            $ocs = $ocs->filter(fn ($oc) => in_array((int) $oc->operacao_id, $allowed, true));
-        }
-
-        $ids = $ocs->pluck('operacao_id')->unique()->values();
-
-        return $ids->count() === 1 ? (int) $ids->first() : null;
     }
 
     /**

@@ -61,7 +61,9 @@
                                     @forelse($pendentes as $emprestimo)
                                         <tr>
                                             <td>#{{ $emprestimo->id }}</td>
-                                            <td>{{ $emprestimo->cliente->nome }}</td>
+                                            <td>
+                                                <a href="{{ \App\Support\ClienteUrl::show($emprestimo->cliente_id, $emprestimo->operacao_id) }}">{{ $emprestimo->cliente->nome }}</a>
+                                            </td>
                                             <td>{{ $emprestimo->operacao->nome }}</td>
                                             <td>{{ ($tipoLabels ?? [
                                                 'dinheiro' => 'Dinheiro',

@@ -139,7 +139,13 @@
                                     <tbody>
                                         @forelse($parcelas as $p)
                                             <tr>
-                                                <td>{{ $p->emprestimo && $p->emprestimo->cliente ? $p->emprestimo->cliente->nome : '-' }}</td>
+                                                <td>
+                                                    @if($p->emprestimo && $p->emprestimo->cliente)
+                                                        <a href="{{ \App\Support\ClienteUrl::show($p->emprestimo->cliente_id, $p->emprestimo->operacao_id) }}">{{ $p->emprestimo->cliente->nome }}</a>
+                                                    @else
+                                                        -
+                                                    @endif
+                                                </td>
                                                 <td>{{ $p->emprestimo && $p->emprestimo->operacao ? $p->emprestimo->operacao->nome : '-' }}</td>
                                                 <td>{{ $p->emprestimo && $p->emprestimo->consultor ? $p->emprestimo->consultor->name : '-' }}</td>
                                                 <td class="text-center">{{ $p->numero }}/{{ $p->emprestimo ? $p->emprestimo->numero_parcelas : '-' }}</td>
@@ -201,7 +207,13 @@
                                         @endphp
                                         <div class="list-group-item d-flex flex-wrap align-items-start gap-2 py-3">
                                             <div class="flex-grow-1">
-                                                <strong>{{ $cliente ? $cliente->nome : 'Cliente não informado' }}</strong>
+                                                <strong>
+                                                    @if($cliente && $primeira->emprestimo)
+                                                        <a href="{{ \App\Support\ClienteUrl::show($cliente->id, $primeira->emprestimo->operacao_id) }}">{{ $cliente->nome }}</a>
+                                                    @else
+                                                        {{ $cliente ? $cliente->nome : 'Cliente não informado' }}
+                                                    @endif
+                                                </strong>
                                                 @if($enderecoCompleto)
                                                     <div class="text-muted small mt-1">{{ $enderecoCompleto }}</div>
                                                 @else

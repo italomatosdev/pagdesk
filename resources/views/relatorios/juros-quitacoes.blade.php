@@ -164,9 +164,11 @@
                                 @forelse($emprestimos as $e)
                                     <tr>
                                         <td>
-                                            <a href="{{ route('emprestimos.show', $e->id) }}" class="text-decoration-none">
-                                                {{ $e->cliente?->nome ?? '-' }}
-                                            </a>
+                                            @if($e->cliente)
+                                                <a href="{{ \App\Support\ClienteUrl::show($e->cliente_id, $e->operacao_id) }}">{{ $e->cliente->nome }}</a>
+                                            @else
+                                                -
+                                            @endif
                                         </td>
                                         <td>{{ $e->operacao?->nome ?? '-' }}</td>
                                         <td class="text-center">

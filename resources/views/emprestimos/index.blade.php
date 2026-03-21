@@ -193,7 +193,13 @@
                                     @forelse($emprestimos as $emprestimo)
                                         <tr>
                                             <td>#{{ $emprestimo->id }}</td>
-                                            <td>{{ $emprestimo->cliente?->nome ?? '—' }}</td>
+                                            <td>
+                                                @if($emprestimo->cliente)
+                                                    <a href="{{ \App\Support\ClienteUrl::show($emprestimo->cliente_id, $emprestimo->operacao_id) }}">{{ $emprestimo->cliente->nome }}</a>
+                                                @else
+                                                    —
+                                                @endif
+                                            </td>
                                             <td>{{ $emprestimo->operacao?->nome ?? '—' }}</td>
                                             <td>
                                                 @php

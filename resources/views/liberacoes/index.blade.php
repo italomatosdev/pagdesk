@@ -186,7 +186,9 @@
                                                 @endphp
                                                 {{ $freqLabels[$liberacao->emprestimo->frequencia] ?? ucfirst($liberacao->emprestimo->frequencia) }}
                                             </td>
-                                            <td>{{ $liberacao->emprestimo->cliente->nome }}</td>
+                                            <td>
+                                                <a href="{{ \App\Support\ClienteUrl::show($liberacao->emprestimo->cliente_id, $liberacao->emprestimo->operacao_id) }}">{{ $liberacao->emprestimo->cliente->nome }}</a>
+                                            </td>
                                             <td>{{ $liberacao->emprestimo->operacao->nome }}</td>
                                             <td>{{ $liberacao->consultor->name }}</td>
                                             <td class="h6 text-primary">

@@ -356,7 +356,9 @@
                                 <tbody>
                                     @forelse($cobrancasHoje as $parcela)
                                         <tr>
-                                            <td>{{ $parcela->emprestimo->cliente->nome }}</td>
+                                            <td>
+                                                <a href="{{ \App\Support\ClienteUrl::show($parcela->emprestimo->cliente_id, $parcela->emprestimo->operacao_id) }}">{{ $parcela->emprestimo->cliente->nome }}</a>
+                                            </td>
                                             <td>R$ {{ number_format($parcela->valor - $parcela->valor_pago, 2, ',', '.') }}</td>
                                             <td>{{ $parcela->data_vencimento->format('d/m/Y') }}</td>
                                             <td>
@@ -408,7 +410,9 @@
                                 <div class="border-bottom p-2">
                                     <div class="d-flex align-items-center">
                                         <div class="flex-grow-1">
-                                            <h6 class="font-size-14 mb-1">{{ $liberacao->emprestimo->cliente->nome }}</h6>
+                                            <h6 class="font-size-14 mb-1">
+                                                <a href="{{ \App\Support\ClienteUrl::show($liberacao->emprestimo->cliente_id, $liberacao->emprestimo->operacao_id) }}" class="text-reset">{{ $liberacao->emprestimo->cliente->nome }}</a>
+                                            </h6>
                                             <p class="text-muted mb-0 font-size-12">
                                                 R$ {{ number_format($liberacao->valor_liberado, 2, ',', '.') }}
                                             </p>
@@ -470,7 +474,9 @@
                                 <tbody>
                                     @forelse($parcelasAtrasadas as $parcela)
                                         <tr class="table-danger">
-                                            <td>{{ $parcela->emprestimo->cliente->nome }}</td>
+                                            <td>
+                                                <a href="{{ \App\Support\ClienteUrl::show($parcela->emprestimo->cliente_id, $parcela->emprestimo->operacao_id) }}">{{ $parcela->emprestimo->cliente->nome }}</a>
+                                            </td>
                                             <td>R$ {{ number_format($parcela->valor - $parcela->valor_pago, 2, ',', '.') }}</td>
                                             <td>{{ $parcela->data_vencimento->format('d/m/Y') }}</td>
                                             <td>
@@ -529,7 +535,9 @@
                                 <tbody>
                                     @forelse($meusEmprestimos as $emprestimo)
                                         <tr>
-                                            <td>{{ $emprestimo->cliente->nome }}</td>
+                                            <td>
+                                                <a href="{{ \App\Support\ClienteUrl::show($emprestimo->cliente_id, $emprestimo->operacao_id) }}">{{ $emprestimo->cliente->nome }}</a>
+                                            </td>
                                             <td>R$ {{ number_format($emprestimo->valor_total, 2, ',', '.') }}</td>
                                             <td>
                                                 @php
@@ -587,7 +595,9 @@
                                 <tbody>
                                     @forelse($proximasCobrancasLista as $parcela)
                                         <tr>
-                                            <td>{{ $parcela->emprestimo->cliente->nome }}</td>
+                                            <td>
+                                                <a href="{{ \App\Support\ClienteUrl::show($parcela->emprestimo->cliente_id, $parcela->emprestimo->operacao_id) }}">{{ $parcela->emprestimo->cliente->nome }}</a>
+                                            </td>
                                             <td>R$ {{ number_format($parcela->valor - $parcela->valor_pago, 2, ',', '.') }}</td>
                                             <td>
                                                 @php
