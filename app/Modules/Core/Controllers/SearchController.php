@@ -7,6 +7,7 @@ use App\Modules\Core\Models\Cliente;
 use App\Modules\Core\Models\Operacao;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Models\User;
+use App\Support\ClienteUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -46,7 +47,7 @@ class SearchController extends Controller
                     'id' => $cliente->id,
                     'title' => $cliente->nome,
                     'subtitle' => $cliente->cpf_formatado,
-                    'url' => route('clientes.show', $cliente->id),
+                    'url' => ClienteUrl::show($cliente->id, $this->resolveSingleOperacaoIdParaClienteNaBusca($cliente, $user)),
                     'icon' => 'bx-user',
                     'badge' => 'Cliente'
                 ];
@@ -157,7 +158,29 @@ class SearchController extends Controller
         // Busca global: filtro por empresa já vem do EmpresaScope do model Cliente.
         // Não exige vínculo em operation_clients para que todos os clientes da empresa apareçam.
 
-        return $query->orderBy('nome')->limit(5)->get();
+        return $query->with('operationClients')->orderBy('nome')->limit(5)->get();
+    }
+
+    /**
+     * Se o usuário enxerga exatamente um vínculo cliente–operação, usa essa operação na URL da ficha.
+     */
+    private function resolveSingleOperacaoIdParaClienteNaBusca(Cliente $cliente, User $user): ?int
+    {
+        $ocs = $cliente->relationLoaded('operationClients')
+            ? $cliente->operationClients
+            : $cliente->operationClients()->get();
+
+        if (! $user->isSuperAdmin()) {
+            $allowed = $user->getOperacoesIds();
+            if (empty($allowed)) {
+                return null;
+            }
+            $ocs = $ocs->filter(fn ($oc) => in_array((int) $oc->operacao_id, $allowed, true));
+        }
+
+        $ids = $ocs->pluck('operacao_id')->unique()->values();
+
+        return $ids->count() === 1 ? (int) $ids->first() : null;
     }
 
     /**

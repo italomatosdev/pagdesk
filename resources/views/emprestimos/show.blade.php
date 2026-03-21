@@ -75,7 +75,7 @@
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <strong>Cliente:</strong> 
-                                <a href="{{ route('clientes.show', $emprestimo->cliente_id) }}">
+                                <a href="{{ \App\Support\ClienteUrl::show($emprestimo->cliente_id, $emprestimo->operacao_id) }}">
                                     {{ $emprestimo->cliente->nome }}
                                 </a>
                                 @if($emprestimo->cliente->temWhatsapp())

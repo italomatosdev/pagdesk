@@ -149,7 +149,7 @@
                                     @forelse($parcelas as $parcela)
                                         <tr class="{{ $parcela->dias_atraso > 30 ? 'table-danger' : ($parcela->dias_atraso > 15 ? 'table-warning' : '') }}">
                                             <td>
-                                                <a href="{{ route('clientes.show', $parcela->emprestimo->cliente_id) }}" 
+                                                <a href="{{ \App\Support\ClienteUrl::show($parcela->emprestimo->cliente_id, $parcela->emprestimo->operacao_id) }}"
                                                    class="text-primary">
                                                     {{ $parcela->emprestimo->cliente->nome }}
                                                 </a>

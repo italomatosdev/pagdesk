@@ -121,7 +121,7 @@
                                     <td>{{ $venda->data_venda->format('d/m/Y') }}</td>
                                     <td>
                                         @if($venda->cliente)
-                                            <a href="{{ route('clientes.show', $venda->cliente_id) }}">{{ $venda->cliente->nome }}</a>
+                                            <a href="{{ \App\Support\ClienteUrl::show($venda->cliente_id, $venda->operacao_id) }}">{{ $venda->cliente->nome }}</a>
                                         @else
                                             —
                                         @endif

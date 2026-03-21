@@ -201,7 +201,7 @@
                                             @endif
                                         </td>
                                         <td>
-                                            <a href="{{ route('clientes.show', $garantia->emprestimo->cliente_id) }}">
+                                            <a href="{{ \App\Support\ClienteUrl::show($garantia->emprestimo->cliente_id, $garantia->emprestimo->operacao_id) }}">
                                                 {{ $garantia->emprestimo->cliente->nome }}
                                             </a>
                                         </td>

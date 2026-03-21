@@ -49,10 +49,10 @@
                 <div class="card">
                     <div class="card-header">
                         <h5 class="card-title mb-0">
-                            <a href="{{ route('clientes.show', $dados['cliente']->id) }}">
+                            <a href="{{ request('operacao_id') ? \App\Support\ClienteUrl::show($dados['cliente']->id, (int) request('operacao_id')) : route('clientes.show', $dados['cliente']->id) }}">
                                 {{ $dados['cliente']->nome }}
                             </a>
-                            <a href="{{ route('renovacoes.show-cliente', $dados['cliente']->id) }}" 
+                            <a href="{{ route('renovacoes.show-cliente', $dados['cliente']->id) }}{{ request('operacao_id') ? '?operacao_id=' . request('operacao_id') : '' }}"
                                class="btn btn-sm btn-info float-end">
                                 <i class="bx bx-show"></i> Ver Histórico Completo
                             </a>

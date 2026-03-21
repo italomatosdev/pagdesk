@@ -97,6 +97,10 @@ Hoje `Cliente` usa accessors que misturam **empresa criadora** vs **`cliente_dad
 
 **Critério de pronto:** nenhuma regressão nas telas críticas; super admin / multi-empresa validado.
 
+**Avanço recente (links com contexto):**
+- Helper `App\Support\ClienteUrl::show($clienteId, ?$operacaoId)` para montar `clientes.show` com `operacao_id` quando a tela tem operação (empréstimo, venda, parcelas atrasadas, liberações, cheques, garantias, renovações com filtro, radar com um único vínculo visível).
+- Busca global (`SearchController`): URL do cliente com `operacao_id` quando o usuário tem exatamente **uma** operação em comum com o cliente.
+
 ---
 
 ## Fase 5 — Backfill opcional de `client_documents.operacao_id`

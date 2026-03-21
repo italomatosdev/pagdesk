@@ -109,8 +109,18 @@
                                 </div>
                             @endif
                             @if(!empty($cliente['id']))
+                                @php
+                                    $oidsRadar = collect($cliente['operation_clients'] ?? [])->pluck('operacao_id')->filter()->unique()->values();
+                                    if (!auth()->user()->isSuperAdmin()) {
+                                        $allowedRadar = auth()->user()->getOperacoesIds();
+                                        if (!empty($allowedRadar)) {
+                                            $oidsRadar = $oidsRadar->filter(fn ($id) => in_array((int) $id, $allowedRadar, true))->values();
+                                        }
+                                    }
+                                    $operacaoIdRadar = $oidsRadar->count() === 1 ? (int) $oidsRadar->first() : null;
+                                @endphp
                                 <div class="mt-3">
-                                    <a href="{{ route('clientes.show', $cliente['id']) }}" class="btn btn-sm btn-primary me-1"><i class="bx bx-show"></i> Ver ficha</a>
+                                    <a href="{{ \App\Support\ClienteUrl::show($cliente['id'], $operacaoIdRadar) }}" class="btn btn-sm btn-primary me-1"><i class="bx bx-show"></i> Ver ficha</a>
                                     <a href="{{ route('clientes.edit', $cliente['id']) }}" class="btn btn-sm btn-outline-secondary"><i class="bx bx-edit"></i> Editar</a>
                                 </div>
                             @endif

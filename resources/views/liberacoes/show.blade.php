@@ -38,7 +38,7 @@
                             </div>
                             <div class="col-md-6 mb-3">
                                 <strong>Cliente:</strong> 
-                                <a href="{{ route('clientes.show', $liberacao->emprestimo->cliente_id) }}">
+                                <a href="{{ \App\Support\ClienteUrl::show($liberacao->emprestimo->cliente_id, $liberacao->emprestimo->operacao_id) }}">
                                     {{ $liberacao->emprestimo->cliente->nome }}
                                 </a>
                                 @if($liberacao->emprestimo->cliente->temWhatsapp())
@@ -239,7 +239,7 @@
                             <a href="{{ route('emprestimos.show', $liberacao->emprestimo_id) }}" class="btn btn-info">
                                 <i class="bx bx-show"></i> Ver Empréstimo
                             </a>
-                            <a href="{{ route('clientes.show', $liberacao->emprestimo->cliente_id) }}" class="btn btn-secondary">
+                            <a href="{{ \App\Support\ClienteUrl::show($liberacao->emprestimo->cliente_id, $liberacao->emprestimo->operacao_id) }}" class="btn btn-secondary">
                                 <i class="bx bx-user"></i> Ver Cliente
                             </a>
                             <a href="{{ route('liberacoes.index') }}" class="btn btn-outline-secondary">
