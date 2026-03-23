@@ -10,9 +10,10 @@ use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\Parcela;
 use App\Support\FichaContatoLookup;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
-use Carbon\Carbon;
 
 class RelatorioController extends Controller
 {
@@ -34,12 +35,44 @@ class RelatorioController extends Controller
             $q->whereIn('operacao_user.role', $papeisResponsavel);
             if ($operacaoId) {
                 $q->where('operacoes.id', $operacaoId);
-            } elseif (!$user->isSuperAdmin() && !empty($operacoesIds)) {
+            } elseif (! $user->isSuperAdmin() && ! empty($operacoesIds)) {
                 $q->whereIn('operacoes.id', $operacoesIds);
             }
         });
 
         return $query->orderBy('name')->get();
+    }
+
+    /**
+     * JSON: consultores (papéis responsável) filtrados por operação — para AJAX nos filtros dos relatórios.
+     */
+    public function consultoresPorOperacao(Request $request): JsonResponse
+    {
+        $user = auth()->user();
+
+        if (empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
+            abort(403, 'Acesso negado.');
+        }
+
+        $operacoesIds = $user->isSuperAdmin()
+            ? Operacao::where('ativo', true)->pluck('id')->toArray()
+            : $user->getOperacoesIds();
+
+        $operacaoRaw = $request->query('operacao_id');
+        $operacaoId = ($operacaoRaw !== null && $operacaoRaw !== '') ? (int) $operacaoRaw : null;
+
+        if ($operacaoId !== null && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds, true))) {
+            abort(403, 'Operação inválida.');
+        }
+
+        $consultores = $this->getConsultoresParaRelatorio($operacaoId, $operacoesIds, $user);
+
+        return response()->json([
+            'consultores' => $consultores->map(fn ($c) => [
+                'id' => $c->id,
+                'name' => $c->id === $user->id ? $c->name.' (Você)' : $c->name,
+            ])->values(),
+        ]);
     }
 
     /**
@@ -90,7 +123,7 @@ class RelatorioController extends Controller
             if ($p->parcela->emprestimo) {
                 $emp = $p->parcela->emprestimo;
                 $jurosIncorporados = (float) ($emp->juros_incorporados ?? 0);
-                
+
                 if ($jurosIncorporados > 0) {
                     $valorTotalParcelas = $emp->parcelas()->sum('valor');
                     if ($valorTotalParcelas > 0) {
@@ -144,16 +177,16 @@ class RelatorioController extends Controller
             ? Operacao::where('ativo', true)->pluck('id')->toArray()
             : $user->getOperacoesIds();
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        if ($operacaoId !== null && (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds, true))) {
+        if ($operacaoId !== null && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds, true))) {
             $operacaoId = null;
         }
         $consultoresIds = $request->input('consultor_id', []);
-        if (!is_array($consultoresIds)) {
+        if (! is_array($consultoresIds)) {
             $consultoresIds = $consultoresIds ? [$consultoresIds] : [];
         }
         $consultoresIds = array_filter(array_map('intval', $consultoresIds));
 
-        $operacoes = !empty($operacoesIds)
+        $operacoes = ! empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
             : collect([]);
         $consultores = $this->getConsultoresParaRelatorio($operacaoId, $operacoesIds, $user);
@@ -164,7 +197,7 @@ class RelatorioController extends Controller
 
         foreach ($consultoresIds as $cid) {
             $c = $consultores->firstWhere('id', $cid);
-            $totalizadoresPorUsuario[$cid] = ['recebido' => 0, 'juros' => 0, 'investido' => 0, 'nome' => $c ? $c->name : 'Usuário #' . $cid];
+            $totalizadoresPorUsuario[$cid] = ['recebido' => 0, 'juros' => 0, 'investido' => 0, 'nome' => $c ? $c->name : 'Usuário #'.$cid];
         }
 
         if (count($consultoresIds) > 0) {
@@ -172,11 +205,11 @@ class RelatorioController extends Controller
                 ->whereBetween('data_pagamento', [$dateFrom, $dateTo])
                 ->whereIn('consultor_id', $consultoresIds);
 
-            if (!$user->isSuperAdmin() || $operacaoId) {
+            if (! $user->isSuperAdmin() || $operacaoId) {
                 $query->whereHas('parcela.emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
                     if ($operacaoId) {
                         $q->where('operacao_id', $operacaoId);
-                    } elseif (!empty($operacoesIds)) {
+                    } elseif (! empty($operacoesIds)) {
                         $q->whereIn('operacao_id', $operacoesIds);
                     } else {
                         $q->whereRaw('1 = 0');
@@ -194,10 +227,10 @@ class RelatorioController extends Controller
                 $juros = $partes['juros'];
                 $investido = $partes['investido'];
 
-                if (!isset($porDiaPorUsuario[$dia])) {
+                if (! isset($porDiaPorUsuario[$dia])) {
                     $porDiaPorUsuario[$dia] = [];
                 }
-                if (!isset($porDiaPorUsuario[$dia][$consultorId])) {
+                if (! isset($porDiaPorUsuario[$dia][$consultorId])) {
                     $porDiaPorUsuario[$dia][$consultorId] = ['recebido' => 0, 'juros' => 0, 'investido' => 0];
                 }
                 $porDiaPorUsuario[$dia][$consultorId]['recebido'] += $valor;
@@ -258,18 +291,18 @@ class RelatorioController extends Controller
             ? Operacao::where('ativo', true)->pluck('id')->toArray()
             : $user->getOperacoesIds();
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        if ($operacaoId !== null && (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds, true))) {
+        if ($operacaoId !== null && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds, true))) {
             $operacaoId = null;
         }
         $consultoresIds = $request->input('consultor_id', []);
-        if (!is_array($consultoresIds)) {
+        if (! is_array($consultoresIds)) {
             $consultoresIds = $consultoresIds ? [$consultoresIds] : [];
         }
         $consultoresIds = array_filter(array_map('intval', $consultoresIds));
         $diasAtrasoMin = $request->input('dias_atraso_min') !== null && $request->input('dias_atraso_min') !== ''
             ? (int) $request->input('dias_atraso_min') : null;
 
-        $operacoes = !empty($operacoesIds)
+        $operacoes = ! empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
             : collect([]);
         $consultores = $this->getConsultoresParaRelatorio($operacaoId, $operacoesIds, $user);
@@ -280,12 +313,12 @@ class RelatorioController extends Controller
 
         $query->whereHas('emprestimo', function ($q) use ($operacaoId, $operacoesIds, $consultoresIds, $user) {
             $q->where('status', 'ativo');
-            if ($user->isSuperAdmin() && !$operacaoId) {
+            if ($user->isSuperAdmin() && ! $operacaoId) {
                 // Super Admin sem operação: sem filtro
             } else {
                 if ($operacaoId) {
                     $q->where('operacao_id', $operacaoId);
-                } elseif (!empty($operacoesIds)) {
+                } elseif (! empty($operacoesIds)) {
                     $q->whereIn('operacao_id', $operacoesIds);
                 } else {
                     $q->whereRaw('1 = 0');
@@ -374,18 +407,18 @@ class RelatorioController extends Controller
             ? Operacao::where('ativo', true)->pluck('id')->toArray()
             : $user->getOperacoesIds();
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        if ($operacaoId !== null && (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds, true))) {
+        if ($operacaoId !== null && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds, true))) {
             $operacaoId = null;
         }
         $consultoresIds = $request->input('consultor_id', []);
-        if (!is_array($consultoresIds)) {
+        if (! is_array($consultoresIds)) {
             $consultoresIds = $consultoresIds ? [$consultoresIds] : [];
         }
         $consultoresIds = array_filter(array_map('intval', $consultoresIds));
         $frequencia = $request->input('frequencia');
         $tipoQuitacao = $request->input('tipo_quitacao');
 
-        $operacoes = !empty($operacoesIds)
+        $operacoes = ! empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
             : collect([]);
         $consultores = $this->getConsultoresParaRelatorio($operacaoId, $operacoesIds, $user);
@@ -394,10 +427,10 @@ class RelatorioController extends Controller
             ->withCount('renovacoes')
             ->where('status', 'finalizado');
 
-        if (!$user->isSuperAdmin() || $operacaoId) {
+        if (! $user->isSuperAdmin() || $operacaoId) {
             if ($operacaoId) {
                 $query->where('operacao_id', $operacaoId);
-            } elseif (!empty($operacoesIds)) {
+            } elseif (! empty($operacoesIds)) {
                 $query->whereIn('operacao_id', $operacoesIds);
             } else {
                 $query->whereRaw('1 = 0');
@@ -472,11 +505,11 @@ class RelatorioController extends Controller
             ? Operacao::where('ativo', true)->pluck('id')->toArray()
             : $user->getOperacoesIds();
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        if ($operacaoId !== null && (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds, true))) {
+        if ($operacaoId !== null && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds, true))) {
             $operacaoId = null;
         }
 
-        $operacoes = !empty($operacoesIds)
+        $operacoes = ! empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
             : collect([]);
         $consultores = $this->getConsultoresParaRelatorio($operacaoId, $operacoesIds, $user);
@@ -485,7 +518,7 @@ class RelatorioController extends Controller
         foreach ($consultores as $c) {
             $totaisPorConsultor[$c->id] = [
                 'id' => $c->id,
-                'nome' => $c->name . ($c->id === $user->id ? ' (Você)' : ''),
+                'nome' => $c->name.($c->id === $user->id ? ' (Você)' : ''),
                 'valor_quitado' => 0,
                 'juros_recebidos' => 0,
             ];
@@ -494,11 +527,11 @@ class RelatorioController extends Controller
         $query = Pagamento::with(['consultor', 'parcela.emprestimo'])
             ->whereBetween('data_pagamento', [$dateFrom, $dateTo]);
 
-        if (!$user->isSuperAdmin() || $operacaoId) {
+        if (! $user->isSuperAdmin() || $operacaoId) {
             $query->whereHas('parcela.emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
                 if ($operacaoId) {
                     $q->where('operacao_id', $operacaoId);
-                } elseif (!empty($operacoesIds)) {
+                } elseif (! empty($operacoesIds)) {
                     $q->whereIn('operacao_id', $operacoesIds);
                 } else {
                     $q->whereRaw('1 = 0');
@@ -515,10 +548,10 @@ class RelatorioController extends Controller
             $juros = $partes['juros'];
             $investido = $partes['investido'];
 
-            if (!isset($totaisPorConsultor[$consultorId])) {
+            if (! isset($totaisPorConsultor[$consultorId])) {
                 $totaisPorConsultor[$consultorId] = [
                     'id' => $consultorId,
-                    'nome' => $p->consultor->name ?? 'Consultor #' . $consultorId,
+                    'nome' => $p->consultor->name ?? 'Consultor #'.$consultorId,
                     'valor_quitado' => 0,
                     'juros_recebidos' => 0,
                 ];
@@ -560,21 +593,21 @@ class RelatorioController extends Controller
             ? Operacao::where('ativo', true)->pluck('id')->toArray()
             : $user->getOperacoesIds();
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        if ($operacaoId !== null && (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds, true))) {
+        if ($operacaoId !== null && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds, true))) {
             $operacaoId = null;
         }
 
-        $operacoes = !empty($operacoesIds)
+        $operacoes = ! empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
             : collect([]);
 
         $query = CashLedgerEntry::with('categoria')
             ->whereBetween('data_movimentacao', [$dateFrom, $dateTo]);
 
-        if (!$user->isSuperAdmin() || $operacaoId) {
+        if (! $user->isSuperAdmin() || $operacaoId) {
             if ($operacaoId) {
                 $query->where('operacao_id', $operacaoId);
-            } elseif (!empty($operacoesIds)) {
+            } elseif (! empty($operacoesIds)) {
                 $query->whereIn('operacao_id', $operacoesIds);
             } else {
                 $query->whereRaw('1 = 0');
@@ -592,7 +625,7 @@ class RelatorioController extends Controller
             $catId = $e->categoria_id ?? 'sem_categoria';
             $catNome = $e->categoria?->nome ?? 'Sem categoria';
 
-            if (!isset($porCategoria[$catId])) {
+            if (! isset($porCategoria[$catId])) {
                 $porCategoria[$catId] = ['nome' => $catNome, 'entradas' => 0, 'saidas' => 0];
             }
 
@@ -641,11 +674,11 @@ class RelatorioController extends Controller
             ? Operacao::where('ativo', true)->pluck('id')->toArray()
             : $user->getOperacoesIds();
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        if ($operacaoId !== null && (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds, true))) {
+        if ($operacaoId !== null && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds, true))) {
             $operacaoId = null;
         }
         $consultoresIds = $request->input('consultor_id', []);
-        if (!is_array($consultoresIds)) {
+        if (! is_array($consultoresIds)) {
             $consultoresIds = $consultoresIds ? [$consultoresIds] : [];
         }
         $consultoresIds = array_filter(array_map('intval', $consultoresIds));
@@ -653,7 +686,7 @@ class RelatorioController extends Controller
         $frequencia = $request->input('frequencia');
         $tipoQuitacao = $request->input('tipo_quitacao');
 
-        $operacoes = !empty($operacoesIds)
+        $operacoes = ! empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
             : collect([]);
         $consultores = $this->getConsultoresParaRelatorio($operacaoId, $operacoesIds, $user);
@@ -661,10 +694,10 @@ class RelatorioController extends Controller
         $query = Emprestimo::with(['cliente', 'operacao', 'consultor', 'parcelas.pagamentos'])
             ->where('status', 'finalizado');
 
-        if (!$user->isSuperAdmin() || $operacaoId) {
+        if (! $user->isSuperAdmin() || $operacaoId) {
             if ($operacaoId) {
                 $query->where('operacao_id', $operacaoId);
-            } elseif (!empty($operacoesIds)) {
+            } elseif (! empty($operacoesIds)) {
                 $query->whereIn('operacao_id', $operacoesIds);
             } else {
                 $query->whereRaw('1 = 0');

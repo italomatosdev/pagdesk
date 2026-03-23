@@ -29,7 +29,7 @@
                             @if($operacoes->isNotEmpty())
                             <div class="col-md-2">
                                 <label class="form-label">Operação</label>
-                                <select name="operacao_id" class="form-select">
+                                <select name="operacao_id" id="relatorio-operacao-id" class="form-select">
                                     <option value="">Todas</option>
                                     @foreach($operacoes as $op)
                                         <option value="{{ $op->id }}" {{ $operacaoId == $op->id ? 'selected' : '' }}>{{ $op->nome }}</option>
@@ -39,7 +39,7 @@
                             @endif
                             <div class="col-md-4">
                                 <label class="form-label">Consultores (selecione um ou mais)</label>
-                                <select name="consultor_id[]" class="form-select" id="consultores-select" multiple>
+                                <select name="consultor_id[]" class="form-select" id="consultores-select" multiple data-select2-placeholder="Selecione um ou mais consultores">
                                     @foreach($consultores as $c)
                                         <option value="{{ $c->id }}" {{ in_array($c->id, $consultoresIds) ? 'selected' : '' }}>{{ $c->id === auth()->id() ? $c->name . ' (Você)' : $c->name }}</option>
                                     @endforeach
@@ -193,12 +193,5 @@
 
 @section('scripts')
 @parent
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Opcional: melhorar multiselect com Select2 se estiver disponível
-    if (typeof $ !== 'undefined' && $.fn.select2) {
-        $('#consultores-select').select2({ theme: 'bootstrap-5', placeholder: 'Selecione um ou mais consultores', allowClear: true });
-    }
-});
-</script>
+@include('relatorios.partials.consultores-operacao-ajax')
 @endsection

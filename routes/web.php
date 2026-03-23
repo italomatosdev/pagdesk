@@ -247,6 +247,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
     // Relatórios (Administrador e Gestor)
     Route::prefix('relatorios')->name('relatorios.')->group(function () {
         Route::get('/', [App\Modules\Core\Controllers\RelatorioController::class, 'index'])->name('index');
+        Route::get('/consultores-por-operacao', [App\Modules\Core\Controllers\RelatorioController::class, 'consultoresPorOperacao'])->name('consultores-por-operacao');
         Route::get('/recebimento-juros-dia', [App\Modules\Core\Controllers\RelatorioController::class, 'recebimentoJurosDia'])->name('recebimento-juros-dia');
         Route::get('/parcelas-atrasadas', [App\Modules\Core\Controllers\RelatorioController::class, 'parcelasAtrasadas'])->name('parcelas-atrasadas');
         Route::get('/quitacoes', [App\Modules\Core\Controllers\RelatorioController::class, 'quitacoes'])->name('quitacoes');
