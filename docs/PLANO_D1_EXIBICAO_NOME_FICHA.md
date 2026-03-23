@@ -51,7 +51,7 @@
 
 **Telas globais (fora do critério D1):** o **mural de devedores** (`consultas/devedores`) segue a **mesma lógica do radar** (`radar/*`) — visão **global** na empresa, sem `operacao_id` único na listagem. Aí o nome exibido continua sendo o do **cadastro** (`Cliente->nome`); **não** é pendência de D1 nem inconsistência com o radar.
 
-**API Select2 de clientes (`ClienteController@buscar`):** **obrigatório** enviar `operacao_id` válido (acesso do usuário); sem isso a API retorna vazio + mensagem e o front **alerta**. Com operação, o texto usa **ficha** + busca em cadastro e em nome/telefone/e-mail da ficha (novo empréstimo / nova venda).
+**API Select2 de clientes (`ClienteController@buscar`):** **obrigatório** enviar `operacao_id` válido (acesso do usuário); sem isso a API retorna vazio + mensagem e o front **alerta**. Com operação, retornam **apenas** clientes com vínculo nessa operação (`operation_clients`); o texto usa **ficha** + busca em cadastro e em nome/telefone/e-mail da ficha (novo empréstimo / nova venda).
 
 **Ainda fora do escopo D1 curto (outros):** telas de cadastro de cliente (contexto misto cadastro/ficha já tratado onde há operação), `caixa/index` sem coluna cliente, commands/logs internos.
 

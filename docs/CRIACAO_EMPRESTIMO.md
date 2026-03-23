@@ -86,6 +86,7 @@ CONSULTOR
 - **Controller:** `App\Modules\Loans\Controllers\EmprestimoController` – `create()` monta a lista por operação e adiciona "Nome (Você)" ao final para gestor/admin; `store()` exige e valida `consultor_id` para gestor e administrador (normal e retroativo).
 - **View:** `resources/views/emprestimos/create.blade.php` – bloco do consultor visível quando `ehGestorOuAdmin`; select preenchido via `consultoresPorOperacao` (JSON), que já inclui a entrada "(Você)" ao final.
 - **Operações:** gestor vê apenas operações às quais tem acesso; administrador vê todas. A lista de consultores (e "Você") é por operação selecionada.
+- **Busca de cliente (Select2):** `clientes.api.buscar` — com `operacao_id` válido, só retorna clientes **já vinculados à operação** (`operation_clients`); nome/documento e ficha (`operacao_dados_clientes`) continuam servindo ao texto de busca e exibição.
 
 ---
 

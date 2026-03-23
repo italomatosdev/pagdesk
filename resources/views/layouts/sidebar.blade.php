@@ -325,6 +325,7 @@
                     <ul class="sub-menu" aria-expanded="false">
                         <li><a href="{{ route('relatorios.recebimento-juros-dia') }}">Recebimento e juros por dia</a></li>
                         <li><a href="{{ route('relatorios.parcelas-atrasadas') }}">Parcelas atrasadas</a></li>
+                        <li><a href="{{ route('relatorios.receber-por-cliente') }}">A receber por cliente (período)</a></li>
                         <li><a href="{{ route('relatorios.quitacoes') }}">Quitações</a></li>
                         <li><a href="{{ route('relatorios.juros-quitacoes') }}">Juros por quitação</a></li>
                         <li><a href="{{ route('relatorios.comissoes') }}">Comissões</a></li>

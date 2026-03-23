@@ -274,10 +274,9 @@
                     </div>
                     <div class="card-body">
                         @php
-                            $documento = $cliente->getDocumentoPorCategoria('documento');
-                            $selfie = $cliente->getDocumentoPorCategoria('selfie');
-                            // Para anexos, mostra todos (originais + específicos da empresa)
-                            $anexos = $cliente->documentos->where('categoria', 'anexo');
+                            $documento = $documentoShow ?? null;
+                            $selfie = $selfieShow ?? null;
+                            $anexos = $anexosShow ?? collect();
                         @endphp
 
                         <div class="mb-3">

@@ -563,6 +563,7 @@ class ClienteController extends Controller
         }
 
         $operacaoContextoShow = null;
+        $documentosOperacaoShow = null;
         if ($request->filled('operacao_id')) {
             $oid = (int) $request->query('operacao_id');
             $temVinculo = $cliente->operationClients()->where('operacao_id', $oid)->exists();
@@ -576,7 +577,20 @@ class ClienteController extends Controller
                 'nome' => Operacao::withoutGlobalScope(EmpresaScope::class)->whereKey($oid)->value('nome') ?? 'Operação',
                 'ficha' => $this->operacaoDadosClienteService->obterParaOperacao($cliente->id, $oid),
             ];
+            $documentosOperacaoShow = $this->documentosClienteNaOperacao($cliente->id, $oid);
         }
+
+        // Fallback para documentos legados/globais quando não houver arquivo no contexto da operação.
+        $documentosLegadoShow = $this->documentosClienteLegadoVisivel(
+            $cliente->id,
+            $user->empresa_id ?? null,
+            $isSuperAdmin
+        );
+        $documentoShow = $documentosOperacaoShow['documento'] ?? $documentosLegadoShow['documento'];
+        $selfieShow = $documentosOperacaoShow['selfie'] ?? $documentosLegadoShow['selfie'];
+        $anexosShow = ($documentosOperacaoShow['anexos'] ?? collect())->isNotEmpty()
+            ? $documentosOperacaoShow['anexos']
+            : $documentosLegadoShow['anexos'];
 
         // Filtrar documentos por empresa (quando houver)
         if (!$isSuperAdmin && $empresaId) {
@@ -706,7 +720,10 @@ class ClienteController extends Controller
             'totalAtrasado',
             'statsCliente',
             'isSuperAdmin',
-            'operacaoContextoShow'
+            'operacaoContextoShow',
+            'documentoShow',
+            'selfieShow',
+            'anexosShow'
         ));
     }
 
@@ -1368,7 +1385,11 @@ class ClienteController extends Controller
             ]);
         }
 
-        $query = Cliente::query();
+        // Apenas clientes já vinculados à operação (ex.: novo empréstimo / nova venda).
+        $query = Cliente::query()
+            ->whereHas('operationClients', function ($q) use ($operacaoValida) {
+                $q->where('operacao_id', $operacaoValida);
+            });
 
         // Remover formatação do CPF se houver
         $documentoLimpo = preg_replace('/[^0-9]/', '', $termo);
