@@ -33,6 +33,14 @@
                             </div>
                             <i class="bx bx-chevron-right ms-auto"></i>
                         </a>
+                        <a href="{{ route('relatorios.receber-por-cliente') }}" class="list-group-item list-group-item-action d-flex align-items-center">
+                            <i class="bx bx-user-voice font-size-20 text-warning me-3"></i>
+                            <div>
+                                <h6 class="mb-1">A receber por cliente (período)</h6>
+                                <small class="text-muted">Consolida cliente por cliente no período: total a receber, juros, contrato sem juros e principal com juros.</small>
+                            </div>
+                            <i class="bx bx-chevron-right ms-auto"></i>
+                        </a>
                         <a href="{{ route('relatorios.quitacoes') }}" class="list-group-item list-group-item-action d-flex align-items-center">
                             <i class="bx bx-check-circle font-size-20 text-success me-3"></i>
                             <div>

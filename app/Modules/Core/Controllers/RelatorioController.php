@@ -484,6 +484,122 @@ class RelatorioController extends Controller
     }
 
     /**
+     * Relatório: A receber por cliente (vencimento no período).
+     * Baseado em parcelas não pagas de empréstimos ativos.
+     */
+    public function receberPorCliente(Request $request): View
+    {
+        $user = auth()->user();
+
+        if (empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
+            abort(403, 'Acesso negado.');
+        }
+
+        $dateFrom = $request->input('date_from') ? Carbon::parse($request->input('date_from'))->startOfDay() : Carbon::now()->startOfMonth();
+        $dateTo = $request->input('date_to') ? Carbon::parse($request->input('date_to'))->endOfDay() : Carbon::now()->endOfMonth();
+        if ($dateFrom->gt($dateTo)) {
+            $dateTo = $dateFrom->copy()->endOfDay();
+        }
+
+        $operacoesIds = $user->isSuperAdmin()
+            ? Operacao::where('ativo', true)->pluck('id')->toArray()
+            : $user->getOperacoesIds();
+        $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
+        if ($operacaoId !== null && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds, true))) {
+            $operacaoId = null;
+        }
+
+        $consultoresIds = $request->input('consultor_id', []);
+        if (! is_array($consultoresIds)) {
+            $consultoresIds = $consultoresIds ? [$consultoresIds] : [];
+        }
+        $consultoresIds = array_values(array_filter(array_map('intval', $consultoresIds)));
+        // Checkbox não envia parâmetro quando desmarcado; hidden "0" + checkbox "1" garante o valor no GET.
+        $somenteSemJuros = $request->has('somente_sem_juros')
+            ? $request->boolean('somente_sem_juros')
+            : true;
+
+        $operacoes = ! empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
+        $consultores = $this->getConsultoresParaRelatorio($operacaoId, $operacoesIds, $user);
+
+        $query = Parcela::query()
+            ->join('emprestimos as e', function ($join) {
+                $join->on('e.id', '=', 'parcelas.emprestimo_id')
+                    ->whereNull('e.deleted_at');
+            })
+            ->join('clientes as c', function ($join) {
+                $join->on('c.id', '=', 'e.cliente_id')
+                    ->whereNull('c.deleted_at');
+            })
+            ->where('e.status', 'ativo')
+            ->whereNull('parcelas.deleted_at')
+            ->where('parcelas.status', '<>', 'paga')
+            ->whereBetween('parcelas.data_vencimento', [$dateFrom->toDateString(), $dateTo->toDateString()]);
+
+        if (! $user->isSuperAdmin() || $operacaoId) {
+            if ($operacaoId) {
+                $query->where('e.operacao_id', $operacaoId);
+            } elseif (! empty($operacoesIds)) {
+                $query->whereIn('e.operacao_id', $operacoesIds);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+
+        if (count($consultoresIds) > 0) {
+            $query->whereIn('e.consultor_id', $consultoresIds);
+        }
+
+        $query->selectRaw('
+            e.cliente_id,
+            c.nome as cliente_nome,
+            c.documento as cliente_documento,
+            COALESCE(SUM(parcelas.valor - COALESCE(parcelas.valor_pago, 0)), 0) as total_a_receber_periodo,
+            COALESCE(SUM(CASE WHEN parcelas.valor > 0 THEN (COALESCE(parcelas.valor_juros, 0) / parcelas.valor) * (parcelas.valor - COALESCE(parcelas.valor_pago, 0)) ELSE 0 END), 0) as somente_juros_no_periodo,
+            COALESCE(SUM(CASE WHEN COALESCE(e.taxa_juros, 0) = 0 THEN parcelas.valor - COALESCE(parcelas.valor_pago, 0) ELSE 0 END), 0) as parcela_sem_juros_contrato_no_periodo
+        ')
+            ->groupBy('e.cliente_id', 'c.nome', 'c.documento');
+
+        if ($somenteSemJuros) {
+            $query->havingRaw('COALESCE(SUM(CASE WHEN COALESCE(e.taxa_juros, 0) = 0 THEN parcelas.valor - COALESCE(parcelas.valor_pago, 0) ELSE 0 END), 0) > 0');
+        }
+
+        $rows = $query
+            ->orderBy('parcela_sem_juros_contrato_no_periodo', 'desc')
+            ->get()
+            ->map(function ($r) {
+                $total = (float) ($r->total_a_receber_periodo ?? 0);
+                $juros = (float) ($r->somente_juros_no_periodo ?? 0);
+                $semJuros = (float) ($r->parcela_sem_juros_contrato_no_periodo ?? 0);
+                $r->principal_com_juros_no_periodo = round($total - $juros - $semJuros, 2);
+
+                return $r;
+            });
+
+        $totais = [
+            'clientes' => $rows->count(),
+            'total_a_receber_periodo' => round((float) $rows->sum('total_a_receber_periodo'), 2),
+            'somente_juros_no_periodo' => round((float) $rows->sum('somente_juros_no_periodo'), 2),
+            'parcela_sem_juros_contrato_no_periodo' => round((float) $rows->sum('parcela_sem_juros_contrato_no_periodo'), 2),
+            'principal_com_juros_no_periodo' => round((float) $rows->sum('principal_com_juros_no_periodo'), 2),
+        ];
+
+        return view('relatorios.receber-por-cliente', compact(
+            'dateFrom',
+            'dateTo',
+            'operacoes',
+            'operacaoId',
+            'consultores',
+            'consultoresIds',
+            'somenteSemJuros',
+            'rows',
+            'totais'
+        ));
+    }
+
+    /**
      * Relatório: Cálculo de comissões por consultor
      * Filtros: período, operação. Lista consultores com bases (valor quitado, juros recebidos) e permite escolher tipo de comissão + taxa % para calcular.
      */
