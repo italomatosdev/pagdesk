@@ -1385,7 +1385,11 @@ class ClienteController extends Controller
             ]);
         }
 
-        $query = Cliente::query();
+        // Apenas clientes já vinculados à operação (ex.: novo empréstimo / nova venda).
+        $query = Cliente::query()
+            ->whereHas('operationClients', function ($q) use ($operacaoValida) {
+                $q->where('operacao_id', $operacaoValida);
+            });
 
         // Remover formatação do CPF se houver
         $documentoLimpo = preg_replace('/[^0-9]/', '', $termo);
