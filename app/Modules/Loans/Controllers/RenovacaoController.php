@@ -4,7 +4,9 @@ namespace App\Modules\Loans\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Core\Models\Cliente;
+use App\Modules\Core\Models\Operacao;
 use App\Modules\Loans\Models\Emprestimo;
+use App\Support\OperacaoPreferida;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -64,13 +66,19 @@ class RenovacaoController extends Controller
             });
         }
 
-        if ($request->filled('operacao_id')) {
-            if ($user->temAcessoOperacao($request->operacao_id)) {
-                $query->where('operacao_id', $request->operacao_id);
-                // Consultor (sem gestor/admin nesta operação): apenas renovações dos seus empréstimos
-                if (!$user->temAlgumPapelNaOperacao((int) $request->operacao_id, ['gestor', 'administrador'])) {
-                    $query->where('consultor_id', $user->id);
-                }
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
+        } else {
+            $operacoesIdsList = $user->getOperacoesIds();
+            $operacoes = ! empty($operacoesIdsList)
+                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIdsList)->orderBy('nome')->get()
+                : collect([]);
+        }
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if ($operacaoId !== null && $user->temAcessoOperacao($operacaoId)) {
+            $query->where('operacao_id', $operacaoId);
+            if (! $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+                $query->where('consultor_id', $user->id);
             }
         }
 
@@ -92,23 +100,13 @@ class RenovacaoController extends Controller
             $renovacoesPorCliente[$clienteId]['historico'] = $historico->unique('id')->values();
         }
 
-        // Operações disponíveis no filtro (Super Admin = todas; demais = só as da operação)
-        if ($user->isSuperAdmin()) {
-            $operacoes = \App\Modules\Core\Models\Operacao::where('ativo', true)->get();
-        } else {
-            $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds)
-                ? \App\Modules\Core\Models\Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
-                : collect([]);
-        }
-
-        return view('renovacoes.index', compact('emprestimos', 'renovacoesPorCliente', 'operacoes'));
+        return view('renovacoes.index', compact('emprestimos', 'renovacoesPorCliente', 'operacoes', 'operacaoId'));
     }
 
     /**
      * Mostrar histórico de renovações de um cliente específico
      */
-    public function showCliente(int $clienteId): View
+    public function showCliente(Request $request, int $clienteId): View
     {
         $cliente = Cliente::findOrFail($clienteId);
         $user = auth()->user();
@@ -178,6 +176,11 @@ class RenovacaoController extends Controller
             }
         }
 
-        return view('renovacoes.show-cliente', compact('cliente', 'cadeiasRenovacao'));
+        $operacoesIds = $user->isSuperAdmin()
+            ? Operacao::query()->orderBy('nome')->pluck('id')->all()
+            : $user->getOperacoesIds();
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoesIds, $user);
+
+        return view('renovacoes.show-cliente', compact('cliente', 'cadeiasRenovacao', 'operacaoId'));
     }
 }

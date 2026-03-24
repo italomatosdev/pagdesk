@@ -7,6 +7,7 @@ use App\Modules\Core\Models\Operacao;
 use App\Modules\Loans\Models\Parcela;
 use App\Modules\Loans\Services\ParcelaService;
 use App\Support\FichaContatoLookup;
+use App\Support\OperacaoPreferida;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -34,22 +35,15 @@ class ParcelaController extends Controller
         }
         
         $operacaoIds = $user->getOperacoesIds();
-        $operacaoId = $request->input('operacao_id');
-        if ($operacaoId !== null && $operacaoId !== '') {
-            $operacaoId = (int) $operacaoId;
-            if (empty($operacaoIds) || !in_array($operacaoId, $operacaoIds, true)) {
-                $operacaoId = null;
-            }
-        } else {
-            $operacaoId = null;
-        }
-
-        $consultorId = empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])) ? $user->id : null;
-        $cobrancas = $this->parcelaService->cobrancasDoDia($operacaoId, $consultorId, $operacaoIds);
 
         $operacoes = !empty($operacaoIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacaoIds)->orderBy('nome')->get()
             : collect([]);
+
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+
+        $consultorId = empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])) ? $user->id : null;
+        $cobrancas = $this->parcelaService->cobrancasDoDia($operacaoId, $consultorId, $operacaoIds);
 
         // Separar por status
         $vencendoHoje = $cobrancas->filter(function ($parcela) {
@@ -112,14 +106,15 @@ class ParcelaController extends Controller
             });
         }
 
-        // Filtro por operação
-        if ($request->filled('operacao_id')) {
-            // Validar se o usuário tem acesso a essa operação
-            if ($user->temAcessoOperacao($request->operacao_id)) {
-                $query->whereHas('emprestimo', function ($q) use ($request) {
-                    $q->where('operacao_id', $request->operacao_id);
-                });
-            }
+        // Operações permitidas para resolver o filtro
+        $operacoesIdsResolver = $user->isSuperAdmin()
+            ? Operacao::where('ativo', true)->pluck('id')->toArray()
+            : $user->getOperacoesIds();
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoesIdsResolver, $user);
+        if ($operacaoId !== null && $user->temAcessoOperacao($operacaoId)) {
+            $query->whereHas('emprestimo', function ($q) use ($operacaoId) {
+                $q->where('operacao_id', $operacaoId);
+            });
         }
 
         // Filtro por consultor (apenas quem tem gestor/admin em alguma op)
@@ -167,6 +162,6 @@ class ParcelaController extends Controller
             FichaContatoLookup::pairsFromParcelas($parcelas->items())
         );
 
-        return view('parcelas.atrasadas', compact('parcelas', 'operacoes', 'consultores', 'fichasContatoPorClienteOperacao'));
+        return view('parcelas.atrasadas', compact('parcelas', 'operacoes', 'consultores', 'fichasContatoPorClienteOperacao', 'operacaoId'));
     }
 }

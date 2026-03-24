@@ -2,6 +2,22 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [2026-03-24] - Operação padrão do usuário (preferida)
+
+### ✅ Adicionado
+
+- **Tabela `user_operacao_preferida`:** até um registro por usuário (`operacao_id` nullable); preferência opcional para pré-selecionar operação em filtros e formulários.
+- **Model `UserOperacaoPreferida`**, relação `User::operacaoPreferida()`, métodos `getOperacaoPrincipalId()` (valida vínculo em `operacao_user`, limpa órfão) e `definirOperacaoPrincipal(?int)`.
+- **Helper `App\Support\OperacaoPreferida`:** `resolverParaFiltroGet`, `resolverParaFormulario`, `resolverParaFormularioOuQuery`.
+- **Perfil:** `PUT /perfil/operacoes/preferida` (`profile.operacoes-preferida`); em **Minhas Operações**, rádio “Nenhuma” ou uma operação (visível com 2+ operações); papel por operação exibido a partir da pivot (`operacao_user.role`).
+
+### ✅ Modificado
+
+- **v1 (telas do plano):** dashboards admin/gestor/consultor, aprovações, caixa (listagem, movimentação manual, sangria, transferência da operação), fechamento de caixa, clientes (índice), empréstimos (índice), liberações (índice, consultor, produtos objeto, pagamentos produto objeto, juros parcial, juros contrato reduzido, renovação abate, negociações) — uso do resolver para default de `operacao_id` quando aplicável.
+- **v2 (telas operacionais e relatórios):** `OperacaoPreferida` aplicado em filtros e defaults adicionais nos controllers (entre outros: `RelatorioController` em todos os relatórios com operação; `ClienteController` link/cadastro e create; `EmprestimoController` create e retroativo pendentes; `CategoriaMovimentacaoController`; `ParcelaController` (cobranças do dia, parcelas atrasadas); `KanbanBoardController`; `GarantiaController`; `ChequeController`; `RenovacaoController` (índice e histórico por cliente com `resolverParaFiltroGet`); `ProdutoController`; `VendaController`; `QuitacaoController`; `SettlementController`). **Views:** selects de operação alinhados à variável do controller (`operacaoId`, `operacaoIdFiltro`, etc.) com opção “Todas” quando o filtro é nulo — relatórios (recebimento/juros por dia, parcelas atrasadas, quitações, comissões, entradas/saídas por categoria, juros em quitações, receber por cliente), vendas, produtos, renovações, kanban, garantias, parcelas/cobranças, categorias de caixa (índice e create), empréstimos retroativos pendentes; em `renovacoes/show-cliente`, links e “Voltar” preservam o contexto de operação. **`EmprestimoController::create`:** no `catch` do carregamento do formulário, mesma lógica de uma operação / preferência quando há várias.
+
+---
+
 ## [2026-01-24] - Transferência do Caixa da Operação (admin)
 
 ### ✅ Adicionado

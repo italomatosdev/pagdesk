@@ -20,10 +20,10 @@
                                 <div class="col-md-4">
                                     <label class="form-label">Operação</label>
                                     <select name="operacao_id" class="form-select">
-                                        <option value="">Todas</option>
+                                        <option value="" {{ ($operacaoId ?? null) === null ? 'selected' : '' }}>Todas</option>
                                         @foreach($operacoes as $operacao)
                                             <option value="{{ $operacao->id }}" 
-                                                    {{ $operacaoId == $operacao->id ? 'selected' : '' }}>
+                                                    {{ (int) ($operacaoId ?? 0) === (int) $operacao->id && ($operacaoId ?? null) !== null ? 'selected' : '' }}>
                                                 {{ $operacao->nome }}
                                             </option>
                                         @endforeach

@@ -23,7 +23,7 @@
                             <select name="operacao_id" class="form-select" required>
                                 <option value="">Selecione a operação</option>
                                 @foreach($operacoes ?? [] as $op)
-                                    <option value="{{ $op->id }}" {{ old('operacao_id') == $op->id ? 'selected' : '' }}>{{ $op->nome }}</option>
+                                    <option value="{{ $op->id }}" {{ (string) old('operacao_id', $operacaoIdDefault ?? '') === (string) $op->id ? 'selected' : '' }}>{{ $op->nome }}</option>
                                 @endforeach
                             </select>
                             @error('operacao_id')

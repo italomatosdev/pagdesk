@@ -13,6 +13,7 @@ use App\Modules\Loans\Models\LiberacaoEmprestimo;
 use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\Parcela;
 use App\Support\FichaContatoLookup;
+use App\Support\OperacaoPreferida;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -156,16 +157,16 @@ class DashboardController extends Controller
     {
         $user = auth()->user();
         $operacoesIds = $user->getOperacoesIds();
-        $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
         [$dateFrom, $dateTo] = $this->getDateRangeFromRequest($request);
-
-        if ($operacaoId && ! $user->isSuperAdmin() && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds))) {
-            $operacaoId = null;
-        }
 
         $operacoes = ! empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
             : collect([]);
+
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if ($operacaoId && ! $user->isSuperAdmin() && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds))) {
+            $operacaoId = null;
+        }
 
         // Helper para aplicar filtro de operações em queries de Emprestimo
         $aplicarFiltroOperacaoEmprestimo = function ($query) use ($operacaoId, $operacoesIds) {
@@ -752,17 +753,16 @@ class DashboardController extends Controller
     {
         $user = auth()->user();
         $operacoesIds = $user->getOperacoesIds();
-        $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
         [$dateFrom, $dateTo] = $this->getDateRangeFromRequest($request);
-
-        // Validar operação selecionada (gestor só acessa suas operações)
-        if ($operacaoId && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds))) {
-            $operacaoId = null;
-        }
 
         $operacoes = ! empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
             : collect([]);
+
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if ($operacaoId && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds))) {
+            $operacaoId = null;
+        }
 
         // Helper para aplicar filtro de operações em queries de Emprestimo
         $aplicarFiltroOperacaoEmprestimo = function ($query) use ($operacaoId, $operacoesIds) {
@@ -1216,18 +1216,18 @@ class DashboardController extends Controller
     protected function dashboardConsultor(Request $request): View
     {
         $user = auth()->user();
-        $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
         [$dateFrom, $dateTo] = $this->getDateRangeFromRequest($request);
-
-        if ($operacaoId && ! $user->temAcessoOperacao($operacaoId)) {
-            $operacaoId = null;
-        }
 
         // Filtrar operações disponíveis para o usuário (sempre apenas as vinculadas)
         $operacoesIds = $user->getOperacoesIds();
         $operacoes = ! empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
             : collect([]);
+
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if ($operacaoId && ! $user->temAcessoOperacao($operacaoId)) {
+            $operacaoId = null;
+        }
 
         // Helper para aplicar filtro de operações em queries de Emprestimo
         $aplicarFiltroOperacaoEmprestimo = function ($query) use ($operacaoId, $operacoesIds) {

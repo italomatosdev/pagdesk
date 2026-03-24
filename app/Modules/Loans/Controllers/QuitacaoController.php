@@ -9,6 +9,7 @@ use App\Modules\Loans\Models\SolicitacaoQuitacao;
 use App\Modules\Loans\Services\QuitacaoService;
 use App\Support\ClienteNomeExibicao;
 use App\Support\FichaContatoLookup;
+use App\Support\OperacaoPreferida;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -166,13 +167,16 @@ class QuitacaoController extends Controller
             abort(403, 'Apenas gestores e administradores podem ver solicitações de quitação.');
         }
 
-        $operacaoId = $request->input('operacao_id');
-        if ($operacaoId && !$user->isSuperAdmin()) {
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
+        } else {
             $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $operacaoId, $opsIds, true)) {
-                $operacaoId = null;
-            }
+            $operacoes = !empty($opsIds)
+                ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
+                : collect([]);
         }
+
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
 
         $query = SolicitacaoQuitacao::with(['emprestimo.cliente', 'emprestimo.operacao', 'solicitante'])
             ->where('status', 'pendente');
@@ -192,15 +196,6 @@ class QuitacaoController extends Controller
         $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
             FichaContatoLookup::pairsFromEmprestimos($solicitacoes->map(fn ($s) => $s->emprestimo)->filter())
         );
-
-        if ($user->isSuperAdmin()) {
-            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
-        } else {
-            $opsIds = $user->getOperacoesIds();
-            $operacoes = !empty($opsIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
-                : collect([]);
-        }
 
         return view('quitacao.pendentes', compact('solicitacoes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }

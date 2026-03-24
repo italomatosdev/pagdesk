@@ -28,11 +28,16 @@
                             </div>
                             @if($operacoes->isNotEmpty())
                             <div class="flex-grow-1">
+                                @php
+                                    $operacaoIdSelecionadaDash = request()->has('operacao_id')
+                                        ? (request()->filled('operacao_id') ? (int) request('operacao_id') : null)
+                                        : ($operacaoId ?? null);
+                                @endphp
                                 <label for="operacao_id" class="form-label">Operação</label>
                                 <select name="operacao_id" id="operacao_id" class="form-select">
-                                    <option value="">Todas as Operações</option>
+                                    <option value="" {{ $operacaoIdSelecionadaDash === null ? 'selected' : '' }}>Todas as Operações</option>
                                     @foreach($operacoes as $operacao)
-                                        <option value="{{ $operacao->id }}" {{ (string)request('operacao_id') === (string)$operacao->id ? 'selected' : '' }}>
+                                        <option value="{{ $operacao->id }}" {{ (int) $operacaoIdSelecionadaDash === (int) $operacao->id ? 'selected' : '' }}>
                                             {{ $operacao->nome }}
                                         </option>
                                     @endforeach

@@ -5,6 +5,7 @@ namespace App\Modules\Cash\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Cash\Models\CategoriaMovimentacao;
 use App\Modules\Core\Models\Operacao;
+use App\Support\OperacaoPreferida;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -32,19 +33,12 @@ class CategoriaMovimentacaoController extends Controller
     {
         $user = auth()->user();
         $operacoesIds = $user->getOperacoesIds();
-        $operacaoId = $request->input('operacao_id');
-        if ($operacaoId !== null && $operacaoId !== '') {
-            $operacaoId = (int) $operacaoId;
-            if (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds, true)) {
-                $operacaoId = null;
-            }
-        } else {
-            $operacaoId = null;
-        }
 
         $operacoes = !empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
             : collect([]);
+
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
 
         $query = CategoriaMovimentacao::with('operacao')->orderBy('ordem')->orderBy('nome');
         $tipo = $request->input('tipo');
@@ -71,14 +65,16 @@ class CategoriaMovimentacaoController extends Controller
     /**
      * Formulário de criação
      */
-    public function create(): View
+    public function create(Request $request): View
     {
         $user = auth()->user();
         $operacoesIds = $user->getOperacoesIds();
         $operacoes = !empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
             : collect([]);
-        return view('caixa.categorias.create', compact('operacoes'));
+        $operacaoIdDefault = OperacaoPreferida::resolverParaFormularioOuQuery($request, $operacoes->pluck('id')->all(), $user);
+
+        return view('caixa.categorias.create', compact('operacoes', 'operacaoIdDefault'));
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Modules\Approvals\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Approvals\Services\AprovacaoService;
 use App\Support\FichaContatoLookup;
+use App\Support\OperacaoPreferida;
 use App\Modules\Core\Models\Operacao;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -33,12 +34,21 @@ class AprovacaoController extends Controller
     public function index(Request $request): View
     {
         $user = auth()->user();
-        $operacaoId = $request->input('operacao_id');
-        
-        // Validar se o usuário tem acesso à operação selecionada (Super Admin vê todas; demais só as vinculadas)
-        if ($operacaoId && !$user->isSuperAdmin()) {
+
+        // Operações disponíveis no filtro: Super Admin vê todas; demais só onde tem papel administrador
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->get();
+        } else {
+            $operacoesIdsAdmin = $user->getOperacoesIdsOndeTemPapel(['administrador']);
+            $operacoes = ! empty($operacoesIdsAdmin)
+                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIdsAdmin)->get()
+                : collect([]);
+        }
+
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if ($operacaoId && ! $user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
-            if (empty($operacoesIds) || !in_array((int) $operacaoId, $operacoesIds, true)) {
+            if (empty($operacoesIds) || ! in_array((int) $operacaoId, $operacoesIds, true)) {
                 $operacaoId = null;
             }
         }
@@ -48,16 +58,6 @@ class AprovacaoController extends Controller
         $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
             FichaContatoLookup::pairsFromEmprestimos($pendentes)
         );
-
-        // Operações disponíveis no filtro: Super Admin vê todas; demais só onde tem papel administrador
-        if ($user->isSuperAdmin()) {
-            $operacoes = Operacao::where('ativo', true)->get();
-        } else {
-            $operacoesIds = $user->getOperacoesIdsOndeTemPapel(['administrador']);
-            $operacoes = !empty($operacoesIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
-                : collect([]);
-        }
 
         return view('aprovacoes.index', compact('pendentes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }

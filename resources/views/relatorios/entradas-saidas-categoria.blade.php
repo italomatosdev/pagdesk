@@ -30,9 +30,9 @@
                         <div class="col-auto">
                             <label class="form-label mb-0">Operação</label>
                             <select name="operacao_id" class="form-select form-select-sm" style="width: 220px;">
-                                <option value="">Todas</option>
+                                <option value="" {{ ($operacaoId ?? null) === null ? 'selected' : '' }}>Todas</option>
                                 @foreach($operacoes as $op)
-                                    <option value="{{ $op->id }}" {{ $operacaoId == $op->id ? 'selected' : '' }}>{{ $op->nome }}</option>
+                                    <option value="{{ $op->id }}" {{ (int) ($operacaoId ?? 0) === (int) $op->id && ($operacaoId ?? null) !== null ? 'selected' : '' }}>{{ $op->nome }}</option>
                                 @endforeach
                             </select>
                         </div>

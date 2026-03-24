@@ -8,6 +8,7 @@ use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\EmprestimoCheque;
 use App\Modules\Loans\Services\ChequeService;
 use App\Support\FichaContatoLookup;
+use App\Support\OperacaoPreferida;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
@@ -34,8 +35,8 @@ class ChequeController extends Controller
             ->orderBy('id');
 
         if ($user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            $emprestimoScope = fn ($q) => $q->whereIn('operacao_id', Operacao::where('ativo', true)->pluck('id')->toArray());
+            $opsIds = Operacao::where('ativo', true)->pluck('id')->toArray();
+            $emprestimoScope = fn ($q) => $q->whereIn('operacao_id', $opsIds);
         } else {
             $opsIds = $user->getOperacoesIds();
             if (empty($opsIds)) {
@@ -60,14 +61,11 @@ class ChequeController extends Controller
         }
         $query->whereHas('emprestimo', $emprestimoScope);
 
-        $operacaoId = $request->input('operacao_id');
-        if ($operacaoId !== null && $operacaoId !== '') {
-            $operacaoId = (int) $operacaoId;
-            if ($user->isSuperAdmin() || in_array($operacaoId, $opsIds ?? $user->getOperacoesIds(), true)) {
-                $query->whereHas('emprestimo', fn ($q) => $q->where('operacao_id', $operacaoId));
-                if (!$user->isSuperAdmin() && !$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
-                    $query->whereHas('emprestimo', fn ($q) => $q->where('consultor_id', $user->id));
-                }
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $opsIds ?? [], $user);
+        if ($operacaoId !== null) {
+            $query->whereHas('emprestimo', fn ($q) => $q->where('operacao_id', $operacaoId));
+            if (! $user->isSuperAdmin() && ! $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+                $query->whereHas('emprestimo', fn ($q) => $q->where('consultor_id', $user->id));
             }
         }
 
@@ -97,9 +95,9 @@ class ChequeController extends Controller
             FichaContatoLookup::pairsFromEmprestimos($cheques->map(fn ($c) => $c->emprestimo)->filter())
         );
 
-        $operacoes = $user->isSuperAdmin()
-            ? Operacao::where('ativo', true)->orderBy('nome')->get()
-            : (!empty($opsIds) ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get() : collect([]));
+        $operacoes = ! empty($opsIds ?? [])
+            ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
+            : collect([]);
 
         $titulo = 'Cheques';
 

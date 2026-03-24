@@ -7,6 +7,7 @@ use App\Modules\Core\Models\Operacao;
 use App\Modules\Core\Models\Produto;
 use App\Modules\Core\Models\ProdutoAnexo;
 use App\Modules\Core\Traits\Auditable;
+use App\Support\OperacaoPreferida;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -57,9 +58,19 @@ class ProdutoController extends Controller
                   ->orWhere('codigo', 'like', "%{$termo}%");
             });
         }
-        if ($request->filled('operacao_id')) {
-            $operacaoId = (int) $request->operacao_id;
-            if ($user->isSuperAdmin() || in_array($operacaoId, $user->getOperacoesIds(), true)) {
+
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::orderBy('nome')->get();
+        } else {
+            $opsIds = $user->getOperacoesIds();
+            $operacoes = ! empty($opsIds)
+                ? Operacao::whereIn('id', $opsIds)->orderBy('nome')->get()
+                : collect([]);
+        }
+        $operacaoId = null;
+        if (! $semOperacao) {
+            $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+            if ($operacaoId !== null && ($user->isSuperAdmin() || in_array($operacaoId, $user->getOperacoesIds(), true))) {
                 $query->where('operacao_id', $operacaoId);
             }
         }
@@ -94,22 +105,13 @@ class ProdutoController extends Controller
         // Contagem de produtos sem operação (para exibir aviso)
         $produtosSemOperacaoCount = Produto::whereNull('operacao_id')->count();
 
-        if ($user->isSuperAdmin()) {
-            $operacoes = Operacao::orderBy('nome')->get();
-        } else {
-            $opsIds = $user->getOperacoesIds();
-            $operacoes = !empty($opsIds)
-                ? Operacao::whereIn('id', $opsIds)->orderBy('nome')->get()
-                : collect([]);
-        }
-
-        return view('produtos.index', compact('produtos', 'stats', 'operacoes', 'produtosSemOperacaoCount', 'semOperacao'));
+        return view('produtos.index', compact('produtos', 'stats', 'operacoes', 'produtosSemOperacaoCount', 'semOperacao', 'operacaoId'));
     }
 
     /**
      * Formulário de novo produto
      */
-    public function create(): View
+    public function create(Request $request): View
     {
         $user = auth()->user();
         if ($user->isSuperAdmin()) {
@@ -120,7 +122,9 @@ class ProdutoController extends Controller
                 ? Operacao::whereIn('id', $opsIds)->orderBy('nome')->get()
                 : collect([]);
         }
-        return view('produtos.create', compact('operacoes'));
+        $operacaoIdDefault = OperacaoPreferida::resolverParaFormularioOuQuery($request, $operacoes->pluck('id')->all(), $user);
+
+        return view('produtos.create', compact('operacoes', 'operacaoIdDefault'));
     }
 
     /**
