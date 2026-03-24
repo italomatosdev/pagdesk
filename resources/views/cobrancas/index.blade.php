@@ -144,6 +144,7 @@
                                 <thead>
                                     <tr>
                                         <th>Cliente</th>
+                                        <th>Operação</th>
                                         <th>Empréstimo</th>
                                         <th>Parcela</th>
                                         <th>Valor</th>
@@ -154,7 +155,13 @@
                                 <tbody>
                                     @forelse($vencendoHoje as $parcela)
                                         <tr>
-                                            <td>{{ \App\Support\ClienteNomeExibicao::fromParcelaMap($parcela, $fichasContatoPorClienteOperacao ?? collect()) }}</td>
+                                            <td>
+                                                <a href="{{ \App\Support\ClienteUrl::show($parcela->emprestimo->cliente_id, $parcela->emprestimo->operacao_id) }}"
+                                                   class="text-primary">
+                                                    {{ \App\Support\ClienteNomeExibicao::fromParcelaMap($parcela, $fichasContatoPorClienteOperacao ?? collect()) }}
+                                                </a>
+                                            </td>
+                                            <td>{{ $parcela->emprestimo->operacao?->nome ?? '—' }}</td>
                                             <td>
                                                 <a href="{{ route('emprestimos.show', $parcela->emprestimo->id) }}">#{{ $parcela->emprestimo->id }}</a>
                                             </td>
@@ -183,7 +190,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="6" class="text-center">Nenhuma parcela vencendo hoje.</td>
+                                            <td colspan="7" class="text-center">Nenhuma parcela vencendo hoje.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>
@@ -208,6 +215,7 @@
                                 <thead>
                                     <tr>
                                         <th>Cliente</th>
+                                        <th>Operação</th>
                                         <th>Empréstimo</th>
                                         <th>Parcela</th>
                                         <th>Valor</th>
@@ -219,7 +227,13 @@
                                 <tbody>
                                     @forelse($atrasadas as $parcela)
                                         <tr class="{{ $parcela->dias_atraso > 30 ? 'table-danger' : '' }}">
-                                            <td>{{ \App\Support\ClienteNomeExibicao::fromParcelaMap($parcela, $fichasContatoPorClienteOperacao ?? collect()) }}</td>
+                                            <td>
+                                                <a href="{{ \App\Support\ClienteUrl::show($parcela->emprestimo->cliente_id, $parcela->emprestimo->operacao_id) }}"
+                                                   class="text-primary">
+                                                    {{ \App\Support\ClienteNomeExibicao::fromParcelaMap($parcela, $fichasContatoPorClienteOperacao ?? collect()) }}
+                                                </a>
+                                            </td>
+                                            <td>{{ $parcela->emprestimo->operacao?->nome ?? '—' }}</td>
                                             <td>
                                                 <a href="{{ route('emprestimos.show', $parcela->emprestimo->id) }}">#{{ $parcela->emprestimo->id }}</a>
                                             </td>
@@ -251,7 +265,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="7" class="text-center">Nenhuma parcela atrasada.</td>
+                                            <td colspan="8" class="text-center">Nenhuma parcela atrasada.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>
