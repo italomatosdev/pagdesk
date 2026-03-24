@@ -323,6 +323,9 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         // Movimentações manuais (apenas gestor e administrador)
         Route::get('/movimentacao/create', [App\Modules\Cash\Controllers\CashController::class, 'create'])->name('movimentacao.create');
         Route::post('/movimentacao', [App\Modules\Cash\Controllers\CashController::class, 'store'])->name('movimentacao.store');
+        // Sangria: próprio caixa → Caixa da Operação (gestor/admin)
+        Route::get('/sangria/create', [App\Modules\Cash\Controllers\CashController::class, 'sangriaCreate'])->name('sangria.create');
+        Route::post('/sangria', [App\Modules\Cash\Controllers\CashController::class, 'sangriaStore'])->name('sangria.store');
         Route::get('/movimentacao/{id}', [App\Modules\Cash\Controllers\CashController::class, 'show'])->name('movimentacao.show');
     });
 

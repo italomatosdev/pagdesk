@@ -5,6 +5,8 @@ namespace App\Modules\Cash\Services;
 use App\Modules\Cash\Models\CashLedgerEntry;
 use App\Modules\Core\Traits\Auditable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class CashService
 {
@@ -384,5 +386,80 @@ class CashService
             'total' => $saldoTotal,
             'operacoes' => $saldosPorOperacao,
         ];
+    }
+
+    /**
+     * Sangria: transfere valor do caixa do gestor/admin para o Caixa da Operação (consultor_id NULL).
+     * Gera saída no usuário e entrada no caixa da operação, em uma transação.
+     *
+     * @return array{saida: CashLedgerEntry, entrada: CashLedgerEntry}
+     */
+    public function transferirParaCaixaOperacao(int $usuarioId, int $operacaoId, float $valor, ?string $observacoes = null, ?string $comprovantePath = null): array
+    {
+        $valor = round($valor, 2);
+        if ($valor < 0.01) {
+            throw ValidationException::withMessages([
+                'valor' => 'Informe um valor maior que zero.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($usuarioId, $operacaoId, $valor, $observacoes, $comprovantePath) {
+            $saldo = $this->calcularSaldo($usuarioId, $operacaoId);
+            if (round($saldo, 2) < $valor) {
+                throw ValidationException::withMessages([
+                    'valor' => 'Saldo insuficiente. Saldo disponível: R$ '.number_format($saldo, 2, ',', '.'),
+                ]);
+            }
+
+            $user = \App\Models\User::findOrFail($usuarioId);
+            if (! $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+                throw ValidationException::withMessages([
+                    'operacao_id' => 'Apenas gestores ou administradores da operação podem executar sangria.',
+                ]);
+            }
+
+            $operacao = \App\Modules\Core\Models\Operacao::findOrFail($operacaoId);
+
+            $refTipo = 'sangria_caixa_operacao';
+            $dataMov = now()->format('Y-m-d');
+
+            $dadosSaida = [
+                'operacao_id' => $operacaoId,
+                'consultor_id' => $usuarioId,
+                'tipo' => 'saida',
+                'origem' => 'automatica',
+                'valor' => $valor,
+                'data_movimentacao' => $dataMov,
+                'descricao' => 'Sangria para o Caixa da Operação — '.$operacao->nome,
+                'observacoes' => $observacoes,
+                'referencia_tipo' => $refTipo,
+                'referencia_id' => null,
+            ];
+            if ($comprovantePath !== null && $comprovantePath !== '') {
+                $dadosSaida['comprovante_path'] = $comprovantePath;
+            }
+
+            $saida = $this->registrarMovimentacao($dadosSaida);
+
+            $dadosEntrada = [
+                'operacao_id' => $operacaoId,
+                'consultor_id' => null,
+                'tipo' => 'entrada',
+                'origem' => 'automatica',
+                'valor' => $valor,
+                'data_movimentacao' => $dataMov,
+                'descricao' => 'Sangria recebida — '.$user->name,
+                'observacoes' => $observacoes,
+                'referencia_tipo' => $refTipo,
+                'referencia_id' => $saida->id,
+            ];
+            if ($comprovantePath !== null && $comprovantePath !== '') {
+                $dadosEntrada['comprovante_path'] = $comprovantePath;
+            }
+
+            $entrada = $this->registrarMovimentacao($dadosEntrada);
+
+            return ['saida' => $saida->fresh(), 'entrada' => $entrada->fresh()];
+        });
     }
 }

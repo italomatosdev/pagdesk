@@ -2,6 +2,16 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [2026-01-24] - Sangria para o Caixa da Operação
+
+### ✅ Adicionado
+
+- **Sangria (gestor/admin):** transferência do **próprio caixa** para o **Caixa da Operação** (`consultor_id` NULL), em um fluxo único com saída + entrada (`origem` automática, categorias `sangria_caixa_operacao`).
+- **Rotas:** `GET /caixa/sangria/create`, `POST /caixa/sangria` (`caixa.sangria.create` / `caixa.sangria.store`).
+- **UI:** botão na tela de Movimentações de Caixa; filtro por tipo de referência “Sangria”; **comprovante opcional** (PDF/imagem, mesmas regras da movimentação manual), gravado nos dois lançamentos.
+- **Service:** `CashService::transferirParaCaixaOperacao`.
+- **Categorias automáticas:** mapeamento em `CashCategoriaAutomaticaService` para `sangria_caixa_operacao|saida` e `|entrada`.
+
 ## [2026-01-26] - Novo Status de Parcelas: quitada_garantia
 
 ### ✅ Adicionado

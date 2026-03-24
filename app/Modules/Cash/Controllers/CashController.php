@@ -296,6 +296,106 @@ class CashController extends Controller
     }
 
     /**
+     * Formulário: sangria do próprio caixa para o Caixa da Operação (gestor/admin).
+     */
+    public function sangriaCreate(Request $request): View
+    {
+        $user = auth()->user();
+
+        if ($user->isSuperAdmin()) {
+            abort(403, 'Super Admin não pode acessar o Caixa.');
+        }
+
+        if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
+            abort(403, 'Acesso negado. Apenas gestores e administradores podem executar sangria.');
+        }
+
+        $operacoesIds = $user->getOperacoesIds();
+        $operacoes = ! empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
+
+        $saldosPorOperacao = [];
+        foreach ($operacoes as $op) {
+            $saldosPorOperacao[$op->id] = $this->cashService->calcularSaldo($user->id, $op->id);
+        }
+
+        $operacaoIdDefault = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
+        if ($operacaoIdDefault !== null && (empty($operacoesIds) || ! in_array($operacaoIdDefault, $operacoesIds, true))) {
+            $operacaoIdDefault = $operacoes->first()?->id;
+        }
+        if ($operacoes->isEmpty()) {
+            abort(403, 'Nenhuma operação disponível para sangria.');
+        }
+
+        return view('caixa.sangria.create', compact('operacoes', 'saldosPorOperacao', 'operacaoIdDefault'));
+    }
+
+    /**
+     * Executa sangria para o Caixa da Operação.
+     */
+    public function sangriaStore(Request $request): RedirectResponse
+    {
+        $user = auth()->user();
+
+        if ($user->isSuperAdmin()) {
+            abort(403, 'Super Admin não pode acessar o Caixa.');
+        }
+
+        if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
+            abort(403, 'Acesso negado. Apenas gestores e administradores podem executar sangria.');
+        }
+
+        $valorInput = $request->input('valor');
+        if (is_string($valorInput)) {
+            $normalizado = preg_replace('/\s|R\$\s?/', '', $valorInput);
+            if (str_contains($normalizado, ',')) {
+                $normalizado = str_replace('.', '', $normalizado);
+                $normalizado = str_replace(',', '.', $normalizado);
+            }
+            if (preg_match('/^-?\d*\.?\d*$/', $normalizado)) {
+                $request->merge(['valor' => $normalizado]);
+            }
+        }
+
+        $validated = $request->validate([
+            'operacao_id' => 'required|exists:operacoes,id',
+            'valor' => 'required|numeric|min:0.01',
+            'observacoes' => 'nullable|string|max:1000',
+            'comprovante' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+        ]);
+
+        $opsIds = $user->getOperacoesIds();
+        if (empty($opsIds) || ! in_array((int) $validated['operacao_id'], $opsIds, true)) {
+            return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
+        }
+
+        $comprovantePath = null;
+        if ($request->hasFile('comprovante')) {
+            $comprovantePath = $request->file('comprovante')->store('comprovantes/sangria', 'public');
+        }
+
+        try {
+            $this->cashService->transferirParaCaixaOperacao(
+                $user->id,
+                (int) $validated['operacao_id'],
+                (float) $validated['valor'],
+                $validated['observacoes'] ?? null,
+                $comprovantePath
+            );
+
+            return redirect()->route('caixa.index', ['operacao_id' => $validated['operacao_id'], 'referencia_tipo' => 'sangria_caixa_operacao'])
+                ->with('success', 'Sangria realizada com sucesso. O valor foi transferido para o Caixa da Operação.');
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            \Log::error('Erro na sangria de caixa: '.$e->getMessage());
+
+            return back()->with('error', 'Erro ao realizar sangria: '.$e->getMessage())->withInput();
+        }
+    }
+
+    /**
      * Criar movimentação manual
      */
     public function store(Request $request): RedirectResponse

@@ -19,6 +19,8 @@ class CashCategoriaAutomaticaService
         'liberacao_emprestimo|saida' => ['nome' => 'Liberacao — saida gestor', 'categoria_tipo' => 'despesa'],
         'liberacao_emprestimo|entrada' => ['nome' => 'Liberacao — entrada consultor', 'categoria_tipo' => 'entrada'],
         'pagamento_cliente|saida' => ['nome' => 'Pagamento ao cliente', 'categoria_tipo' => 'despesa'],
+        'sangria_caixa_operacao|saida' => ['nome' => 'Sangria para o Caixa da Operacao (saida usuario)', 'categoria_tipo' => 'despesa'],
+        'sangria_caixa_operacao|entrada' => ['nome' => 'Sangria para o Caixa da Operacao (entrada)', 'categoria_tipo' => 'entrada'],
     ];
 
     public function resolverCategoriaId(?int $empresaId, ?string $referenciaTipo, ?string $tipoLedger): ?int

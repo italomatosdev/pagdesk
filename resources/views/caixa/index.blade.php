@@ -202,9 +202,14 @@
                         <div class="d-flex align-items-center justify-content-between">
                             <h4 class="card-title mb-0">Movimentações</h4>
                             @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor'])))
-                                <a href="{{ route('caixa.movimentacao.create') }}" class="btn btn-primary btn-sm">
-                                    <i class="bx bx-plus"></i> Nova Movimentação Manual
-                                </a>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <a href="{{ route('caixa.sangria.create') }}" class="btn btn-outline-primary btn-sm">
+                                        <i class="bx bx-down-arrow-alt"></i> Sangria para Caixa da Operação
+                                    </a>
+                                    <a href="{{ route('caixa.movimentacao.create') }}" class="btn btn-primary btn-sm">
+                                        <i class="bx bx-plus"></i> Nova Movimentação Manual
+                                    </a>
+                                </div>
                             @endif
                         </div>
                     </div>
@@ -272,6 +277,9 @@
                                                             @case('venda')
                                                             @case('App\Modules\Core\Models\Venda')
                                                                 <i class="bx bx-cart"></i> Venda
+                                                                @break
+                                                            @case('sangria_caixa_operacao')
+                                                                <i class="bx bx-down-arrow-alt"></i> Sangria
                                                                 @break
                                                             @default
                                                                 {{ ucfirst(str_replace('_', ' ', $movimentacao->referencia_tipo)) }}
