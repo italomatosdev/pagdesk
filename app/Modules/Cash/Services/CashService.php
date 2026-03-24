@@ -462,4 +462,92 @@ class CashService
             return ['saida' => $saida->fresh(), 'entrada' => $entrada->fresh()];
         });
     }
+
+    /**
+     * Transferência: valor do Caixa da Operação (consultor_id NULL) para o caixa de um gestor/admin na mesma operação.
+     * Apenas quem tem papel **administrador** na operação pode executar (validado antes de chamar).
+     *
+     * @return array{saida: CashLedgerEntry, entrada: CashLedgerEntry}
+     */
+    public function transferirDoCaixaOperacaoParaUsuario(
+        int $executorId,
+        int $operacaoId,
+        int $destinatarioId,
+        float $valor,
+        ?string $observacoes = null,
+        ?string $comprovantePath = null
+    ): array {
+        $valor = round($valor, 2);
+        if ($valor < 0.01) {
+            throw ValidationException::withMessages([
+                'valor' => 'Informe um valor maior que zero.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($executorId, $operacaoId, $destinatarioId, $valor, $observacoes, $comprovantePath) {
+            $saldoOperacao = $this->calcularSaldoOperacao($operacaoId);
+            if (round($saldoOperacao, 2) < $valor) {
+                throw ValidationException::withMessages([
+                    'valor' => 'Saldo insuficiente no Caixa da Operação. Disponível: R$ '.number_format($saldoOperacao, 2, ',', '.'),
+                ]);
+            }
+
+            $executor = \App\Models\User::findOrFail($executorId);
+            if (! $executor->temAlgumPapelNaOperacao($operacaoId, ['administrador'])) {
+                throw ValidationException::withMessages([
+                    'operacao_id' => 'Apenas administradores da operação podem executar esta transferência.',
+                ]);
+            }
+
+            $destinatario = \App\Models\User::findOrFail($destinatarioId);
+            if (! $destinatario->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+                throw ValidationException::withMessages([
+                    'destinatario_id' => 'O destinatário deve ser gestor ou administrador nesta operação.',
+                ]);
+            }
+
+            $operacao = \App\Modules\Core\Models\Operacao::findOrFail($operacaoId);
+
+            $refTipo = 'transferencia_caixa_operacao';
+            $dataMov = now()->format('Y-m-d');
+
+            $dadosSaida = [
+                'operacao_id' => $operacaoId,
+                'consultor_id' => null,
+                'tipo' => 'saida',
+                'origem' => 'automatica',
+                'valor' => $valor,
+                'data_movimentacao' => $dataMov,
+                'descricao' => 'Transferência do Caixa da Operação → '.$destinatario->name,
+                'observacoes' => $observacoes,
+                'referencia_tipo' => $refTipo,
+                'referencia_id' => null,
+            ];
+            if ($comprovantePath !== null && $comprovantePath !== '') {
+                $dadosSaida['comprovante_path'] = $comprovantePath;
+            }
+
+            $saida = $this->registrarMovimentacao($dadosSaida);
+
+            $dadosEntrada = [
+                'operacao_id' => $operacaoId,
+                'consultor_id' => $destinatarioId,
+                'tipo' => 'entrada',
+                'origem' => 'automatica',
+                'valor' => $valor,
+                'data_movimentacao' => $dataMov,
+                'descricao' => 'Transferência recebida — Caixa da Operação ('.$operacao->nome.')',
+                'observacoes' => $observacoes,
+                'referencia_tipo' => $refTipo,
+                'referencia_id' => $saida->id,
+            ];
+            if ($comprovantePath !== null && $comprovantePath !== '') {
+                $dadosEntrada['comprovante_path'] = $comprovantePath;
+            }
+
+            $entrada = $this->registrarMovimentacao($dadosEntrada);
+
+            return ['saida' => $saida->fresh(), 'entrada' => $entrada->fresh()];
+        });
+    }
 }

@@ -2,6 +2,17 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [2026-01-24] - Transferência do Caixa da Operação (admin)
+
+### ✅ Adicionado
+
+- **Transferência (apenas administrador da operação):** saída no **Caixa da Operação** e entrada no caixa de um **gestor ou administrador** na mesma operação; destino pode ser **outro** ou **o próprio** admin (aviso + `confirm` no formulário).
+- **Rotas:** `GET /caixa/transferencia-operacao/create`, `POST /caixa/transferencia-operacao`; comprovante opcional (`comprovantes/transferencia-operacao`).
+- **Service:** `CashService::transferirDoCaixaOperacaoParaUsuario`; categorias `transferencia_caixa_operacao` em `CashCategoriaAutomaticaService`.
+- **UI:** botão na listagem de caixa (só quem tem papel administrador em alguma operação); filtro e badge “Transferência”.
+
+---
+
 ## [2026-01-24] - Sangria para o Caixa da Operação
 
 ### ✅ Adicionado

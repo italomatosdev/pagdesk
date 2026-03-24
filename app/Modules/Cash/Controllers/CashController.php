@@ -396,6 +396,127 @@ class CashController extends Controller
     }
 
     /**
+     * Formulário: transferência do Caixa da Operação → gestor/admin (apenas administrador da operação).
+     */
+    public function transferenciaOperacaoCreate(Request $request): View
+    {
+        $user = auth()->user();
+
+        if ($user->isSuperAdmin()) {
+            abort(403, 'Super Admin não pode acessar o Caixa.');
+        }
+
+        $operacoesAdminIds = $user->getOperacoesIdsOndeTemPapel(['administrador']);
+        if (empty($operacoesAdminIds)) {
+            abort(403, 'Acesso negado. Apenas administradores da operação podem acessar esta transferência.');
+        }
+
+        $operacoes = Operacao::where('ativo', true)->whereIn('id', $operacoesAdminIds)->orderBy('nome')->get();
+
+        $saldosCaixaOperacao = [];
+        foreach ($operacoes as $op) {
+            $saldosCaixaOperacao[$op->id] = $this->cashService->calcularSaldoOperacao($op->id);
+        }
+
+        $usuariosDestinoPorOperacao = [];
+        foreach ($operacoes as $op) {
+            $usuariosDestinoPorOperacao[$op->id] = User::query()
+                ->whereHas('operacoes', function ($q) use ($op) {
+                    $q->where('operacoes.id', $op->id)
+                        ->whereIn('operacao_user.role', ['gestor', 'administrador']);
+                })
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])
+                ->values()
+                ->all();
+        }
+
+        $operacaoIdDefault = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
+        if ($operacaoIdDefault !== null && ! in_array($operacaoIdDefault, $operacoesAdminIds, true)) {
+            $operacaoIdDefault = $operacoes->first()?->id;
+        }
+
+        return view('caixa.transferencia_operacao.create', compact(
+            'operacoes',
+            'saldosCaixaOperacao',
+            'usuariosDestinoPorOperacao',
+            'operacaoIdDefault'
+        ));
+    }
+
+    /**
+     * Executa transferência do Caixa da Operação para o caixa de um gestor/admin.
+     */
+    public function transferenciaOperacaoStore(Request $request): RedirectResponse
+    {
+        $user = auth()->user();
+
+        if ($user->isSuperAdmin()) {
+            abort(403, 'Super Admin não pode acessar o Caixa.');
+        }
+
+        if (empty($user->getOperacoesIdsOndeTemPapel(['administrador']))) {
+            abort(403, 'Acesso negado. Apenas administradores da operação podem executar esta transferência.');
+        }
+
+        $valorInput = $request->input('valor');
+        if (is_string($valorInput)) {
+            $normalizado = preg_replace('/\s|R\$\s?/', '', $valorInput);
+            if (str_contains($normalizado, ',')) {
+                $normalizado = str_replace('.', '', $normalizado);
+                $normalizado = str_replace(',', '.', $normalizado);
+            }
+            if (preg_match('/^-?\d*\.?\d*$/', $normalizado)) {
+                $request->merge(['valor' => $normalizado]);
+            }
+        }
+
+        $validated = $request->validate([
+            'operacao_id' => 'required|exists:operacoes,id',
+            'destinatario_id' => 'required|exists:users,id',
+            'valor' => 'required|numeric|min:0.01',
+            'observacoes' => 'nullable|string|max:1000',
+            'comprovante' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+        ]);
+
+        $operacaoId = (int) $validated['operacao_id'];
+        if (! $user->temAlgumPapelNaOperacao($operacaoId, ['administrador'])) {
+            return back()->with('error', 'Você deve ser administrador na operação selecionada.')->withInput();
+        }
+
+        $destinatario = User::findOrFail((int) $validated['destinatario_id']);
+        if (! $destinatario->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+            return back()->with('error', 'O destinatário deve ser gestor ou administrador na operação selecionada.')->withInput();
+        }
+
+        $comprovantePath = null;
+        if ($request->hasFile('comprovante')) {
+            $comprovantePath = $request->file('comprovante')->store('comprovantes/transferencia-operacao', 'public');
+        }
+
+        try {
+            $this->cashService->transferirDoCaixaOperacaoParaUsuario(
+                $user->id,
+                $operacaoId,
+                (int) $validated['destinatario_id'],
+                (float) $validated['valor'],
+                $validated['observacoes'] ?? null,
+                $comprovantePath
+            );
+
+            return redirect()->route('caixa.index', ['operacao_id' => $operacaoId, 'referencia_tipo' => 'transferencia_caixa_operacao'])
+                ->with('success', 'Transferência realizada com sucesso.');
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            \Log::error('Erro na transferência do caixa da operação: '.$e->getMessage());
+
+            return back()->with('error', 'Erro ao realizar transferência: '.$e->getMessage())->withInput();
+        }
+    }
+
+    /**
      * Criar movimentação manual
      */
     public function store(Request $request): RedirectResponse

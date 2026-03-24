@@ -21,6 +21,8 @@ class CashCategoriaAutomaticaService
         'pagamento_cliente|saida' => ['nome' => 'Pagamento ao cliente', 'categoria_tipo' => 'despesa'],
         'sangria_caixa_operacao|saida' => ['nome' => 'Sangria para o Caixa da Operacao (saida usuario)', 'categoria_tipo' => 'despesa'],
         'sangria_caixa_operacao|entrada' => ['nome' => 'Sangria para o Caixa da Operacao (entrada)', 'categoria_tipo' => 'entrada'],
+        'transferencia_caixa_operacao|saida' => ['nome' => 'Transferencia do Caixa da Operacao (saida)', 'categoria_tipo' => 'despesa'],
+        'transferencia_caixa_operacao|entrada' => ['nome' => 'Transferencia do Caixa da Operacao (entrada usuario)', 'categoria_tipo' => 'entrada'],
     ];
 
     public function resolverCategoriaId(?int $empresaId, ?string $referenciaTipo, ?string $tipoLedger): ?int
