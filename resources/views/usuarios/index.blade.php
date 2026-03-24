@@ -15,12 +15,7 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
-                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                            <h4 class="card-title mb-0">Lista de Usuários</h4>
-                            <a href="{{ route('usuarios.create') }}" class="btn btn-primary">
-                                <i class="bx bx-plus"></i> Novo Usuário
-                            </a>
-                        </div>
+                        <h4 class="card-title mb-0">Lista de Usuários</h4>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -32,7 +27,6 @@
                                         <th>Email</th>
                                         <th>Papéis</th>
                                         <th>Operação</th>
-                                        <th>Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -58,16 +52,10 @@
                                                     <span class="text-muted">Sem operações</span>
                                                 @endif
                                             </td>
-                                            <td>
-                                                <a href="{{ route('usuarios.show', $usuario->id) }}" 
-                                                   class="btn btn-sm btn-info">
-                                                    <i class="bx bx-show"></i>
-                                                </a>
-                                            </td>
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="6" class="text-center">Nenhum usuário encontrado.</td>
+                                            <td colspan="5" class="text-center">Nenhum usuário encontrado.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>
