@@ -3,7 +3,7 @@
     Conferir fechamento de caixa
 @endsection
 @section('page-title')
-    Conferir antes de fechar o caixa
+    {{ ($permiteFechar ?? true) ? 'Conferir antes de fechar o caixa' : 'Extrato e conferência de caixa' }}
 @endsection
 @section('body')
     <body>
@@ -32,11 +32,19 @@
                     </ul>
                 </div>
             @endif
-            <div class="alert alert-info mb-3">
-                <i class="bx bx-info-circle me-2"></i>
-                Revise o período, as movimentações e os totais. O valor registrado no fechamento será o
-                <strong>saldo atual</strong> do caixa no momento da confirmação.
-            </div>
+            @if($permiteFechar ?? true)
+                <div class="alert alert-info mb-3">
+                    <i class="bx bx-info-circle me-2"></i>
+                    Revise o período, as movimentações e os totais. O valor registrado no fechamento será o
+                    <strong>saldo atual</strong> do caixa no momento da confirmação.
+                </div>
+            @else
+                <div class="alert alert-warning mb-3">
+                    <i class="bx bx-info-circle me-2"></i>
+                    <strong>Saldo zero ou negativo.</strong> Esta tela é apenas para conferência do extrato.
+                    Não é possível concluir o fechamento padrão de caixa neste caso.
+                </div>
+            @endif
 
             <div class="card mb-3">
                 <div class="card-header bg-primary text-white">
@@ -102,18 +110,18 @@
                             </div>
                         </div>
                         <div class="col-md-3 mb-3 d-flex">
-                            <div class="card border-primary w-100">
+                            <div class="card border-{{ $saldoFinal >= 0 ? 'primary' : 'danger' }} w-100">
                                 <div class="card-body">
                                     <p class="text-muted mb-1 small">Saldo (extrato)</p>
-                                    <h4 class="mb-0 text-primary">R$ {{ number_format($saldoFinal, 2, ',', '.') }}</h4>
+                                    <h4 class="mb-0 text-{{ $saldoFinal >= 0 ? 'primary' : 'danger' }}">R$ {{ number_format($saldoFinal, 2, ',', '.') }}</h4>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="alert alert-warning mb-0">
-                        <strong>Valor do fechamento (saldo atual):</strong>
-                        <span class="fs-4 text-success">R$ {{ number_format($saldoAtual, 2, ',', '.') }}</span>
-                        @if(abs($saldoAtual - $saldoFinal) > 0.009)
+                    <div class="alert {{ ($permiteFechar ?? true) ? 'alert-warning' : 'alert-secondary' }} mb-0">
+                        <strong>{{ ($permiteFechar ?? true) ? 'Valor do fechamento (saldo atual):' : 'Saldo atual (referência):' }}</strong>
+                        <span class="fs-4 {{ $saldoAtual > 0 ? 'text-success' : ($saldoAtual < 0 ? 'text-danger' : 'text-muted') }}">R$ {{ number_format($saldoAtual, 2, ',', '.') }}</span>
+                        @if(($permiteFechar ?? true) && abs($saldoAtual - $saldoFinal) > 0.009)
                             <p class="small mb-0 mt-2">
                                 O saldo por extrato (R$ {{ number_format($saldoFinal, 2, ',', '.') }}) pode diferir do saldo
                                 atual por movimentações ou arredondamentos. O que vale para o fechamento é o saldo atual.
@@ -188,48 +196,65 @@
                                         <th colspan="4" class="text-end">Total saídas:</th>
                                         <th class="text-end text-danger">- R$ {{ number_format($totalSaidas, 2, ',', '.') }}</th>
                                     </tr>
-                                    <tr class="table-primary">
+                                    <tr class="table-{{ $saldoFinal >= 0 ? 'primary' : 'danger' }}">
                                         <th colspan="4" class="text-end">Saldo final (extrato):</th>
-                                        <th class="text-end">R$ {{ number_format($saldoFinal, 2, ',', '.') }}</th>
+                                        <th class="text-end {{ $saldoFinal < 0 ? 'text-danger' : '' }}">R$ {{ number_format($saldoFinal, 2, ',', '.') }}</th>
                                     </tr>
                                 </tfoot>
                             </table>
                         </div>
                     @else
                         <div class="alert alert-warning mb-0">
-                            Nenhuma movimentação no período; o saldo atual ainda pode ser positivo por saldo anterior.
+                            @if($saldoAtual > 0)
+                                Nenhuma movimentação no período; o saldo atual ainda pode ser positivo por saldo anterior.
+                            @else
+                                Nenhuma movimentação no período exibida; o saldo atual reflete o histórico do caixa.
+                            @endif
                         </div>
                     @endif
                 </div>
             </div>
 
-            <div class="card">
-                <div class="card-header bg-light">
-                    <h5 class="card-title mb-0"><i class="bx bx-lock-alt me-2"></i>Confirmar fechamento</h5>
+            @if($permiteFechar ?? true)
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h5 class="card-title mb-0"><i class="bx bx-lock-alt me-2"></i>Confirmar fechamento</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" action="{{ route('fechamento-caixa.fechar') }}">
+                            @csrf
+                            <input type="hidden" name="usuario_id" value="{{ $usuarioAlvo->id }}">
+                            <input type="hidden" name="operacao_id" value="{{ $operacao->id }}">
+                            <div class="mb-3">
+                                <label class="form-label">Observações (opcional)</label>
+                                <textarea name="observacoes" class="form-control @error('observacoes') is-invalid @enderror" rows="3">{{ old('observacoes') }}</textarea>
+                                @error('observacoes')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                            <div class="d-flex flex-wrap gap-2 justify-content-between">
+                                <a href="{{ route('fechamento-caixa.index', ['operacao_id' => $operacao->id]) }}" class="btn btn-secondary">
+                                    <i class="bx bx-arrow-back"></i> Voltar
+                                </a>
+                                <button type="submit" class="btn btn-danger">
+                                    <i class="bx bx-lock-alt"></i> Confirmar fechamento
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <form method="POST" action="{{ route('fechamento-caixa.fechar') }}">
-                        @csrf
-                        <input type="hidden" name="usuario_id" value="{{ $usuarioAlvo->id }}">
-                        <input type="hidden" name="operacao_id" value="{{ $operacao->id }}">
-                        <div class="mb-3">
-                            <label class="form-label">Observações (opcional)</label>
-                            <textarea name="observacoes" class="form-control @error('observacoes') is-invalid @enderror" rows="3">{{ old('observacoes') }}</textarea>
-                            @error('observacoes')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        <div class="d-flex flex-wrap gap-2 justify-content-between">
-                            <a href="{{ route('fechamento-caixa.index', ['operacao_id' => $operacao->id]) }}" class="btn btn-secondary">
-                                <i class="bx bx-arrow-back"></i> Voltar
-                            </a>
-                            <button type="submit" class="btn btn-danger">
-                                <i class="bx bx-lock-alt"></i> Confirmar fechamento
-                            </button>
-                        </div>
-                    </form>
+            @else
+                <div class="card border-secondary">
+                    <div class="card-body">
+                        <p class="text-muted mb-3">
+                            Com saldo zero ou negativo não há confirmação de fechamento nesta tela. Use <strong>Voltar</strong> para retornar à lista.
+                        </p>
+                        <a href="{{ route('fechamento-caixa.index', ['operacao_id' => $operacao->id]) }}" class="btn btn-secondary">
+                            <i class="bx bx-arrow-back"></i> Voltar
+                        </a>
+                    </div>
                 </div>
-            </div>
+            @endif
         </div>
     </div>
 @endsection

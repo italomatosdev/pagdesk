@@ -7,10 +7,10 @@ use App\Models\User;
 use App\Modules\Core\Models\Operacao;
 use App\Modules\Core\Models\Role;
 use App\Modules\Core\Services\PermissionService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
-use Illuminate\Http\RedirectResponse;
 
 class UsuarioController extends Controller
 {
@@ -23,6 +23,7 @@ class UsuarioController extends Controller
             if (empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
                 abort(403, 'Acesso negado. Apenas administradores e gestores podem gerenciar usuários.');
             }
+
             return $next($request);
         });
         $this->permissionService = $permissionService;
@@ -38,7 +39,7 @@ class UsuarioController extends Controller
         $user = auth()->user();
 
         // Apenas Super Admin vê todos os usuários do sistema
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
             if (empty($operacoesIds)) {
                 $query->whereRaw('1 = 0');
@@ -49,6 +50,7 @@ class UsuarioController extends Controller
 
         $usuarios = $query->orderBy('name')->paginate(15);
         $roles = Role::all();
+
         return view('usuarios.index', compact('usuarios', 'roles'));
     }
 
@@ -64,7 +66,7 @@ class UsuarioController extends Controller
         }
 
         $empresa = $user->operacoes()->first()?->empresa;
-        if (!$empresa) {
+        if (! $empresa) {
             abort(403, 'Sua conta não está vinculada a uma empresa. Entre em contato com o suporte.');
         }
 
@@ -92,7 +94,7 @@ class UsuarioController extends Controller
         }
 
         $empresa = $user->operacoes()->first()?->empresa;
-        if (!$empresa) {
+        if (! $empresa) {
             abort(403, 'Sua conta não está vinculada a uma empresa.');
         }
 
@@ -108,11 +110,11 @@ class UsuarioController extends Controller
 
         $operacoesIds = $validated['operacoes'] ?? [];
         $operacaoRole = $request->input('operacao_role', []);
-        if (!empty($operacoesIds)) {
+        if (! empty($operacoesIds)) {
             $operacoesIds = array_values(array_intersect($operacoesIds, $operacoesPermitidas));
         }
 
-        $temAdministrador = !empty($operacoesIds) && in_array('administrador', array_map(fn ($id) => $operacaoRole[$id] ?? 'consultor', $operacoesIds), true);
+        $temAdministrador = ! empty($operacoesIds) && in_array('administrador', array_map(fn ($id) => $operacaoRole[$id] ?? 'consultor', $operacoesIds), true);
         if ($temAdministrador && empty($user->getOperacoesIdsOndeTemPapel(['administrador']))) {
             return back()->with('error', 'Apenas administradores podem atribuir o papel de administrador em uma operação.')->withInput();
         }
@@ -139,7 +141,7 @@ class UsuarioController extends Controller
             return redirect()->route('usuarios.show', $usuario->id)
                 ->with('success', 'Usuário criado com sucesso!');
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao criar usuário: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Erro ao criar usuário: '.$e->getMessage())->withInput();
         }
     }
 
@@ -151,7 +153,7 @@ class UsuarioController extends Controller
         $query = User::with(['roles', 'operacao', 'operacoes']);
         $user = auth()->user();
 
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
             if (empty($operacoesIds)) {
                 $query->whereRaw('1 = 0');
@@ -167,7 +169,7 @@ class UsuarioController extends Controller
         }
 
         $operacoesQuery = Operacao::where('ativo', true);
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
             if (empty($operacoesIds)) {
                 $operacoesQuery->whereRaw('1 = 0');
@@ -195,7 +197,7 @@ class UsuarioController extends Controller
         }
 
         try {
-            if (!$user->isSuperAdmin()) {
+            if (! $user->isSuperAdmin()) {
                 $operacoesIds = $user->getOperacoesIds();
                 $query = empty($operacoesIds)
                     ? User::whereRaw('1 = 0')
@@ -204,10 +206,11 @@ class UsuarioController extends Controller
             }
 
             $this->permissionService->atribuirPapel($id, $validated['role_name']);
+
             return redirect()->route('usuarios.show', $id)
                 ->with('success', 'Papel atribuído com sucesso!');
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao atribuir papel: ' . $e->getMessage());
+            return back()->with('error', 'Erro ao atribuir papel: '.$e->getMessage());
         }
     }
 
@@ -222,7 +225,7 @@ class UsuarioController extends Controller
 
         try {
             $user = auth()->user();
-            if (!$user->isSuperAdmin()) {
+            if (! $user->isSuperAdmin()) {
                 $operacoesIds = $user->getOperacoesIds();
                 $query = empty($operacoesIds)
                     ? User::whereRaw('1 = 0')
@@ -231,10 +234,11 @@ class UsuarioController extends Controller
             }
 
             $this->permissionService->removerPapel($id, $validated['role_name']);
+
             return redirect()->route('usuarios.show', $id)
                 ->with('success', 'Papel removido com sucesso!');
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao remover papel: ' . $e->getMessage());
+            return back()->with('error', 'Erro ao remover papel: '.$e->getMessage());
         }
     }
 
@@ -255,7 +259,7 @@ class UsuarioController extends Controller
             $operacoesPermitidas = $user->getOperacoesIds();
 
             $query = User::query();
-            if (!$user->isSuperAdmin()) {
+            if (! $user->isSuperAdmin()) {
                 if (empty($operacoesPermitidas)) {
                     $query->whereRaw('1 = 0');
                 } else {
@@ -267,11 +271,11 @@ class UsuarioController extends Controller
             $operacoesIds = $validated['operacoes'] ?? [];
             $operacaoRole = $request->input('operacao_role', []);
 
-            if (!$user->isSuperAdmin() && !empty($operacoesIds)) {
+            if (! $user->isSuperAdmin() && ! empty($operacoesIds)) {
                 $operacoesIds = array_values(array_intersect($operacoesIds, $operacoesPermitidas));
             }
 
-            $temAdministrador = !empty($operacoesIds) && in_array('administrador', array_map(fn ($opId) => $operacaoRole[$opId] ?? 'consultor', $operacoesIds), true);
+            $temAdministrador = ! empty($operacoesIds) && in_array('administrador', array_map(fn ($opId) => $operacaoRole[$opId] ?? 'consultor', $operacoesIds), true);
             if ($temAdministrador && empty($user->getOperacoesIdsOndeTemPapel(['administrador']))) {
                 return back()->with('error', 'Apenas administradores podem atribuir o papel de administrador em uma operação.');
             }
@@ -289,58 +293,110 @@ class UsuarioController extends Controller
             return redirect()->route('usuarios.show', $id)
                 ->with('success', 'Operações e papéis atualizados com sucesso!');
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao atualizar operações: ' . $e->getMessage());
+            return back()->with('error', 'Erro ao atualizar operações: '.$e->getMessage());
         }
     }
 
     /**
-     * Buscar usuários (consultores e gestores) para Select2
-     * Usado no filtro de movimentações de caixa
+     * Buscar usuários para Select2 (filtros de caixa / prestações).
+     *
+     * Sem `operacao_id`: consultores e gestores em qualquer operação à qual o logado tenha acesso (comportamento legado).
+     * Com `operacao_id`: qualquer usuário vinculado àquela operação (qualquer papel em `operacao_user`), para alinhar ao fechamento de caixa por operação.
      */
     public function buscar(Request $request)
     {
         $termo = $request->input('q', '');
-        
+
         if (strlen($termo) < 2) {
-            return response()->json(['results' => []]);
+            return response()->json(['results' => [], 'total_count' => 0]);
         }
 
         $user = auth()->user();
-        
-        $query = User::whereHas('operacoes', function ($q) {
-            $q->whereIn('operacao_user.role', ['consultor', 'gestor']);
-        });
 
-        // Filtrar por operações do usuário logado (administrador é da operação, não da empresa)
-        if (!$user->isSuperAdmin()) {
-            $operacoesIds = $user->getOperacoesIds();
-            if (empty($operacoesIds)) {
-                return response()->json(['results' => []]);
+        $operacaoIdRaw = $request->input('operacao_id');
+        $operacaoId = $operacaoIdRaw !== null && $operacaoIdRaw !== '' ? (int) $operacaoIdRaw : null;
+        $operacaoValida = null;
+
+        if ($operacaoId !== null && $operacaoId > 0) {
+            if ($user->isSuperAdmin()) {
+                $operacaoValida = Operacao::where('id', $operacaoId)->where('ativo', true)->exists()
+                    ? $operacaoId
+                    : null;
+            } else {
+                $opsIds = $user->getOperacoesIds();
+                $operacaoValida = (! empty($opsIds) && in_array($operacaoId, $opsIds, true))
+                    ? $operacaoId
+                    : null;
             }
-            $query->whereHas('operacoes', function ($q) use ($operacoesIds) {
-                $q->whereIn('operacoes.id', $operacoesIds);
-            });
         }
 
-        // Buscar por nome ou email
-        $query->where(function($q) use ($termo) {
+        if ($request->filled('operacao_id') && ($operacaoValida === null || $operacaoValida < 1)) {
+            return response()->json([
+                'results' => [],
+                'total_count' => 0,
+                'error' => 'Operação inválida ou sem permissão.',
+            ]);
+        }
+
+        $query = User::query();
+
+        if ($operacaoValida !== null && $operacaoValida > 0) {
+            $query->whereHas('operacoes', function ($q) use ($operacaoValida) {
+                $q->where('operacoes.id', $operacaoValida);
+            });
+        } else {
+            $query->whereHas('operacoes', function ($q) {
+                $q->whereIn('operacao_user.role', ['consultor', 'gestor']);
+            });
+
+            if (! $user->isSuperAdmin()) {
+                $operacoesIds = $user->getOperacoesIds();
+                if (empty($operacoesIds)) {
+                    return response()->json(['results' => [], 'total_count' => 0]);
+                }
+                $query->whereHas('operacoes', function ($q) use ($operacoesIds) {
+                    $q->whereIn('operacoes.id', $operacoesIds);
+                });
+            }
+        }
+
+        $query->where(function ($q) use ($termo) {
             $q->where('name', 'like', "%{$termo}%")
-              ->orWhere('email', 'like', "%{$termo}%");
+                ->orWhere('email', 'like', "%{$termo}%");
         });
+
+        $page = max(1, (int) $request->input('page', 1));
+        $perPage = 20;
+        $totalCount = (clone $query)->count();
 
         $usuarios = $query->with('operacoes')
             ->orderBy('name')
-            ->limit(20)
+            ->skip(($page - 1) * $perPage)
+            ->take($perPage)
             ->get();
 
-        $results = $usuarios->map(function ($usuario) {
-            $papeis = $usuario->operacoes->pluck('pivot.role')->filter()->unique()->map(fn ($r) => ucfirst($r))->implode(', ');
+        $authId = auth()->id();
+        $results = $usuarios->map(function ($usuario) use ($operacaoValida, $authId) {
+            if ($operacaoValida !== null && $operacaoValida > 0) {
+                $papeis = $usuario->operacoes->where('id', $operacaoValida)
+                    ->pluck('pivot.role')->filter()->unique()->map(fn ($r) => ucfirst((string) $r))->implode(', ');
+            } else {
+                $papeis = $usuario->operacoes->pluck('pivot.role')->filter()->unique()->map(fn ($r) => ucfirst((string) $r))->implode(', ');
+            }
+            $texto = $usuario->name.' - '.$usuario->email.($papeis !== '' ? ' ('.$papeis.')' : '');
+            if ((int) $usuario->id === (int) $authId) {
+                $texto .= ' (Você)';
+            }
+
             return [
                 'id' => $usuario->id,
-                'text' => $usuario->name . ' - ' . $usuario->email . ($papeis ? ' (' . $papeis . ')' : '')
+                'text' => $texto,
             ];
         });
 
-        return response()->json(['results' => $results]);
+        return response()->json([
+            'results' => $results,
+            'total_count' => $totalCount,
+        ]);
     }
 }

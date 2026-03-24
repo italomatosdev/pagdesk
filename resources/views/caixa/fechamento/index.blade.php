@@ -23,35 +23,119 @@
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
                 </div>
             @endif
-            <!-- Card: Meu Saldo / Fechar Meu Caixa -->
-            @if($meuSaldo > 0)
-            <div class="card mb-3 border-primary">
-                <div class="card-header bg-primary text-white">
+
+            <!-- Filtros no topo: operação e demais critérios aplicam à página inteira -->
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="bx bx-filter-alt"></i> Filtros
+                    </h5>
+                    <small class="text-muted">A operação selecionada vale para seu saldo, para a lista de usuários e para os fechamentos abaixo.</small>
+                </div>
+                <div class="card-body pb-2">
+                    <form method="GET" action="{{ route('fechamento-caixa.index') }}" class="mb-0">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-3">
+                                <label class="form-label">Operação</label>
+                                <select name="operacao_id" id="fechamento-operacao-select" class="form-select">
+                                    @foreach($operacoes as $op)
+                                        <option value="{{ $op->id }}" {{ $operacaoId == $op->id ? 'selected' : '' }}>
+                                            {{ $op->nome }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor'])))
+                            <div class="col-md-3">
+                                <label class="form-label">Usuário</label>
+                                <select name="consultor_id" id="fechamento-usuario-filtro-select" class="form-select" data-select2-placeholder="Todos os usuários">
+                                    <option value="">Todos</option>
+                                    @foreach($usuariosFiltro ?? [] as $u)
+                                        <option value="{{ $u->id }}" {{ (int) ($consultorId ?? 0) === (int) $u->id ? 'selected' : '' }}>
+                                            {{ $u->id === auth()->id() ? $u->name . ' (Você)' : $u->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            @endif
+                            <div class="col-md-2">
+                                <label class="form-label">Status</label>
+                                <select name="status" class="form-select">
+                                    <option value="">Todos</option>
+                                    <option value="aprovado" {{ ($status ?? '') === 'aprovado' ? 'selected' : '' }}>Aguardando Envio</option>
+                                    <option value="enviado" {{ ($status ?? '') === 'enviado' ? 'selected' : '' }}>Aguardando Confirmação</option>
+                                    <option value="concluido" {{ ($status ?? '') === 'concluido' ? 'selected' : '' }}>Concluído</option>
+                                    <option value="rejeitado" {{ ($status ?? '') === 'rejeitado' ? 'selected' : '' }}>Rejeitado</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Data início</label>
+                                <input type="date" name="data_inicio" class="form-control" value="{{ $dataInicio ?? '' }}">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Data fim</label>
+                                <input type="date" name="data_fim" class="form-control" value="{{ $dataFim ?? '' }}">
+                            </div>
+                        </div>
+                        <div class="row g-3 align-items-end mt-1">
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bx bx-search"></i> Filtrar
+                                </button>
+                            </div>
+                            <div class="col-md-2">
+                                <a href="{{ route('fechamento-caixa.index', ['operacao_id' => $operacaoId]) }}" class="btn btn-outline-secondary w-100">
+                                    Limpar filtros da lista
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Card: Meu Saldo / Fechar ou apenas extrato -->
+            @if(round(abs((float) $meuSaldo), 2) > 0)
+            @php $meuSaldoRounded = round((float) $meuSaldo, 2); @endphp
+            <div class="card mb-3 border-{{ $meuSaldoRounded > 0 ? 'primary' : 'danger' }}">
+                <div class="card-header {{ $meuSaldoRounded > 0 ? 'bg-primary' : 'bg-danger' }} text-white">
                     <h5 class="card-title mb-0 text-white">
                         <i class="bx bx-wallet"></i> Meu Caixa na Operação: {{ $operacaoSelecionada?->nome ?? 'Selecione uma operação' }}
                     </h5>
                 </div>
                 <div class="card-body">
-                    <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
                         <div>
                             <p class="text-muted mb-1">Meu saldo atual</p>
-                            <h3 class="text-success mb-0">R$ {{ number_format($meuSaldo, 2, ',', '.') }}</h3>
+                            <h3 class="mb-0 {{ $meuSaldoRounded > 0 ? 'text-success' : 'text-danger' }}">R$ {{ number_format($meuSaldo, 2, ',', '.') }}</h3>
+                            @if($meuSaldoRounded < 0)
+                                <small class="text-muted">Saldo negativo: use apenas para conferir o extrato; o fechamento padrão não está disponível.</small>
+                            @endif
                         </div>
-                        <a href="{{ route('fechamento-caixa.conferir', ['usuario_id' => auth()->id(), 'operacao_id' => $operacaoId]) }}" class="btn btn-primary btn-lg">
-                            <i class="bx bx-search-alt"></i> Conferir e fechar meu caixa
-                        </a>
+                        @if($meuSaldoRounded > 0)
+                            <a href="{{ route('fechamento-caixa.conferir', ['usuario_id' => auth()->id(), 'operacao_id' => $operacaoId]) }}" class="btn btn-primary btn-lg">
+                                <i class="bx bx-search-alt"></i> Conferir e fechar meu caixa
+                            </a>
+                        @else
+                            <a href="{{ route('fechamento-caixa.conferir', ['usuario_id' => auth()->id(), 'operacao_id' => $operacaoId]) }}" class="btn btn-outline-danger btn-lg">
+                                <i class="bx bx-list-ul"></i> Ver extrato
+                            </a>
+                        @endif
                     </div>
                 </div>
             </div>
             @endif
 
-            <!-- Card: Usuários com Saldo (apenas gestor/admin) -->
-            @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])) && $usuariosComSaldo->isNotEmpty())
+            @php
+                $outrosComSaldo = ($usuariosComSaldo ?? collect())->filter(fn ($u) => (int) $u->id !== (int) auth()->id());
+            @endphp
+            <!-- Card: Saldos de outros usuários (apenas gestor/admin) -->
+            @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])) && $outrosComSaldo->isNotEmpty())
             <div class="card mb-3">
                 <div class="card-header bg-warning">
                     <h5 class="card-title mb-0">
-                        <i class="bx bx-group"></i> Usuários com Saldo Pendente
+                        <i class="bx bx-group"></i> Saldos por usuário (conferência)
                     </h5>
+                    <small class="text-dark">Saldo positivo: pode fechar. Saldo negativo: apenas extrato — não é possível fechar pelo fluxo padrão.</small>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
@@ -61,12 +145,11 @@
                                     <th>Usuário</th>
                                     <th>Função</th>
                                     <th class="text-end">Saldo</th>
-                                    <th class="text-center" width="150">Ação</th>
+                                    <th class="text-center" width="180">Ação</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach($usuariosComSaldo as $usuario)
-                                    @if($usuario->id !== auth()->id())
+                                @foreach($outrosComSaldo as $usuario)
                                     <tr>
                                         <td>
                                             <strong>{{ $usuario->name }}</strong>
@@ -80,15 +163,20 @@
                                             @endforeach
                                         </td>
                                         <td class="text-end">
-                                            <span class="text-success fw-bold">R$ {{ number_format($usuario->saldo_operacao, 2, ',', '.') }}</span>
+                                            <span class="fw-bold {{ round((float) $usuario->saldo_operacao, 2) >= 0 ? 'text-success' : 'text-danger' }}">R$ {{ number_format($usuario->saldo_operacao, 2, ',', '.') }}</span>
                                         </td>
                                         <td class="text-center">
-                                            <a href="{{ route('fechamento-caixa.conferir', ['usuario_id' => $usuario->id, 'operacao_id' => $operacaoId]) }}" class="btn btn-danger btn-sm">
-                                                <i class="bx bx-search-alt"></i> Conferir e fechar
-                                            </a>
+                                            @if(round((float) $usuario->saldo_operacao, 2) > 0)
+                                                <a href="{{ route('fechamento-caixa.conferir', ['usuario_id' => $usuario->id, 'operacao_id' => $operacaoId]) }}" class="btn btn-danger btn-sm">
+                                                    <i class="bx bx-search-alt"></i> Conferir e fechar
+                                                </a>
+                                            @else
+                                                <a href="{{ route('fechamento-caixa.conferir', ['usuario_id' => $usuario->id, 'operacao_id' => $operacaoId]) }}" class="btn btn-outline-secondary btn-sm">
+                                                    <i class="bx bx-list-ul"></i> Ver extrato
+                                                </a>
+                                            @endif
                                         </td>
                                     </tr>
-                                    @endif
                                 @endforeach
                             </tbody>
                         </table>
@@ -105,65 +193,6 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <!-- Filtros -->
-                    <form method="GET" action="{{ route('fechamento-caixa.index') }}" class="mb-3">
-                        <div class="row g-3 align-items-end">
-                            <div class="col-md-3">
-                                <label class="form-label">Operação</label>
-                                <select name="operacao_id" class="form-select" onchange="this.form.submit()">
-                                    @foreach($operacoes as $op)
-                                        <option value="{{ $op->id }}" {{ $operacaoId == $op->id ? 'selected' : '' }}>
-                                            {{ $op->nome }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor'])))
-                            <div class="col-md-3">
-                                <label class="form-label">Usuário</label>
-                                <select name="consultor_id" id="consultor-select" class="form-select">
-                                    <option value="">Todos</option>
-                                    @if(isset($consultorSelecionado) && $consultorSelecionado)
-                                        <option value="{{ $consultorSelecionado->id }}" selected>
-                                            {{ $consultorSelecionado->name }}
-                                        </option>
-                                    @endif
-                                </select>
-                            </div>
-                            @endif
-                            <div class="col-md-2">
-                                <label class="form-label">Status</label>
-                                <select name="status" class="form-select">
-                                    <option value="">Todos</option>
-                                    <option value="aprovado" {{ ($status ?? '') === 'aprovado' ? 'selected' : '' }}>Aguardando Envio</option>
-                                    <option value="enviado" {{ ($status ?? '') === 'enviado' ? 'selected' : '' }}>Aguardando Confirmação</option>
-                                    <option value="concluido" {{ ($status ?? '') === 'concluido' ? 'selected' : '' }}>Concluído</option>
-                                    <option value="rejeitado" {{ ($status ?? '') === 'rejeitado' ? 'selected' : '' }}>Rejeitado</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="row g-3 align-items-end mt-1">
-                            <div class="col-md-2">
-                                <label class="form-label">Data Início</label>
-                                <input type="date" name="data_inicio" class="form-control" value="{{ $dataInicio ?? '' }}">
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label">Data Fim</label>
-                                <input type="date" name="data_fim" class="form-control" value="{{ $dataFim ?? '' }}">
-                            </div>
-                            <div class="col-md-2">
-                                <button type="submit" class="btn btn-primary w-100">
-                                    <i class="bx bx-search"></i> Filtrar
-                                </button>
-                            </div>
-                            <div class="col-md-2">
-                                <a href="{{ route('fechamento-caixa.index', ['operacao_id' => $operacaoId]) }}" class="btn btn-outline-secondary w-100">
-                                    Limpar
-                                </a>
-                            </div>
-                        </div>
-                    </form>
-
                     <!-- Tabela -->
                     <div class="table-responsive">
                         <table class="table table-bordered table-striped mb-0">
@@ -266,30 +295,24 @@
 @parent
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Select2 para busca de usuários
-    const consultorSelect = document.getElementById('consultor-select');
-    if (consultorSelect && typeof $ !== 'undefined' && $.fn.select2) {
-        $('#consultor-select').select2({
-            theme: 'bootstrap-5',
-            placeholder: 'Buscar usuário...',
-            allowClear: true,
-            minimumInputLength: 2,
-            ajax: {
-                url: '{{ route("usuarios.api.buscar") }}',
-                dataType: 'json',
-                delay: 250,
-                data: function(params) {
-                    return { q: params.term, page: params.page || 1 };
-                },
-                processResults: function(data, params) {
-                    return {
-                        results: data.results,
-                        pagination: { more: (params.page * 20) < data.total_count }
-                    };
-                },
-                cache: true
+    const opFe = document.getElementById('fechamento-operacao-select');
+    if (opFe) {
+        opFe.addEventListener('change', function() {
+            const c = document.getElementById('fechamento-usuario-filtro-select');
+            if (c && typeof $ !== 'undefined' && $.fn.select2 && $(c).data('select2')) {
+                $(c).select2('destroy');
             }
+            if (c) {
+                c.value = '';
+            }
+            this.form.submit();
         });
+    }
+
+    const usuarioFiltroEl = document.getElementById('fechamento-usuario-filtro-select');
+    if (usuarioFiltroEl && typeof $ !== 'undefined' && $.fn.select2) {
+        var ph = usuarioFiltroEl.getAttribute('data-select2-placeholder') || 'Todos os usuários';
+        $(usuarioFiltroEl).select2({ theme: 'bootstrap-5', placeholder: ph, allowClear: true });
     }
 });
 

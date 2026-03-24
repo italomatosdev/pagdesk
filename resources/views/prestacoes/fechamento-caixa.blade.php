@@ -19,7 +19,7 @@
                 </div>
                 <div class="card-body">
                     <p class="text-muted mb-4">
-                        Selecione a operação para ver os usuários com saldo positivo. Ao fechar o caixa, o usuário será notificado para enviar o valor e anexar o comprovante.
+                        Selecione a operação para ver usuários com saldo diferente de zero. Saldo positivo: pode fechar (notificação para envio). Saldo negativo: apenas conferência no extrato — use a tela unificada de Fechamento de Caixa.
                     </p>
 
                     <!-- Filtro de Operação -->
@@ -41,7 +41,7 @@
                     @if($operacaoId)
                         @if($usuariosComSaldo->isEmpty())
                             <div class="alert alert-info">
-                                <i class="bx bx-info-circle"></i> Nenhum usuário com saldo positivo nesta operação.
+                                <i class="bx bx-info-circle"></i> Nenhum usuário com saldo diferente de zero nesta operação.
                             </div>
                         @else
                             <div class="table-responsive">
@@ -69,19 +69,26 @@
                                                     @endforeach
                                                 </td>
                                                 <td class="text-end">
-                                                    <span class="text-success fw-bold fs-5">
+                                                    <span class="fw-bold fs-5 {{ round((float) $usuario->saldo_operacao, 2) >= 0 ? 'text-success' : 'text-danger' }}">
                                                         R$ {{ number_format($usuario->saldo_operacao, 2, ',', '.') }}
                                                     </span>
                                                 </td>
                                                 <td class="text-center">
-                                                    <button type="button" class="btn btn-danger btn-sm" 
-                                                            data-bs-toggle="modal" 
-                                                            data-bs-target="#modalFechar{{ $usuario->id }}">
-                                                        <i class="bx bx-lock-alt"></i> Fechar Caixa
-                                                    </button>
+                                                    @if(round((float) $usuario->saldo_operacao, 2) > 0)
+                                                        <button type="button" class="btn btn-danger btn-sm"
+                                                                data-bs-toggle="modal"
+                                                                data-bs-target="#modalFechar{{ $usuario->id }}">
+                                                            <i class="bx bx-lock-alt"></i> Fechar Caixa
+                                                        </button>
+                                                    @else
+                                                        <a href="{{ route('fechamento-caixa.conferir', ['usuario_id' => $usuario->id, 'operacao_id' => $operacaoId]) }}" class="btn btn-outline-secondary btn-sm">
+                                                            <i class="bx bx-list-ul"></i> Ver extrato
+                                                        </a>
+                                                    @endif
                                                 </td>
                                             </tr>
 
+                                            @if(round((float) $usuario->saldo_operacao, 2) > 0)
                                             <!-- Modal de Confirmação -->
                                             <div class="modal fade" id="modalFechar{{ $usuario->id }}" tabindex="-1">
                                                 <div class="modal-dialog">
@@ -124,6 +131,7 @@
                                                     </div>
                                                 </div>
                                             </div>
+                                            @endif
                                         @endforeach
                                     </tbody>
                                 </table>
