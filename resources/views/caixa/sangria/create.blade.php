@@ -136,6 +136,28 @@ document.addEventListener('DOMContentLoaded', function() {
         sel.addEventListener('change', atualizarSaldo);
         atualizarSaldo();
     }
+
+    var formSangria = document.getElementById('form-sangria');
+    if (formSangria && typeof Swal !== 'undefined') {
+        formSangria.addEventListener('submit', function onSubmitSangria(e) {
+            e.preventDefault();
+            Swal.fire({
+                title: 'Confirmar sangria?',
+                html: 'Será registrada uma <strong>saída</strong> no seu caixa e uma <strong>entrada</strong> no Caixa da Operação (mesmo valor).',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sim, confirmar',
+                cancelButtonText: 'Cancelar',
+                reverseButtons: true,
+                focusCancel: true
+            }).then(function(result) {
+                if (result.isConfirmed) {
+                    formSangria.removeEventListener('submit', onSubmitSangria);
+                    formSangria.submit();
+                }
+            });
+        });
+    }
 });
 </script>
 @endsection

@@ -201,12 +201,27 @@ document.addEventListener('DOMContentLoaded', function() {
         popularDestinatarios();
     }
 
-    if (form) {
-        form.addEventListener('submit', function(e) {
-            if (selDest && parseInt(selDest.value, 10) === meuId) {
-                var ok = window.confirm('O valor sairá do Caixa da Operação e entrará no seu caixa pessoal nesta operação. Confirma?');
-                if (!ok) e.preventDefault();
-            }
+    if (form && typeof Swal !== 'undefined') {
+        form.addEventListener('submit', function onSubmitTransferencia(e) {
+            e.preventDefault();
+            var self = selDest && parseInt(selDest.value, 10) === meuId;
+            Swal.fire({
+                title: 'Confirmar transferência?',
+                html: self
+                    ? 'O valor sairá do <strong>Caixa da Operação</strong> e entrará no <strong>seu caixa pessoal</strong> nesta operação.'
+                    : 'Será registrada uma <strong>saída</strong> no Caixa da Operação e uma <strong>entrada</strong> no caixa do destinatário (mesmo valor).',
+                icon: self ? 'warning' : 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sim, confirmar',
+                cancelButtonText: 'Cancelar',
+                reverseButtons: true,
+                focusCancel: true
+            }).then(function(result) {
+                if (result.isConfirmed) {
+                    form.removeEventListener('submit', onSubmitTransferencia);
+                    form.submit();
+                }
+            });
         });
     }
 });
