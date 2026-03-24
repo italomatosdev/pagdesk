@@ -3,13 +3,14 @@
 namespace App\Modules\Cash\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Modules\Cash\Models\Settlement;
 use App\Modules\Cash\Services\CashService;
 use App\Modules\Cash\Services\SettlementService;
 use App\Modules\Core\Models\Operacao;
 use App\Support\FichaContatoLookup;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -34,7 +35,7 @@ class FechamentoCaixaController extends Controller
         }
 
         $operacoesIds = $user->getOperacoesIds();
-        $operacoes = !empty($operacoesIds)
+        $operacoes = ! empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
             : collect([]);
 
@@ -43,7 +44,7 @@ class FechamentoCaixaController extends Controller
         }
 
         $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : $operacoes->first()->id;
-        if (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds, true)) {
+        if (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds, true)) {
             $operacaoId = $operacoes->first()->id;
         }
 
@@ -60,9 +61,20 @@ class FechamentoCaixaController extends Controller
 
         // Filtros para listagem
         $consultorId = null;
-        if (!empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
+        $usuariosFiltro = collect([]);
+        if (! empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
+            $usuariosFiltro = User::query()
+                ->whereHas('operacoes', function ($q) use ($operacaoId) {
+                    $q->where('operacoes.id', $operacaoId);
+                })
+                ->orderBy('name')
+                ->get(['id', 'name']);
+
             $consultorIdInput = $request->input('consultor_id');
             $consultorId = $consultorIdInput ? (int) $consultorIdInput : null;
+            if ($consultorId && ! $usuariosFiltro->contains(fn (User $u) => (int) $u->id === $consultorId)) {
+                $consultorId = null;
+            }
         } else {
             $consultorId = $user->id;
         }
@@ -73,20 +85,15 @@ class FechamentoCaixaController extends Controller
         // Listar fechamentos
         $fechamentos = $this->settlementService->listar($consultorId, $operacaoId, $status, $user, $dataInicio, $dataFim);
 
-        // Consultor selecionado para exibição
-        $consultorSelecionado = null;
-        if ($consultorId) {
-            $consultorSelecionado = \App\Models\User::find($consultorId);
-        }
-
         return view('caixa.fechamento.index', compact(
             'operacoes',
             'operacaoId',
             'operacaoSelecionada',
             'meuSaldo',
             'usuariosComSaldo',
+            'usuariosFiltro',
             'fechamentos',
-            'consultorSelecionado',
+            'consultorId',
             'status',
             'dataInicio',
             'dataFim'
@@ -112,13 +119,13 @@ class FechamentoCaixaController extends Controller
         $usuarioId = (int) $validated['usuario_id'];
         $operacaoId = (int) $validated['operacao_id'];
 
-        if (!$user->temAcessoOperacao($operacaoId)) {
+        if (! $user->temAcessoOperacao($operacaoId)) {
             return redirect()->route('fechamento-caixa.index')
                 ->with('error', 'Você não tem acesso a esta operação.');
         }
 
         if ($usuarioId !== $user->id) {
-            if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+            if (! $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
                 return redirect()->route('fechamento-caixa.index')
                     ->with('error', 'Você não tem permissão para fechar o caixa de outro usuário.');
             }
@@ -126,10 +133,7 @@ class FechamentoCaixaController extends Controller
 
         $dados = $this->settlementService->prepararConferenciaFechamento($usuarioId, $operacaoId);
 
-        if ($dados['saldoAtual'] <= 0) {
-            return redirect()->route('fechamento-caixa.index', ['operacao_id' => $operacaoId])
-                ->with('error', 'Não há saldo positivo para fechar. Saldo atual: R$ ' . number_format($dados['saldoAtual'], 2, ',', '.'));
-        }
+        $permiteFechar = round((float) $dados['saldoAtual'], 2) > 0;
 
         $usuarioAlvo = \App\Models\User::findOrFail($usuarioId);
         $operacao = Operacao::findOrFail($operacaoId);
@@ -157,7 +161,8 @@ class FechamentoCaixaController extends Controller
             'quantidadeMovimentacoes',
             'dataInicioConf',
             'dataFimConf',
-            'fichasContatoPorClienteOperacao'
+            'fichasContatoPorClienteOperacao',
+            'permiteFechar'
         ));
     }
 
@@ -206,7 +211,7 @@ class FechamentoCaixaController extends Controller
             ->where('operacao_id', $settlement->operacao_id)
             ->whereBetween('data_movimentacao', [
                 $settlement->data_inicio->format('Y-m-d'),
-                $settlement->data_fim->format('Y-m-d')
+                $settlement->data_fim->format('Y-m-d'),
             ])
             ->with(['operacao', 'pagamento.parcela.emprestimo.cliente'])
             ->orderBy('data_movimentacao', 'asc')
@@ -247,12 +252,17 @@ class FechamentoCaixaController extends Controller
 
         // Verificar permissões
         if ($usuarioId !== $user->id) {
-            if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+            if (! $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
                 return back()->with('error', 'Você não tem permissão para fechar o caixa de outro usuário.');
             }
         }
-        if (!$user->temAcessoOperacao($operacaoId)) {
+        if (! $user->temAcessoOperacao($operacaoId)) {
             return back()->with('error', 'Você não tem acesso a esta operação.');
+        }
+
+        $saldoAtualFechar = $this->cashService->calcularSaldo($usuarioId, $operacaoId);
+        if (round((float) $saldoAtualFechar, 2) <= 0) {
+            return back()->with('error', 'Não é possível fechar com saldo zero ou negativo. Saldo atual: R$ '.number_format($saldoAtualFechar, 2, ',', '.'));
         }
 
         try {
@@ -271,7 +281,7 @@ class FechamentoCaixaController extends Controller
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao fechar caixa: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Erro ao fechar caixa: '.$e->getMessage())->withInput();
         }
     }
 
@@ -308,7 +318,8 @@ class FechamentoCaixaController extends Controller
             if ($request->ajax()) {
                 return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
             }
-            return back()->with('error', 'Erro: ' . $e->getMessage());
+
+            return back()->with('error', 'Erro: '.$e->getMessage());
         }
     }
 
@@ -320,15 +331,16 @@ class FechamentoCaixaController extends Controller
         $user = auth()->user();
 
         $settlement = Settlement::findOrFail($id);
-        if (!$user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Apenas gestores e administradores podem aprovar.');
         }
 
         try {
             $this->settlementService->aprovar($id, $user->id, $request->input('observacoes'));
+
             return redirect()->route('fechamento-caixa.show', $id)->with('success', 'Fechamento aprovado!');
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro: ' . $e->getMessage());
+            return back()->with('error', 'Erro: '.$e->getMessage());
         }
     }
 
@@ -339,7 +351,7 @@ class FechamentoCaixaController extends Controller
     {
         $user = auth()->user();
         $settlement = Settlement::findOrFail($id);
-        if (!$user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Apenas gestores e administradores podem rejeitar.');
         }
 
@@ -349,9 +361,10 @@ class FechamentoCaixaController extends Controller
 
         try {
             $this->settlementService->rejeitar($id, $user->id, $validated['motivo_rejeicao']);
+
             return redirect()->route('fechamento-caixa.show', $id)->with('success', 'Fechamento rejeitado.');
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro: ' . $e->getMessage());
+            return back()->with('error', 'Erro: '.$e->getMessage());
         }
     }
 
@@ -362,7 +375,7 @@ class FechamentoCaixaController extends Controller
     {
         $user = auth()->user();
         $settlement = Settlement::findOrFail($id);
-        if (!$user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Apenas gestores e administradores podem confirmar recebimento.');
         }
 
@@ -372,10 +385,11 @@ class FechamentoCaixaController extends Controller
 
         try {
             $this->settlementService->confirmarRecebimento($id, $user->id, $validated['observacoes'] ?? null);
+
             return redirect()->route('fechamento-caixa.show', $id)
                 ->with('success', 'Recebimento confirmado! Movimentações geradas.');
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro: ' . $e->getMessage());
+            return back()->with('error', 'Erro: '.$e->getMessage());
         }
     }
 
@@ -387,7 +401,7 @@ class FechamentoCaixaController extends Controller
     {
         $user = auth()->user();
         $settlement = Settlement::with('consultor')->findOrFail($id);
-        if (!$user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Apenas gestores e administradores podem marcar como pago.');
         }
 
@@ -397,13 +411,15 @@ class FechamentoCaixaController extends Controller
 
         try {
             $this->settlementService->marcarComoPagoConsultorBloqueado($id, $user->id, $validated['observacoes'] ?? null);
+
             return redirect()->route('fechamento-caixa.show', $id)
                 ->with('success', 'Marcado como pago. Movimentações de caixa geradas (consultor bloqueado).');
         } catch (\Illuminate\Validation\ValidationException $e) {
             $msg = $e->validator->errors()->first('settlement') ?: $e->getMessage();
+
             return back()->with('error', $msg);
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro: ' . $e->getMessage());
+            return back()->with('error', 'Erro: '.$e->getMessage());
         }
     }
 }

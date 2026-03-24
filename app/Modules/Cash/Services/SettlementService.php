@@ -210,7 +210,8 @@ class SettlementService
     }
 
     /**
-     * Listar usuários com saldo positivo em uma operação (para fechamento de caixa)
+     * Listar usuários com saldo diferente de zero em uma operação (fechamento de caixa).
+     * Positivos: fluxo de fechar; negativos: apenas conferência do extrato (sem fechamento padrão).
      *
      * @param int $operacaoId
      * @return \Illuminate\Support\Collection
@@ -235,7 +236,7 @@ class SettlementService
             $usuario->saldo_operacao = $saldo;
             return $usuario;
         })->filter(function ($usuario) {
-            return $usuario->saldo_operacao > 0; // Apenas usuários com saldo positivo
+            return abs(round((float) $usuario->saldo_operacao, 2)) > 0;
         })->sortByDesc('saldo_operacao')->values();
     }
 

@@ -4,6 +4,7 @@ namespace App\Modules\Cash\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Cash\Models\Settlement;
+use App\Modules\Cash\Services\CashService;
 use App\Modules\Cash\Services\SettlementService;
 use App\Modules\Core\Models\Operacao;
 use App\Support\FichaContatoLookup;
@@ -402,7 +403,7 @@ class SettlementController extends Controller
 
     /**
      * Tela de fechamento de caixa (Gestor/Admin)
-     * Lista usuários com saldo positivo para fechar
+     * Lista usuários com saldo diferente de zero (positivos e negativos)
      */
     public function fechamentoCaixa(Request $request): View
     {
@@ -458,6 +459,11 @@ class SettlementController extends Controller
 
         if (!$user->temAcessoOperacao($validated['operacao_id'])) {
             return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
+        }
+
+        $saldoAtual = app(CashService::class)->calcularSaldo((int) $validated['usuario_id'], (int) $validated['operacao_id']);
+        if (round((float) $saldoAtual, 2) <= 0) {
+            return back()->with('error', 'Não é possível fechar com saldo zero ou negativo. Saldo atual: R$ '.number_format($saldoAtual, 2, ',', '.'))->withInput();
         }
 
         try {

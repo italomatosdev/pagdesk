@@ -156,6 +156,12 @@
                                         <option value="venda" {{ request('referencia_tipo') === 'venda' ? 'selected' : '' }}>
                                             Venda
                                         </option>
+                                        <option value="sangria_caixa_operacao" {{ request('referencia_tipo') === 'sangria_caixa_operacao' ? 'selected' : '' }}>
+                                            Sangria (Caixa da Operação)
+                                        </option>
+                                        <option value="transferencia_caixa_operacao" {{ request('referencia_tipo') === 'transferencia_caixa_operacao' ? 'selected' : '' }}>
+                                            Transferência (Caixa da Operação)
+                                        </option>
                                     </select>
                                 </div>
                             </div>
@@ -202,9 +208,19 @@
                         <div class="d-flex align-items-center justify-content-between">
                             <h4 class="card-title mb-0">Movimentações</h4>
                             @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor'])))
-                                <a href="{{ route('caixa.movimentacao.create') }}" class="btn btn-primary btn-sm">
-                                    <i class="bx bx-plus"></i> Nova Movimentação Manual
-                                </a>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <a href="{{ route('caixa.sangria.create') }}" class="btn btn-outline-primary btn-sm">
+                                        <i class="bx bx-down-arrow-alt"></i> Sangria para Caixa da Operação
+                                    </a>
+                                    @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador'])))
+                                        <a href="{{ route('caixa.transferencia_operacao.create') }}" class="btn btn-outline-secondary btn-sm">
+                                            <i class="bx bx-transfer"></i> Transferência do Caixa da Operação
+                                        </a>
+                                    @endif
+                                    <a href="{{ route('caixa.movimentacao.create') }}" class="btn btn-primary btn-sm">
+                                        <i class="bx bx-plus"></i> Nova Movimentação Manual
+                                    </a>
+                                </div>
                             @endif
                         </div>
                     </div>
@@ -272,6 +288,12 @@
                                                             @case('venda')
                                                             @case('App\Modules\Core\Models\Venda')
                                                                 <i class="bx bx-cart"></i> Venda
+                                                                @break
+                                                            @case('sangria_caixa_operacao')
+                                                                <i class="bx bx-down-arrow-alt"></i> Sangria
+                                                                @break
+                                                            @case('transferencia_caixa_operacao')
+                                                                <i class="bx bx-transfer"></i> Transferência
                                                                 @break
                                                             @default
                                                                 {{ ucfirst(str_replace('_', ' ', $movimentacao->referencia_tipo)) }}

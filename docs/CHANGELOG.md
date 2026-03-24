@@ -2,6 +2,27 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [2026-01-24] - Transferência do Caixa da Operação (admin)
+
+### ✅ Adicionado
+
+- **Transferência (apenas administrador da operação):** saída no **Caixa da Operação** e entrada no caixa de um **gestor ou administrador** na mesma operação; destino pode ser **outro** ou **o próprio** admin (aviso + `confirm` no formulário).
+- **Rotas:** `GET /caixa/transferencia-operacao/create`, `POST /caixa/transferencia-operacao`; comprovante opcional (`comprovantes/transferencia-operacao`).
+- **Service:** `CashService::transferirDoCaixaOperacaoParaUsuario`; categorias `transferencia_caixa_operacao` em `CashCategoriaAutomaticaService`.
+- **UI:** botão na listagem de caixa (só quem tem papel administrador em alguma operação); filtro e badge “Transferência”.
+
+---
+
+## [2026-01-24] - Sangria para o Caixa da Operação
+
+### ✅ Adicionado
+
+- **Sangria (gestor/admin):** transferência do **próprio caixa** para o **Caixa da Operação** (`consultor_id` NULL), em um fluxo único com saída + entrada (`origem` automática, categorias `sangria_caixa_operacao`).
+- **Rotas:** `GET /caixa/sangria/create`, `POST /caixa/sangria` (`caixa.sangria.create` / `caixa.sangria.store`).
+- **UI:** botão na tela de Movimentações de Caixa; filtro por tipo de referência “Sangria”; **comprovante opcional** (PDF/imagem, mesmas regras da movimentação manual), gravado nos dois lançamentos.
+- **Service:** `CashService::transferirParaCaixaOperacao`.
+- **Categorias automáticas:** mapeamento em `CashCategoriaAutomaticaService` para `sangria_caixa_operacao|saida` e `|entrada`.
+
 ## [2026-01-26] - Novo Status de Parcelas: quitada_garantia
 
 ### ✅ Adicionado
