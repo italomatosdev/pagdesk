@@ -10,6 +10,7 @@ use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\Parcela;
 use App\Support\FichaContatoLookup;
+use App\Support\OperacaoPreferida;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -176,10 +177,7 @@ class RelatorioController extends Controller
         $operacoesIds = $user->isSuperAdmin()
             ? Operacao::where('ativo', true)->pluck('id')->toArray()
             : $user->getOperacoesIds();
-        $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        if ($operacaoId !== null && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds, true))) {
-            $operacaoId = null;
-        }
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoesIds, $user);
         $consultoresIds = $request->input('consultor_id', []);
         if (! is_array($consultoresIds)) {
             $consultoresIds = $consultoresIds ? [$consultoresIds] : [];
@@ -290,10 +288,7 @@ class RelatorioController extends Controller
         $operacoesIds = $user->isSuperAdmin()
             ? Operacao::where('ativo', true)->pluck('id')->toArray()
             : $user->getOperacoesIds();
-        $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        if ($operacaoId !== null && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds, true))) {
-            $operacaoId = null;
-        }
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoesIds, $user);
         $consultoresIds = $request->input('consultor_id', []);
         if (! is_array($consultoresIds)) {
             $consultoresIds = $consultoresIds ? [$consultoresIds] : [];
@@ -406,10 +401,7 @@ class RelatorioController extends Controller
         $operacoesIds = $user->isSuperAdmin()
             ? Operacao::where('ativo', true)->pluck('id')->toArray()
             : $user->getOperacoesIds();
-        $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        if ($operacaoId !== null && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds, true))) {
-            $operacaoId = null;
-        }
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoesIds, $user);
         $consultoresIds = $request->input('consultor_id', []);
         if (! is_array($consultoresIds)) {
             $consultoresIds = $consultoresIds ? [$consultoresIds] : [];
@@ -504,10 +496,7 @@ class RelatorioController extends Controller
         $operacoesIds = $user->isSuperAdmin()
             ? Operacao::where('ativo', true)->pluck('id')->toArray()
             : $user->getOperacoesIds();
-        $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        if ($operacaoId !== null && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds, true))) {
-            $operacaoId = null;
-        }
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoesIds, $user);
 
         $consultoresIds = $request->input('consultor_id', []);
         if (! is_array($consultoresIds)) {
@@ -620,10 +609,7 @@ class RelatorioController extends Controller
         $operacoesIds = $user->isSuperAdmin()
             ? Operacao::where('ativo', true)->pluck('id')->toArray()
             : $user->getOperacoesIds();
-        $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        if ($operacaoId !== null && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds, true))) {
-            $operacaoId = null;
-        }
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoesIds, $user);
 
         $operacoes = ! empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
@@ -708,10 +694,7 @@ class RelatorioController extends Controller
         $operacoesIds = $user->isSuperAdmin()
             ? Operacao::where('ativo', true)->pluck('id')->toArray()
             : $user->getOperacoesIds();
-        $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        if ($operacaoId !== null && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds, true))) {
-            $operacaoId = null;
-        }
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoesIds, $user);
 
         $operacoes = ! empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
@@ -789,10 +772,7 @@ class RelatorioController extends Controller
         $operacoesIds = $user->isSuperAdmin()
             ? Operacao::where('ativo', true)->pluck('id')->toArray()
             : $user->getOperacoesIds();
-        $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        if ($operacaoId !== null && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds, true))) {
-            $operacaoId = null;
-        }
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoesIds, $user);
         $consultoresIds = $request->input('consultor_id', []);
         if (! is_array($consultoresIds)) {
             $consultoresIds = $consultoresIds ? [$consultoresIds] : [];

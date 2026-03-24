@@ -35,11 +35,14 @@
 
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Operação <span class="text-danger">*</span></label>
+                                    @php
+                                        $opSelMov = old('operacao_id', $operacaoIdDefault ?? null);
+                                    @endphp
                                     <select name="operacao_id" id="operacao_id" class="form-select" required>
                                         <option value="">Selecione uma operação...</option>
                                         @foreach($operacoes as $operacao)
                                             <option value="{{ $operacao->id }}" 
-                                                    {{ old('operacao_id') == $operacao->id ? 'selected' : '' }}>
+                                                    {{ $opSelMov !== null && (int) $opSelMov === (int) $operacao->id ? 'selected' : '' }}>
                                                 {{ $operacao->nome }}
                                             </option>
                                         @endforeach
@@ -195,7 +198,7 @@
                                 <select name="operacao_id" id="modal_categoria_operacao_id" class="form-select" required>
                                     <option value="">Selecione a operação</option>
                                     @foreach($operacoes ?? [] as $op)
-                                        <option value="{{ $op->id }}" {{ old('operacao_id') == $op->id ? 'selected' : '' }}>{{ $op->nome }}</option>
+                                        <option value="{{ $op->id }}" {{ isset($opSelMov) && $opSelMov !== null && (int) $opSelMov === (int) $op->id ? 'selected' : '' }}>{{ $op->nome }}</option>
                                     @endforeach
                                 </select>
                                 <small class="text-muted">Operação à qual esta categoria pertencerá.</small>

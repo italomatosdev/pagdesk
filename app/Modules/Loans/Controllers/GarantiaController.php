@@ -9,6 +9,7 @@ use App\Modules\Loans\Models\EmprestimoGarantia;
 use App\Modules\Loans\Models\EmprestimoGarantiaAnexo;
 use App\Support\ClienteNomeExibicao;
 use App\Support\FichaContatoLookup;
+use App\Support\OperacaoPreferida;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
@@ -78,15 +79,11 @@ class GarantiaController extends Controller
             });
         }
 
-        $operacaoIdFiltro = $request->input('operacao_id');
-        if ($operacaoIdFiltro !== null && $operacaoIdFiltro !== '') {
-            $operacaoIdFiltro = (int) $operacaoIdFiltro;
-            if (!empty($operacoesIds) && in_array($operacaoIdFiltro, $operacoesIds, true)) {
-                $query->whereHas('emprestimo', fn ($q) => $q->where('operacao_id', $operacaoIdFiltro));
-                // Consultor (sem gestor/admin nesta operação): apenas garantias dos seus empréstimos
-                if (!$user->temAlgumPapelNaOperacao($operacaoIdFiltro, ['gestor', 'administrador'])) {
-                    $query->whereHas('emprestimo', fn ($q) => $q->where('consultor_id', $user->id));
-                }
+        $operacaoIdFiltro = OperacaoPreferida::resolverParaFiltroGet($request, $operacoesIds, $user);
+        if ($operacaoIdFiltro !== null && ! empty($operacoesIds) && in_array($operacaoIdFiltro, $operacoesIds, true)) {
+            $query->whereHas('emprestimo', fn ($q) => $q->where('operacao_id', $operacaoIdFiltro));
+            if (! $user->temAlgumPapelNaOperacao($operacaoIdFiltro, ['gestor', 'administrador'])) {
+                $query->whereHas('emprestimo', fn ($q) => $q->where('consultor_id', $user->id));
             }
         }
 
@@ -120,7 +117,7 @@ class GarantiaController extends Controller
             'outros' => EmprestimoGarantia::where('categoria', 'outros')->whereHas('emprestimo', $statsQuery)->count(),
         ];
 
-        return view('garantias.index', compact('garantias', 'operacoes', 'stats', 'fichasContatoPorClienteOperacao'));
+        return view('garantias.index', compact('garantias', 'operacoes', 'stats', 'fichasContatoPorClienteOperacao', 'operacaoIdFiltro'));
     }
 
     /**

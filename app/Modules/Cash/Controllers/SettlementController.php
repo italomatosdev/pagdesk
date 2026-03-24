@@ -8,6 +8,7 @@ use App\Modules\Cash\Services\CashService;
 use App\Modules\Cash\Services\SettlementService;
 use App\Modules\Core\Models\Operacao;
 use App\Support\FichaContatoLookup;
+use App\Support\OperacaoPreferida;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -41,23 +42,18 @@ class SettlementController extends Controller
             $consultorIdInput = $request->input('consultor_id');
             $consultorId = $consultorIdInput ? (int) $consultorIdInput : null;
         }
-        $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
         $status = $request->input('status');
 
-        if ($operacaoId && !$user->temAcessoOperacao($operacaoId)) {
+        $operacoesIds = $user->getOperacoesIds();
+        $operacoes = ! empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if ($operacaoId && ! $user->temAcessoOperacao($operacaoId)) {
             $operacaoId = null;
         }
 
         $settlements = $this->settlementService->listar($consultorId, $operacaoId, $status, $user);
-
-        if ($user->isSuperAdmin()) {
-            $operacoes = Operacao::where('ativo', true)->get();
-        } else {
-            $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
-                : collect([]);
-        }
 
         // Buscar dados do consultor selecionado (se houver) para pré-seleção no Select2
         $consultorSelecionado = null;
@@ -143,7 +139,7 @@ class SettlementController extends Controller
     /**
      * Mostrar formulário de criação
      */
-    public function create(): View
+    public function create(Request $request): View
     {
         $user = auth()->user();
         
@@ -152,16 +148,13 @@ class SettlementController extends Controller
             abort(403, 'Super Admin não pode criar Prestação de Contas.');
         }
         
-        if ($user->isSuperAdmin()) {
-            $operacoes = Operacao::where('ativo', true)->get();
-        } else {
-            $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
-                : collect([]);
-        }
+        $operacoesIds = $user->getOperacoesIds();
+        $operacoes = !empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
+        $operacaoIdDefault = OperacaoPreferida::resolverParaFormularioOuQuery($request, $operacoes->pluck('id')->all(), $user);
 
-        return view('prestacoes.create', compact('operacoes'));
+        return view('prestacoes.create', compact('operacoes', 'operacaoIdDefault'));
     }
 
     /**
@@ -413,8 +406,6 @@ class SettlementController extends Controller
             abort(403, 'Acesso negado. Apenas gestores e administradores podem fechar caixa.');
         }
 
-        $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
         } else {
@@ -424,12 +415,12 @@ class SettlementController extends Controller
                 : collect([]);
         }
 
-        if (!$operacaoId && $operacoes->isNotEmpty()) {
-            $operacaoId = $operacoes->first()->id;
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if ($operacaoId && ! $user->temAcessoOperacao($operacaoId)) {
+            $operacaoId = null;
         }
-
-        if ($operacaoId && !$user->temAcessoOperacao($operacaoId)) {
-            $operacaoId = $operacoes->first()?->id;
+        if (! $operacaoId && $operacoes->isNotEmpty()) {
+            $operacaoId = $operacoes->first()->id;
         }
 
         $usuariosComSaldo = collect([]);

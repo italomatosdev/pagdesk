@@ -20,9 +20,9 @@
                             <div class="flex-grow-1" style="min-width: 200px;">
                                 <label for="operacao_id" class="form-label">Filtrar por Operação</label>
                                 <select name="operacao_id" id="operacao_id" class="form-select">
-                                    <option value="">Todas as Operações</option>
+                                    <option value="" {{ ($operacaoId ?? null) === null ? 'selected' : '' }}>Todas as Operações</option>
                                     @foreach($operacoes as $operacao)
-                                        <option value="{{ $operacao->id }}" {{ $operacaoId == $operacao->id ? 'selected' : '' }}>
+                                        <option value="{{ $operacao->id }}" {{ (int) ($operacaoId ?? 0) === (int) $operacao->id && ($operacaoId ?? null) !== null ? 'selected' : '' }}>
                                             {{ $operacao->nome }}
                                         </option>
                                     @endforeach
@@ -33,7 +33,7 @@
                                 <button type="submit" class="btn btn-primary">
                                     <i class="bx bx-filter"></i> Filtrar
                                 </button>
-                                @if($operacaoId)
+                                @if(($operacaoId ?? null) !== null)
                                     <a href="{{ route('kanban.index') }}" class="btn btn-secondary">
                                         <i class="bx bx-x"></i> Limpar
                                     </a>

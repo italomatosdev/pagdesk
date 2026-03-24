@@ -107,10 +107,10 @@
                                         <i class="bx bx-building text-muted me-1"></i> Operação
                                     </label>
                                     <select name="operacao_id" id="operacao-id-select" class="form-select">
-                                        <option value="">Todas as operações</option>
+                                        <option value="" {{ ($operacaoId ?? null) === null ? 'selected' : '' }}>Todas as operações</option>
                                         @foreach($operacoes as $operacao)
                                             <option value="{{ $operacao->id }}" 
-                                                    {{ $operacaoId == $operacao->id ? 'selected' : '' }}>
+                                                    {{ (int) ($operacaoId ?? 0) === (int) $operacao->id && ($operacaoId ?? null) !== null ? 'selected' : '' }}>
                                                 {{ $operacao->nome }}
                                             </option>
                                         @endforeach

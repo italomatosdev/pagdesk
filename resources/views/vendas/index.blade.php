@@ -73,9 +73,9 @@
                 <div class="col-md-3">
                     <label class="form-label">Operação</label>
                     <select name="operacao_id" class="form-select">
-                        <option value="">Todas</option>
+                        <option value="" {{ ($operacaoId ?? null) === null ? 'selected' : '' }}>Todas</option>
                         @foreach($operacoes as $op)
-                            <option value="{{ $op->id }}" {{ request('operacao_id') == $op->id ? 'selected' : '' }}>{{ $op->nome }}</option>
+                            <option value="{{ $op->id }}" {{ (int) ($operacaoId ?? 0) === (int) $op->id && ($operacaoId ?? null) !== null ? 'selected' : '' }}>{{ $op->nome }}</option>
                         @endforeach
                     </select>
                 </div>

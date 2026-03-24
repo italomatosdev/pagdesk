@@ -110,14 +110,19 @@
                                     'cancelado' => 'Cancelado',
                                 ];
                             @endphp
+                            @php
+                                $operacaoIdSelecionadaLista = request()->has('operacao_id')
+                                    ? (request()->filled('operacao_id') ? (int) request('operacao_id') : null)
+                                    : ($operacaoFiltro ?? null);
+                            @endphp
                             <div class="bg-light rounded p-3 mb-3">
                                 <div class="row g-3 align-items-end">
                                     <div class="col-md-2">
                                         <label class="form-label mb-1">Operação</label>
                                         <select name="operacao_id" class="form-select">
-                                            <option value="">Todas</option>
+                                            <option value="" {{ $operacaoIdSelecionadaLista === null ? 'selected' : '' }}>Todas</option>
                                             @foreach($operacoes as $operacao)
-                                                <option value="{{ $operacao->id }}" {{ request('operacao_id') == $operacao->id ? 'selected' : '' }}>{{ $operacao->nome }}</option>
+                                                <option value="{{ $operacao->id }}" {{ (int) $operacaoIdSelecionadaLista === (int) $operacao->id ? 'selected' : '' }}>{{ $operacao->nome }}</option>
                                             @endforeach
                                         </select>
                                     </div>

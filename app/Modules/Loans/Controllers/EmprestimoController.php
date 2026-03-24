@@ -9,6 +9,7 @@ use App\Modules\Core\Services\ClienteService;
 use App\Modules\Core\Services\OperacaoDadosClienteService;
 use App\Support\ClienteNomeExibicao;
 use App\Support\FichaContatoLookup;
+use App\Support\OperacaoPreferida;
 use App\Support\NotificacaoClienteDisplayName;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Parcela;
@@ -67,12 +68,18 @@ class EmprestimoController extends Controller
             });
         }
 
-        // Filtros
-        if ($request->filled('operacao_id')) {
-            // Validar se o usuário tem acesso a essa operação
-            if ($user->temAcessoOperacao($request->operacao_id)) {
-                $query->where('operacao_id', $request->operacao_id);
-            }
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->get();
+        } else {
+            $operacoesIdsList = $user->getOperacoesIds();
+            $operacoes = ! empty($operacoesIdsList)
+                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIdsList)->get()
+                : collect([]);
+        }
+
+        $operacaoFiltro = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if ($operacaoFiltro && $user->temAcessoOperacao($operacaoFiltro)) {
+            $query->where('operacao_id', $operacaoFiltro);
         }
 
         $statuses = array_filter((array) $request->input('status', []));
@@ -151,17 +158,7 @@ class EmprestimoController extends Controller
             FichaContatoLookup::pairsFromEmprestimos($emprestimos->items())
         );
 
-        // Operações disponíveis no filtro (Super Admin: todas; demais: apenas as do usuário)
-        if ($user->isSuperAdmin()) {
-            $operacoes = Operacao::where('ativo', true)->get();
-        } else {
-            $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
-                : collect([]);
-        }
-
-        return view('emprestimos.index', compact('emprestimos', 'operacoes', 'stats', 'fichasContatoPorClienteOperacao'));
+        return view('emprestimos.index', compact('emprestimos', 'operacoes', 'stats', 'fichasContatoPorClienteOperacao', 'operacaoFiltro'));
     }
 
     /**
@@ -368,6 +365,10 @@ class EmprestimoController extends Controller
                 }
             }
 
+            if (! $negociacao && $operacaoSelecionadaId === null && $operacoes->count() > 1) {
+                $operacaoSelecionadaId = OperacaoPreferida::resolverParaFormularioOuQuery($request, $operacoes->pluck('id')->all(), $user);
+            }
+
             $nomeClienteExibicaoOrigem = $emprestimoOrigem !== null
                 ? ClienteNomeExibicao::forEmprestimo($emprestimoOrigem)
                 : null;
@@ -390,6 +391,11 @@ class EmprestimoController extends Controller
             $consultoresPorOperacao = $consultoresPorOperacao ?? [];
             $clientePreSelecionado = null;
             $operacaoSelecionadaId = null;
+            if ($operacoes->count() === 1) {
+                $operacaoSelecionadaId = $operacoes->first()->id;
+            } elseif ($operacoes->count() > 1) {
+                $operacaoSelecionadaId = OperacaoPreferida::resolverParaFormularioOuQuery($request, $operacoes->pluck('id')->all(), auth()->user());
+            }
             $negociacao = false;
             $emprestimoOrigem = null;
             $saldoDevedor = null;
@@ -977,13 +983,16 @@ class EmprestimoController extends Controller
             abort(403, 'Apenas gestores e administradores podem ver empréstimos retroativos pendentes de aceite.');
         }
 
-        $operacaoId = $request->input('operacao_id');
-        if ($operacaoId && !$user->isSuperAdmin()) {
+        if ($user->isSuperAdmin()) {
+            $operacoes = \App\Modules\Core\Models\Operacao::where('ativo', true)->orderBy('nome')->get();
+        } else {
             $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $operacaoId, $opsIds, true)) {
-                $operacaoId = null;
-            }
+            $operacoes = !empty($opsIds)
+                ? \App\Modules\Core\Models\Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
+                : collect([]);
         }
+
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
 
         $query = SolicitacaoEmprestimoRetroativo::with(['emprestimo.cliente', 'emprestimo.operacao', 'emprestimo.parcelas', 'solicitante'])
             ->where('status', 'aguardando');
@@ -1003,15 +1012,6 @@ class EmprestimoController extends Controller
         $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
             FichaContatoLookup::pairsFromEmprestimos($solicitacoes->map(fn ($s) => $s->emprestimo)->filter())
         );
-
-        if ($user->isSuperAdmin()) {
-            $operacoes = \App\Modules\Core\Models\Operacao::where('ativo', true)->orderBy('nome')->get();
-        } else {
-            $opsIds = $user->getOperacoesIds();
-            $operacoes = !empty($opsIds)
-                ? \App\Modules\Core\Models\Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
-                : collect([]);
-        }
 
         return view('emprestimos.retroativo-pendentes', compact('solicitacoes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }

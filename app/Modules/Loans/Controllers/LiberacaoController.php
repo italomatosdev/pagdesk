@@ -13,6 +13,7 @@ use App\Modules\Loans\Models\SolicitacaoRenovacaoAbate;
 use App\Modules\Core\Services\OperacaoDadosClienteService;
 use App\Support\ClienteNomeExibicao;
 use App\Support\FichaContatoLookup;
+use App\Support\OperacaoPreferida;
 use App\Modules\Loans\Services\EmprestimoService;
 use App\Modules\Loans\Services\LiberacaoService;
 use App\Modules\Loans\Services\PagamentoService;
@@ -49,13 +50,19 @@ class LiberacaoController extends Controller
             abort(403, 'Acesso negado. Apenas gestores e administradores podem ver liberações.');
         }
 
-        $user = auth()->user();
-        $operacaoId = $request->input('operacao_id');
-        
-        // Validar se o usuário tem acesso à operação selecionada (Super Admin vê todas; demais só as vinculadas)
-        if ($operacaoId && !$user->isSuperAdmin()) {
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->get();
+        } else {
+            $operacoesIdsList = $user->getOperacoesIds();
+            $operacoes = ! empty($operacoesIdsList)
+                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIdsList)->get()
+                : collect([]);
+        }
+
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if ($operacaoId && ! $user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
-            if (empty($operacoesIds) || !in_array((int) $operacaoId, $operacoesIds, true)) {
+            if (empty($operacoesIds) || ! in_array((int) $operacaoId, $operacoesIds, true)) {
                 $operacaoId = null;
             }
         }
@@ -65,16 +72,6 @@ class LiberacaoController extends Controller
         $fichasContatoPorClienteOperacao = $this->fichasContatoMapFromEmprestimos(
             $liberacoes->map(fn ($l) => $l->emprestimo)->filter()
         );
-
-        // Operações disponíveis no filtro: Super Admin vê todas; demais só as vinculadas
-        if ($user->isSuperAdmin()) {
-            $operacoes = Operacao::where('ativo', true)->get();
-        } else {
-            $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
-                : collect([]);
-        }
 
         return view('liberacoes.index', compact('liberacoes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }
@@ -182,24 +179,26 @@ class LiberacaoController extends Controller
     {
         $user = auth()->user();
         $status = $request->input('status');
-        $operacaoId = $request->input('operacao_id');
-        if ($operacaoId !== null && $operacaoId !== '' && !$user->temAcessoOperacao($operacaoId)) {
+
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
+        } else {
+            $opsIds = $user->getOperacoesIds();
+            $operacoes = ! empty($opsIds)
+                ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
+                : collect([]);
+        }
+
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if ($operacaoId !== null && ! $user->temAcessoOperacao($operacaoId)) {
             $operacaoId = null;
         }
+
         $liberacoes = $this->liberacaoService->listarPorConsultor($user->id, $status, $operacaoId);
 
         $fichasContatoPorClienteOperacao = $this->fichasContatoMapFromEmprestimos(
             $liberacoes->map(fn ($l) => $l->emprestimo)->filter()
         );
-
-        if ($user->isSuperAdmin()) {
-            $operacoes = \App\Modules\Core\Models\Operacao::where('ativo', true)->orderBy('nome')->get();
-        } else {
-            $opsIds = $user->getOperacoesIds();
-            $operacoes = !empty($opsIds)
-                ? \App\Modules\Core\Models\Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
-                : collect([]);
-        }
 
         return view('liberacoes.consultor', compact('liberacoes', 'status', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }
@@ -374,14 +373,25 @@ class LiberacaoController extends Controller
         if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado.');
         }
-        $operacaoId = $request->input('operacao_id');
-        $status = $request->input('status', 'todos'); // todos | aceito | pendente | rejeitado
-        if ($operacaoId && !$user->isSuperAdmin()) {
+
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->get();
+        } else {
+            $operacoesIdsList = $user->getOperacoesIds();
+            $operacoes = ! empty($operacoesIdsList)
+                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIdsList)->get()
+                : collect([]);
+        }
+
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if ($operacaoId && ! $user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $operacaoId, $opsIds, true)) {
+            if (empty($opsIds) || ! in_array((int) $operacaoId, $opsIds, true)) {
                 $operacaoId = null;
             }
         }
+
+        $status = $request->input('status', 'todos'); // todos | aceito | pendente | rejeitado
 
         $query = PagamentoProdutoObjetoItem::with([
             'pagamento.parcela.emprestimo.cliente',
@@ -416,15 +426,6 @@ class LiberacaoController extends Controller
             $itens->map(fn ($item) => $item->pagamento?->parcela?->emprestimo)->filter()
         );
 
-        if ($user->isSuperAdmin()) {
-            $operacoes = Operacao::where('ativo', true)->get();
-        } else {
-            $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
-                : collect([]);
-        }
-
         return view('liberacoes.produtos-objeto-recebidos', compact('itens', 'operacoes', 'operacaoId', 'status', 'fichasContatoPorClienteOperacao'));
     }
 
@@ -437,10 +438,20 @@ class LiberacaoController extends Controller
         if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem aceitar pagamentos em produto/objeto.');
         }
-        $operacaoId = $request->input('operacao_id');
-        if ($operacaoId && !$user->isSuperAdmin()) {
+
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->get();
+        } else {
+            $operacoesIdsList = $user->getOperacoesIds();
+            $operacoes = ! empty($operacoesIdsList)
+                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIdsList)->get()
+                : collect([]);
+        }
+
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if ($operacaoId && ! $user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $operacaoId, $opsIds, true)) {
+            if (empty($opsIds) || ! in_array((int) $operacaoId, $opsIds, true)) {
                 $operacaoId = null;
             }
         }
@@ -465,15 +476,6 @@ class LiberacaoController extends Controller
         $pagamentos = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
         $fichasContatoPorClienteOperacao = $this->fichasContatoMapFromParcelas($pagamentos->map(fn ($p) => $p->parcela)->filter());
-
-        if ($user->isSuperAdmin()) {
-            $operacoes = Operacao::where('ativo', true)->get();
-        } else {
-            $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
-                : collect([]);
-        }
 
         return view('liberacoes.pagamentos-produto-objeto', compact('pagamentos', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }
@@ -535,11 +537,20 @@ class LiberacaoController extends Controller
         if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem aprovar solicitações de juros parcial.');
         }
-        $operacaoId = $request->input('operacao_id');
 
-        if ($operacaoId && !$user->isSuperAdmin()) {
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
+        } else {
+            $opsIdsList = $user->getOperacoesIds();
+            $operacoes = ! empty($opsIdsList)
+                ? Operacao::where('ativo', true)->whereIn('id', $opsIdsList)->orderBy('nome')->get()
+                : collect([]);
+        }
+
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if ($operacaoId && ! $user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $operacaoId, $opsIds, true)) {
+            if (empty($opsIds) || ! in_array((int) $operacaoId, $opsIds, true)) {
                 $operacaoId = null;
             }
         }
@@ -565,15 +576,6 @@ class LiberacaoController extends Controller
         $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
         $fichasContatoPorClienteOperacao = $this->fichasContatoMapFromParcelas($solicitacoes->map(fn ($s) => $s->parcela)->filter());
-
-        if ($user->isSuperAdmin()) {
-            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
-        } else {
-            $opsIds = $user->getOperacoesIds();
-            $operacoes = !empty($opsIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
-                : collect([]);
-        }
 
         return view('liberacoes.solicitacoes-juros-parcial', compact('solicitacoes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }
@@ -643,11 +645,20 @@ class LiberacaoController extends Controller
         if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem aprovar estas solicitações.');
         }
-        $operacaoId = $request->input('operacao_id');
 
-        if ($operacaoId && !$user->isSuperAdmin()) {
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
+        } else {
+            $opsIdsList = $user->getOperacoesIds();
+            $operacoes = ! empty($opsIdsList)
+                ? Operacao::where('ativo', true)->whereIn('id', $opsIdsList)->orderBy('nome')->get()
+                : collect([]);
+        }
+
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if ($operacaoId && ! $user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $operacaoId, $opsIds, true)) {
+            if (empty($opsIds) || ! in_array((int) $operacaoId, $opsIds, true)) {
                 $operacaoId = null;
             }
         }
@@ -673,15 +684,6 @@ class LiberacaoController extends Controller
         $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
         $fichasContatoPorClienteOperacao = $this->fichasContatoMapFromParcelas($solicitacoes->map(fn ($s) => $s->parcela)->filter());
-
-        if ($user->isSuperAdmin()) {
-            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
-        } else {
-            $opsIds = $user->getOperacoesIds();
-            $operacoes = !empty($opsIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
-                : collect([]);
-        }
 
         return view('liberacoes.solicitacoes-juros-contrato-reduzido', compact('solicitacoes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }
@@ -751,11 +753,20 @@ class LiberacaoController extends Controller
         if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem aprovar estas solicitações.');
         }
-        $operacaoId = $request->input('operacao_id');
 
-        if ($operacaoId && !$user->isSuperAdmin()) {
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
+        } else {
+            $opsIdsList = $user->getOperacoesIds();
+            $operacoes = ! empty($opsIdsList)
+                ? Operacao::where('ativo', true)->whereIn('id', $opsIdsList)->orderBy('nome')->get()
+                : collect([]);
+        }
+
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if ($operacaoId && ! $user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $operacaoId, $opsIds, true)) {
+            if (empty($opsIds) || ! in_array((int) $operacaoId, $opsIds, true)) {
                 $operacaoId = null;
             }
         }
@@ -781,15 +792,6 @@ class LiberacaoController extends Controller
         $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
         $fichasContatoPorClienteOperacao = $this->fichasContatoMapFromParcelas($solicitacoes->map(fn ($s) => $s->parcela)->filter());
-
-        if ($user->isSuperAdmin()) {
-            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
-        } else {
-            $opsIds = $user->getOperacoesIds();
-            $operacoes = !empty($opsIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
-                : collect([]);
-        }
 
         return view('liberacoes.solicitacoes-renovacao-abate', compact('solicitacoes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }
@@ -901,11 +903,20 @@ class LiberacaoController extends Controller
         if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem aprovar negociações.');
         }
-        $operacaoId = $request->input('operacao_id');
 
-        if ($operacaoId && !$user->isSuperAdmin()) {
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
+        } else {
+            $opsIdsList = $user->getOperacoesIds();
+            $operacoes = ! empty($opsIdsList)
+                ? Operacao::where('ativo', true)->whereIn('id', $opsIdsList)->orderBy('nome')->get()
+                : collect([]);
+        }
+
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if ($operacaoId && ! $user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $operacaoId, $opsIds, true)) {
+            if (empty($opsIds) || ! in_array((int) $operacaoId, $opsIds, true)) {
                 $operacaoId = null;
             }
         }
@@ -932,15 +943,6 @@ class LiberacaoController extends Controller
         $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
         $fichasContatoPorClienteOperacao = $this->fichasContatoMapFromEmprestimos($solicitacoes->map(fn ($s) => $s->emprestimo)->filter());
-
-        if ($user->isSuperAdmin()) {
-            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
-        } else {
-            $opsIds = $user->getOperacoesIds();
-            $operacoes = !empty($opsIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
-                : collect([]);
-        }
 
         return view('liberacoes.negociacoes', compact('solicitacoes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
     }

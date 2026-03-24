@@ -9,6 +9,7 @@ use App\Modules\Cash\Services\CashService;
 use App\Modules\Cash\Services\SettlementService;
 use App\Modules\Core\Models\Operacao;
 use App\Support\FichaContatoLookup;
+use App\Support\OperacaoPreferida;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -43,9 +44,12 @@ class FechamentoCaixaController extends Controller
             abort(403, 'Você não tem acesso a nenhuma operação.');
         }
 
-        $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : $operacoes->first()->id;
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if ($operacaoId === null) {
+            $operacaoId = (int) $operacoes->first()->id;
+        }
         if (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds, true)) {
-            $operacaoId = $operacoes->first()->id;
+            $operacaoId = (int) $operacoes->first()->id;
         }
 
         $operacaoSelecionada = $operacoes->firstWhere('id', $operacaoId);

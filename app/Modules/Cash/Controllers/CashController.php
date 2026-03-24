@@ -9,6 +9,7 @@ use App\Modules\Cash\Services\CashService;
 use App\Modules\Core\Models\Operacao;
 use App\Modules\Loans\Models\LiberacaoEmprestimo;
 use App\Models\User;
+use App\Support\OperacaoPreferida;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -52,8 +53,8 @@ class CashController extends Controller
         }
 
         $operacoesIds = $user->getOperacoesIds();
-        $operacaoId = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
-        if ($operacaoId !== null && (empty($operacoesIds) || !in_array($operacaoId, $operacoesIds, true))) {
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoesIds, $user);
+        if ($operacaoId !== null && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds, true))) {
             $operacaoId = null;
         }
 
@@ -252,6 +253,8 @@ class CashController extends Controller
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
             : collect([]);
 
+        $operacaoIdDefault = OperacaoPreferida::resolverParaFormularioOuQuery($request, $operacoes->pluck('id')->all(), $user);
+
         $usuarios = collect();
         if (!empty($operacoesIds)) {
             $usuarios = User::with(['operacoes'])
@@ -292,7 +295,13 @@ class CashController extends Controller
                 'despesa' => $categorias->where('tipo', 'despesa')->values()->toArray(),
             ];
         }
-        return view('caixa.movimentacao.create', compact('operacoes', 'usuarios', 'usuariosPorOperacao', 'categoriasPorOperacao'));
+        return view('caixa.movimentacao.create', compact(
+            'operacoes',
+            'usuarios',
+            'usuariosPorOperacao',
+            'categoriasPorOperacao',
+            'operacaoIdDefault'
+        ));
     }
 
     /**
@@ -320,7 +329,7 @@ class CashController extends Controller
             $saldosPorOperacao[$op->id] = $this->cashService->calcularSaldo($user->id, $op->id);
         }
 
-        $operacaoIdDefault = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
+        $operacaoIdDefault = OperacaoPreferida::resolverParaFormularioOuQuery($request, $operacoes->pluck('id')->all(), $user);
         if ($operacaoIdDefault !== null && (empty($operacoesIds) || ! in_array($operacaoIdDefault, $operacoesIds, true))) {
             $operacaoIdDefault = $operacoes->first()?->id;
         }
@@ -432,7 +441,7 @@ class CashController extends Controller
                 ->all();
         }
 
-        $operacaoIdDefault = $request->input('operacao_id') ? (int) $request->input('operacao_id') : null;
+        $operacaoIdDefault = OperacaoPreferida::resolverParaFormularioOuQuery($request, $operacoes->pluck('id')->all(), $user);
         if ($operacaoIdDefault !== null && ! in_array($operacaoIdDefault, $operacoesAdminIds, true)) {
             $operacaoIdDefault = $operacoes->first()?->id;
         }

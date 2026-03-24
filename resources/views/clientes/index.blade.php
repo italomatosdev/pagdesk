@@ -106,9 +106,9 @@
                                 <div class="col-md-3">
                                     <label class="form-label small text-muted mb-0">Operação</label>
                                     <select name="operacao_id" class="form-select">
-                                        <option value="">Todas</option>
+                                        <option value="" @selected(($operacaoIdFiltro ?? null) === null)>Todas</option>
                                         @foreach($operacoes ?? [] as $op)
-                                            <option value="{{ $op->id }}" @selected((int) ($operacaoIdFiltro ?? 0) === (int) $op->id)>{{ $op->nome }}</option>
+                                            <option value="{{ $op->id }}" @selected(($operacaoIdFiltro ?? null) !== null && (int) $operacaoIdFiltro === (int) $op->id)>{{ $op->nome }}</option>
                                         @endforeach
                                     </select>
                                 </div>

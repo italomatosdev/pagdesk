@@ -27,11 +27,16 @@
                                     value="{{ $dateTo->format('Y-m-d') }}">
                             </div>
                             <div class="flex-grow-1">
+                                @php
+                                    $operacaoIdSelecionadaDash = request()->has('operacao_id')
+                                        ? (request()->filled('operacao_id') ? (int) request('operacao_id') : null)
+                                        : ($operacaoId ?? null);
+                                @endphp
                                 <label for="operacao_id" class="form-label">Operação</label>
                                 <select name="operacao_id" id="operacao_id" class="form-select">
-                                    <option value="">Todas as Operações</option>
+                                    <option value="" {{ $operacaoIdSelecionadaDash === null ? 'selected' : '' }}>Todas as Operações</option>
                                     @foreach($operacoes as $operacao)
-                                        <option value="{{ $operacao->id }}" {{ request('operacao_id') == $operacao->id ? 'selected' : '' }}>
+                                        <option value="{{ $operacao->id }}" {{ (int) $operacaoIdSelecionadaDash === (int) $operacao->id ? 'selected' : '' }}>
                                             {{ $operacao->nome }}
                                         </option>
                                     @endforeach

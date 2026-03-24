@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Validation\ValidationException;
 
 class ProfileController extends Controller
 {
@@ -32,7 +33,37 @@ class ProfileController extends Controller
     {
         $user = auth()->user();
         $operacoes = $user->operacoes()->orderBy('nome')->get();
-        return view('profile.operacoes', compact('operacoes'));
+        $preferidaId = $user->getOperacaoPrincipalId();
+
+        return view('profile.operacoes', compact('operacoes', 'preferidaId'));
+    }
+
+    /**
+     * Define a operação preferida (pré-seleção em filtros) ou remove a preferência.
+     */
+    public function updateOperacaoPreferida(Request $request): RedirectResponse
+    {
+        $user = auth()->user();
+
+        $rawOp = $request->input('operacao_id');
+        if ($rawOp === '' || $rawOp === null) {
+            $request->merge(['operacao_id' => null]);
+        }
+
+        $validated = $request->validate([
+            'operacao_id' => 'nullable|integer|exists:operacoes,id',
+        ]);
+
+        $id = $validated['operacao_id'] ?? null;
+
+        try {
+            $user->definirOperacaoPrincipal($id !== null ? (int) $id : null);
+        } catch (ValidationException $e) {
+            return redirect()->route('profile.operacoes')->withErrors($e->errors())->withInput();
+        }
+
+        return redirect()->route('profile.operacoes')
+            ->with('success', 'Operação padrão atualizada.');
     }
 
     /**

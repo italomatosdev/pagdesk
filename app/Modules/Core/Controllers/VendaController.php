@@ -10,6 +10,7 @@ use App\Modules\Core\Models\Venda;
 use App\Modules\Core\Services\VendaService;
 use App\Support\ClienteNomeExibicao;
 use App\Support\FichaContatoLookup;
+use App\Support\OperacaoPreferida;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -52,11 +53,18 @@ class VendaController extends Controller
         if ($request->filled('cliente_id')) {
             $query->where('cliente_id', $request->cliente_id);
         }
-        if ($request->filled('operacao_id')) {
-            $operacaoId = (int) $request->operacao_id;
-            if ($user->isSuperAdmin() || in_array($operacaoId, $user->getOperacoesIds(), true)) {
-                $query->where('operacao_id', $operacaoId);
-            }
+
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::orderBy('nome')->get();
+        } else {
+            $opsIds = $user->getOperacoesIds();
+            $operacoes = !empty($opsIds)
+                ? Operacao::whereIn('id', $opsIds)->orderBy('nome')->get()
+                : collect([]);
+        }
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if ($operacaoId !== null && ($user->isSuperAdmin() || in_array($operacaoId, $user->getOperacoesIds(), true))) {
+            $query->where('operacao_id', $operacaoId);
         }
         if ($request->filled('data_inicio')) {
             $query->whereDate('data_venda', '>=', $request->data_inicio);
@@ -81,16 +89,7 @@ class VendaController extends Controller
             FichaContatoLookup::pairsFromVendas($vendas->getCollection())
         );
 
-        if ($user->isSuperAdmin()) {
-            $operacoes = Operacao::orderBy('nome')->get();
-        } else {
-            $opsIds = $user->getOperacoesIds();
-            $operacoes = !empty($opsIds)
-                ? Operacao::whereIn('id', $opsIds)->orderBy('nome')->get()
-                : collect([]);
-        }
-
-        return view('vendas.index', compact('vendas', 'operacoes', 'stats', 'fichasContatoPorClienteOperacao'));
+        return view('vendas.index', compact('vendas', 'operacoes', 'stats', 'fichasContatoPorClienteOperacao', 'operacaoId'));
     }
 
     /**
@@ -126,7 +125,9 @@ class VendaController extends Controller
             $clientePreSelecionado = \App\Modules\Core\Models\Cliente::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)->find($request->cliente_id);
         }
 
-        return view('vendas.create', compact('operacoes', 'produtos', 'formasDisponiveis', 'clientePreSelecionado'));
+        $operacaoIdDefault = OperacaoPreferida::resolverParaFormularioOuQuery($request, $operacoes->pluck('id')->all(), $user);
+
+        return view('vendas.create', compact('operacoes', 'produtos', 'formasDisponiveis', 'clientePreSelecionado', 'operacaoIdDefault'));
     }
 
     /**

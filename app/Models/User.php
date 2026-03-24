@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Notifications\ResetPasswordNotification;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Notifications\Notifiable;
@@ -106,6 +107,67 @@ class User extends Authenticatable
         return $this->belongsToMany(\App\Modules\Core\Models\Operacao::class, 'operacao_user', 'user_id', 'operacao_id')
             ->withPivot('role')
             ->withTimestamps();
+    }
+
+    /**
+     * Preferência de operação padrão (UI) — tabela user_operacao_preferida.
+     */
+    public function operacaoPreferida(): HasOne
+    {
+        return $this->hasOne(UserOperacaoPreferida::class);
+    }
+
+    /**
+     * ID da operação preferida, somente se ainda houver vínculo em operacao_user.
+     * Remove preferência órfã (persistido) ao detectar inconsistência.
+     */
+    public function getOperacaoPrincipalId(): ?int
+    {
+        $row = $this->relationLoaded('operacaoPreferida')
+            ? $this->operacaoPreferida
+            : $this->operacaoPreferida()->first();
+
+        if ($row === null || $row->operacao_id === null) {
+            return null;
+        }
+
+        $oid = (int) $row->operacao_id;
+
+        if (! $this->operacoes()->where('operacoes.id', $oid)->exists()) {
+            $row->operacao_id = null;
+            $row->save();
+            $this->unsetRelation('operacaoPreferida');
+
+            return null;
+        }
+
+        return $oid;
+    }
+
+    /**
+     * Define ou limpa a operação preferida. Exige vínculo em operacao_user quando $operacaoId não é null.
+     *
+     * @throws \Illuminate\Validation\ValidationException
+     */
+    public function definirOperacaoPrincipal(?int $operacaoId): void
+    {
+        if ($operacaoId !== null) {
+            $operacaoId = (int) $operacaoId;
+            if (! $this->operacoes()->where('operacoes.id', $operacaoId)->exists()) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'operacao_id' => ['Operação inválida ou sem vínculo com seu usuário.'],
+                ]);
+            }
+        }
+
+        DB::transaction(function () use ($operacaoId) {
+            UserOperacaoPreferida::query()->updateOrCreate(
+                ['user_id' => $this->id],
+                ['operacao_id' => $operacaoId]
+            );
+        });
+
+        $this->unsetRelation('operacaoPreferida');
     }
 
     /**

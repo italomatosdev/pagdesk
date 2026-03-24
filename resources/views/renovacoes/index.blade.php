@@ -17,9 +17,9 @@
                         <div class="col-md-4">
                             <label class="form-label">Operação</label>
                             <select name="operacao_id" class="form-select">
-                                <option value="">Todas as Operações</option>
+                                <option value="" {{ ($operacaoId ?? null) === null ? 'selected' : '' }}>Todas as Operações</option>
                                 @foreach($operacoes as $operacao)
-                                    <option value="{{ $operacao->id }}" {{ request('operacao_id') == $operacao->id ? 'selected' : '' }}>
+                                    <option value="{{ $operacao->id }}" {{ (int) ($operacaoId ?? 0) === (int) $operacao->id && ($operacaoId ?? null) !== null ? 'selected' : '' }}>
                                         {{ $operacao->nome }}
                                     </option>
                                 @endforeach
@@ -49,10 +49,10 @@
                 <div class="card">
                     <div class="card-header">
                         <h5 class="card-title mb-0">
-                            <a href="{{ request('operacao_id') ? \App\Support\ClienteUrl::show($dados['cliente']->id, (int) request('operacao_id')) : route('clientes.show', $dados['cliente']->id) }}">
+                            <a href="{{ ($operacaoId ?? null) !== null ? \App\Support\ClienteUrl::show($dados['cliente']->id, (int) $operacaoId) : route('clientes.show', $dados['cliente']->id) }}">
                                 {{ $dados['cliente']->nome }}
                             </a>
-                            <a href="{{ route('renovacoes.show-cliente', $dados['cliente']->id) }}{{ request('operacao_id') ? '?operacao_id=' . request('operacao_id') : '' }}"
+                            <a href="{{ route('renovacoes.show-cliente', $dados['cliente']->id) }}{{ ($operacaoId ?? null) !== null ? '?operacao_id=' . $operacaoId : '' }}"
                                class="btn btn-sm btn-info float-end">
                                 <i class="bx bx-show"></i> Ver Histórico Completo
                             </a>

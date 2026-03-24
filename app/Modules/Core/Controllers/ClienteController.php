@@ -15,6 +15,7 @@ use App\Models\Scopes\EmpresaScope;
 use App\Modules\Core\Services\ClienteService;
 use App\Modules\Core\Services\ClienteConsultaService;
 use App\Modules\Core\Services\OperacaoDadosClienteService;
+use App\Support\OperacaoPreferida;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Parcela;
 use App\Support\ClienteNomeExibicao;
@@ -71,11 +72,18 @@ class ClienteController extends Controller
             }
         }
 
-        // Filtro por operação (lista + links externos)
-        $operacaoIdRequest = $request->filled('operacao_id') ? (int) $request->operacao_id : null;
+        if ($isSuperAdmin) {
+            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
+        } else {
+            $operacoes = ! empty($operacoesIds)
+                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+                : collect();
+        }
+
+        $operacaoIdResolvido = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
         $operacaoIdFiltro = null;
-        if ($operacaoIdRequest && ($isSuperAdmin || in_array($operacaoIdRequest, $operacoesIds, true))) {
-            $operacaoIdFiltro = $operacaoIdRequest;
+        if ($operacaoIdResolvido && ($isSuperAdmin || in_array($operacaoIdResolvido, $operacoesIds, true))) {
+            $operacaoIdFiltro = $operacaoIdResolvido;
             $query->whereHas('operationClients', fn ($q) => $q->where('operacao_id', $operacaoIdFiltro));
         }
 
@@ -141,14 +149,6 @@ class ClienteController extends Controller
             ->orderBy('nome')
             ->paginate(15)
             ->withQueryString();
-
-        if ($isSuperAdmin) {
-            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
-        } else {
-            $operacoes = !empty($operacoesIds)
-                ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
-                : collect();
-        }
 
         return view('clientes.index', compact('clientes', 'isSuperAdmin', 'stats', 'operacoes', 'operacaoIdFiltro'));
     }
@@ -259,16 +259,19 @@ class ClienteController extends Controller
                 : collect([]);
         }
 
-        $operacaoId = $request->query('operacao_id');
+        $operacaoSelecionadaId = $request->has('operacao_id')
+            ? ($request->filled('operacao_id') ? (int) $request->operacao_id : null)
+            : OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+
         $linkCadastro = null;
-        if ($operacaoId && ($user->isSuperAdmin() || in_array((int) $operacaoId, $operacoesIds, true))) {
-            $ref = RefEncoder::encode((int) $operacaoId, $user->id);
+        if ($operacaoSelecionadaId && ($user->isSuperAdmin() || in_array((int) $operacaoSelecionadaId, $operacoesIds, true))) {
+            $ref = RefEncoder::encode((int) $operacaoSelecionadaId, $user->id);
             $linkCadastro = route('cadastro-cliente.form', ['ref' => $ref]);
         }
 
         return view('clientes.link-cadastro', [
             'operacoes' => $operacoes,
-            'operacaoSelecionadaId' => $operacaoId ? (int) $operacaoId : null,
+            'operacaoSelecionadaId' => $operacaoSelecionadaId,
             'linkCadastro' => $linkCadastro,
         ]);
     }
@@ -276,7 +279,7 @@ class ClienteController extends Controller
     /**
      * Mostrar formulário de criação
      */
-    public function create(): View
+    public function create(Request $request): View
     {
         $user = auth()->user();
         $operacoesIds = $user->getOperacoesIds();
@@ -288,7 +291,11 @@ class ClienteController extends Controller
                 ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->with('documentosObrigatorios')->get()
                 : collect([]);
         }
-        $operacaoSelecionadaId = $operacoes->count() === 1 ? $operacoes->first()->id : null;
+        if ($operacoes->count() === 1) {
+            $operacaoSelecionadaId = $operacoes->first()->id;
+        } else {
+            $operacaoSelecionadaId = OperacaoPreferida::resolverParaFormularioOuQuery($request, $operacoes->pluck('id')->all(), $user);
+        }
         $documentObrigatoriosPorOperacao = [];
         foreach ($operacoes as $op) {
             $documentObrigatoriosPorOperacao[$op->id] = $op->documentosObrigatorios->pluck('tipo_documento')->values()->toArray();
