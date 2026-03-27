@@ -49,6 +49,14 @@
                             </div>
                             <i class="bx bx-chevron-right ms-auto"></i>
                         </a>
+                        <a href="{{ route('relatorios.valor-emprestado-principal') }}" class="list-group-item list-group-item-action d-flex align-items-center">
+                            <i class="bx bx-money font-size-20 text-primary me-3"></i>
+                            <div>
+                                <h6 class="mb-1">Valor emprestado (principal) por período</h6>
+                                <small class="text-muted">Soma do principal por data de início do contrato. Filtros: período e operação.</small>
+                            </div>
+                            <i class="bx bx-chevron-right ms-auto"></i>
+                        </a>
                         <a href="{{ route('relatorios.comissoes') }}" class="list-group-item list-group-item-action d-flex align-items-center">
                             <i class="bx bx-calculator font-size-20 text-info me-3"></i>
                             <div>

@@ -862,6 +862,68 @@ class RelatorioController extends Controller
     }
 
     /**
+     * Relatório: valor emprestado (principal) no período, pela data de início do contrato.
+     * Inclui empréstimos aprovados, ativos ou finalizados; exclui rascunho, pendente e cancelado.
+     */
+    public function valorEmprestadoPrincipal(Request $request): View
+    {
+        $user = auth()->user();
+
+        if (empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
+            abort(403, 'Acesso negado.');
+        }
+
+        $dateFrom = $request->input('date_from') ? Carbon::parse($request->input('date_from'))->startOfDay() : Carbon::now()->startOfMonth();
+        $dateTo = $request->input('date_to') ? Carbon::parse($request->input('date_to'))->endOfDay() : Carbon::now()->endOfMonth();
+        if ($dateFrom->gt($dateTo)) {
+            $dateTo = $dateFrom->copy()->endOfDay();
+        }
+
+        $operacoesIds = $user->isSuperAdmin()
+            ? Operacao::where('ativo', true)->pluck('id')->toArray()
+            : $user->getOperacoesIds();
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoesIds, $user);
+
+        $operacoes = ! empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
+
+        $query = Emprestimo::with(['cliente', 'operacao', 'consultor'])
+            ->whereIn('status', ['aprovado', 'ativo', 'finalizado'])
+            ->whereBetween('data_inicio', [$dateFrom->toDateString(), $dateTo->toDateString()]);
+
+        if (! $user->isSuperAdmin() || $operacaoId) {
+            if ($operacaoId) {
+                $query->where('operacao_id', $operacaoId);
+            } elseif (! empty($operacoesIds)) {
+                $query->whereIn('operacao_id', $operacoesIds);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+
+        $emprestimos = $query->orderBy('data_inicio')->orderBy('id')->get();
+
+        $totalPrincipal = round((float) $emprestimos->sum(fn (Emprestimo $e) => (float) $e->valor_total), 2);
+        $qtdEmprestimos = $emprestimos->count();
+
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromEmprestimos($emprestimos)
+        );
+
+        return view('relatorios.valor-emprestado-principal', compact(
+            'dateFrom',
+            'dateTo',
+            'operacoes',
+            'operacaoId',
+            'emprestimos',
+            'totalPrincipal',
+            'qtdEmprestimos',
+            'fichasContatoPorClienteOperacao'
+        ));
+    }
+
+    /**
      * Relatório: Entradas e saídas por categoria
      * Filtros: período e operação.
      */

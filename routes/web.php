@@ -254,6 +254,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::get('/quitacoes', [App\Modules\Core\Controllers\RelatorioController::class, 'quitacoes'])->name('quitacoes');
         Route::get('/comissoes/detalhe', [App\Modules\Core\Controllers\RelatorioController::class, 'comissoesDetalheConsultor'])->name('comissoes-detalhe');
         Route::get('/comissoes', [App\Modules\Core\Controllers\RelatorioController::class, 'comissoes'])->name('comissoes');
+        Route::get('/valor-emprestado-principal', [App\Modules\Core\Controllers\RelatorioController::class, 'valorEmprestadoPrincipal'])->name('valor-emprestado-principal');
         Route::get('/entradas-saidas-categoria', [App\Modules\Core\Controllers\RelatorioController::class, 'entradasSaidasPorCategoria'])->name('entradas-saidas-categoria');
         Route::get('/juros-quitacoes', [App\Modules\Core\Controllers\RelatorioController::class, 'jurosQuitacoes'])->name('juros-quitacoes');
     });
