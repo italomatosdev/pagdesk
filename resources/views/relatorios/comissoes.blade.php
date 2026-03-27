@@ -60,6 +60,7 @@
                         <table class="table table-bordered table-sm table-hover mb-0" id="tabela-comissoes">
                             <thead class="table-light">
                                 <tr>
+                                    <th class="text-center" style="width: 52px;" title="Abrir tela de detalhe por empréstimo"></th>
                                     <th>Consultor</th>
                                     <th class="text-end">Valor quitado (principal)</th>
                                     <th class="text-end">Juros recebidos</th>
@@ -70,9 +71,31 @@
                             </thead>
                             <tbody>
                                 @forelse($consultoresComTotais as $row)
+                                    @php
+                                        $temMovimento = ($row['valor_quitado'] + $row['juros_recebidos']) > 0;
+                                        $paramsDetalhe = array_filter([
+                                            'consultor_id' => $row['id'],
+                                            'date_from' => $dateFrom->format('Y-m-d'),
+                                            'date_to' => $dateTo->format('Y-m-d'),
+                                            'operacao_id' => $operacaoId,
+                                        ], fn ($v) => $v !== null && $v !== '');
+                                    @endphp
                                     <tr class="row-comissao"
                                         data-valor-quitado="{{ number_format($row['valor_quitado'], 2, '.', '') }}"
                                         data-juros-recebidos="{{ number_format($row['juros_recebidos'], 2, '.', '') }}">
+                                        <td class="text-center align-middle">
+                                            @if($temMovimento)
+                                                <a href="{{ route('relatorios.comissoes-detalhe', $paramsDetalhe) }}"
+                                                   class="btn btn-sm btn-outline-primary"
+                                                   title="Ver empréstimos e totalizadores">
+                                                    <i class="bx bx-list-ul"></i>
+                                                </a>
+                                            @else
+                                                <span class="btn btn-sm btn-outline-secondary disabled opacity-50" title="Sem movimentação no período">
+                                                    <i class="bx bx-list-ul"></i>
+                                                </span>
+                                            @endif
+                                        </td>
                                         <td>{{ $row['nome'] }}</td>
                                         <td class="text-end">R$ {{ number_format($row['valor_quitado'], 2, ',', '.') }}</td>
                                         <td class="text-end">R$ {{ number_format($row['juros_recebidos'], 2, ',', '.') }}</td>
@@ -90,7 +113,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="6" class="text-center text-muted py-4">Nenhum consultor com movimentação no período. Ajuste os filtros ou verifique se há pagamentos.</td>
+                                        <td colspan="7" class="text-center text-muted py-4">Nenhum consultor com movimentação no período. Ajuste os filtros ou verifique se há pagamentos.</td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -101,7 +124,7 @@
         </div>
     </div>
 
-    <div class="row mt-2">
+    <div class="row mt-2 mb-5 pb-5">
         <div class="col-12">
             <a href="{{ route('relatorios.index') }}" class="btn btn-secondary">
                 <i class="bx bx-arrow-back"></i> Voltar aos relatórios
