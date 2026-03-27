@@ -327,6 +327,7 @@
                         <li><a href="{{ route('relatorios.parcelas-atrasadas') }}">Parcelas atrasadas</a></li>
                         <li><a href="{{ route('relatorios.receber-por-cliente') }}">A receber por cliente (período)</a></li>
                         <li><a href="{{ route('relatorios.quitacoes') }}">Quitações</a></li>
+                        <li><a href="{{ route('relatorios.valor-emprestado-principal') }}">Valor emprestado (principal)</a></li>
                         <li><a href="{{ route('relatorios.juros-quitacoes') }}">Juros por quitação</a></li>
                         <li><a href="{{ route('relatorios.comissoes') }}">Comissões</a></li>
                         <li><a href="{{ route('relatorios.entradas-saidas-categoria') }}">Entradas e saídas</a></li>

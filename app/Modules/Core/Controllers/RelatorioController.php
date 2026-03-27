@@ -14,6 +14,7 @@ use App\Support\OperacaoPreferida;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class RelatorioController extends Controller
@@ -146,6 +147,106 @@ class RelatorioController extends Controller
             'juros_atraso' => $jurosAtraso,
             'juros_incorporados' => round($jurosIncorporadosProporcional, 2),
         ];
+    }
+
+    /**
+     * Detalhe do relatório de comissões: empréstimos que compõem os pagamentos, com mesma repartição principal/juros.
+     *
+     * @param  Collection<int, Pagamento>  $pagamentos
+     * @return array{linhas: list<array<string, mixed>>, totais: array<string, float|int>}
+     */
+    private function montarDetalheComissoesEmprestimos(Collection $pagamentos): array
+    {
+        $acumPorEmprestimo = [];
+
+        foreach ($pagamentos as $p) {
+            $valor = (float) $p->valor;
+            $partes = self::repartirInvestidoJurosParaRelatorio($p);
+            $emprestimoId = $p->parcela?->emprestimo_id;
+            if (! $emprestimoId) {
+                continue;
+            }
+            if (! isset($acumPorEmprestimo[$emprestimoId])) {
+                $acumPorEmprestimo[$emprestimoId] = [
+                    'total_pago' => 0.0,
+                    'valor_quitado' => 0.0,
+                    'juros_recebidos' => 0.0,
+                ];
+            }
+            $acumPorEmprestimo[$emprestimoId]['total_pago'] += $valor;
+            $acumPorEmprestimo[$emprestimoId]['valor_quitado'] += $partes['investido'];
+            $acumPorEmprestimo[$emprestimoId]['juros_recebidos'] += $partes['juros'];
+        }
+
+        if ($acumPorEmprestimo === []) {
+            return [
+                'linhas' => [],
+                'totais' => [
+                    'qtd_emprestimos' => 0,
+                    'soma_valor_total_contratos' => 0.0,
+                    'soma_total_pago_periodo' => 0.0,
+                    'soma_valor_quitado' => 0.0,
+                    'soma_juros_recebidos' => 0.0,
+                ],
+            ];
+        }
+
+        $idsEmprestimos = array_keys($acumPorEmprestimo);
+
+        $emprestimos = Emprestimo::with(['cliente', 'consultor', 'parcelas'])
+            ->whereIn('id', $idsEmprestimos)
+            ->get()
+            ->keyBy('id');
+
+        $maxDataPorEmprestimo = Pagamento::query()
+            ->join('parcelas', 'parcelas.id', '=', 'pagamentos.parcela_id')
+            ->whereIn('parcelas.emprestimo_id', $idsEmprestimos)
+            ->whereNull('pagamentos.deleted_at')
+            ->whereNull('parcelas.deleted_at')
+            ->groupBy('parcelas.emprestimo_id')
+            ->selectRaw('parcelas.emprestimo_id as eid, MAX(pagamentos.data_pagamento) as dmax')
+            ->pluck('dmax', 'eid');
+
+        $linhas = [];
+        foreach ($acumPorEmprestimo as $emprestimoId => $acc) {
+            $emp = $emprestimos->get($emprestimoId);
+            if (! $emp) {
+                continue;
+            }
+            $dataQuitacao = null;
+            if ($emp->isFinalizado() || $emp->todasParcelasPagas()) {
+                $raw = $maxDataPorEmprestimo->get($emprestimoId);
+                if ($raw !== null && $raw !== '') {
+                    $dataQuitacao = Carbon::parse($raw)->format('d/m/Y');
+                }
+            }
+            $linhas[] = [
+                'emprestimo_id' => (int) $emprestimoId,
+                'cliente_nome' => $emp->cliente->nome ?? '—',
+                'consultor_nome' => $emp->consultor->name ?? '—',
+                'valor_total' => round((float) $emp->valor_total, 2),
+                'total_pago_periodo' => round((float) $acc['total_pago'], 2),
+                'valor_quitado' => round((float) $acc['valor_quitado'], 2),
+                'juros_recebidos' => round((float) $acc['juros_recebidos'], 2),
+                'data_quitacao' => $dataQuitacao,
+            ];
+        }
+
+        usort($linhas, function ($a, $b) {
+            $c = strcmp($a['cliente_nome'], $b['cliente_nome']);
+
+            return $c !== 0 ? $c : ($a['emprestimo_id'] <=> $b['emprestimo_id']);
+        });
+
+        $totais = [
+            'qtd_emprestimos' => count($linhas),
+            'soma_valor_total_contratos' => round((float) array_sum(array_column($linhas, 'valor_total')), 2),
+            'soma_total_pago_periodo' => round((float) array_sum(array_column($linhas, 'total_pago_periodo')), 2),
+            'soma_valor_quitado' => round((float) array_sum(array_column($linhas, 'valor_quitado')), 2),
+            'soma_juros_recebidos' => round((float) array_sum(array_column($linhas, 'juros_recebidos')), 2),
+        ];
+
+        return compact('linhas', 'totais');
     }
 
     /**
@@ -645,7 +746,6 @@ class RelatorioController extends Controller
 
         foreach ($pagamentos as $p) {
             $consultorId = $p->consultor_id;
-            $valor = (float) $p->valor;
             $partes = self::repartirInvestidoJurosParaRelatorio($p);
             $juros = $partes['juros'];
             $investido = $partes['investido'];
@@ -670,6 +770,156 @@ class RelatorioController extends Controller
             'operacoes',
             'operacaoId',
             'consultoresComTotais'
+        ));
+    }
+
+    /**
+     * Tela de detalhe: empréstimos que compõem a linha do consultor no relatório de comissões (mesmo período, filtros e regra de repartição).
+     */
+    public function comissoesDetalheConsultor(Request $request): View
+    {
+        $user = auth()->user();
+
+        if (empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
+            abort(403, 'Acesso negado.');
+        }
+
+        $consultorId = (int) $request->query('consultor_id', 0);
+        if ($consultorId <= 0) {
+            abort(404);
+        }
+
+        $dateFrom = $request->input('date_from') ? Carbon::parse($request->input('date_from'))->startOfDay() : Carbon::now()->startOfMonth();
+        $dateTo = $request->input('date_to') ? Carbon::parse($request->input('date_to'))->endOfDay() : Carbon::now()->endOfMonth();
+        if ($dateFrom->gt($dateTo)) {
+            $dateTo = $dateFrom->copy()->endOfDay();
+        }
+
+        $operacoesIds = $user->isSuperAdmin()
+            ? Operacao::where('ativo', true)->pluck('id')->toArray()
+            : $user->getOperacoesIds();
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoesIds, $user);
+
+        $operacoes = ! empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
+
+        $consultoresPermitidos = $this->getConsultoresParaRelatorio($operacaoId, $operacoesIds, $user);
+        $naLista = $consultoresPermitidos->contains(fn ($c) => (int) $c->id === $consultorId);
+
+        $consultor = \App\Models\User::find($consultorId);
+        if (! $consultor) {
+            abort(404);
+        }
+
+        $query = Pagamento::with(['consultor', 'parcela.emprestimo'])
+            ->whereBetween('data_pagamento', [$dateFrom, $dateTo])
+            ->where('consultor_id', $consultorId);
+
+        if (! $user->isSuperAdmin() || $operacaoId) {
+            $query->whereHas('parcela.emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
+                if ($operacaoId) {
+                    $q->where('operacao_id', $operacaoId);
+                } elseif (! empty($operacoesIds)) {
+                    $q->whereIn('operacao_id', $operacoesIds);
+                } else {
+                    $q->whereRaw('1 = 0');
+                }
+            });
+        }
+
+        $pagamentos = $query->get();
+
+        if (! $naLista && $pagamentos->isEmpty()) {
+            abort(403, 'Consultor não disponível para o seu acesso.');
+        }
+
+        $detalhe = $this->montarDetalheComissoesEmprestimos($pagamentos);
+        $linhas = $detalhe['linhas'];
+        $totais = $detalhe['totais'];
+
+        $consultorNome = $consultor->name.($consultorId === $user->id ? ' (Você)' : '');
+
+        $filtrosVoltar = array_filter([
+            'date_from' => $dateFrom->format('Y-m-d'),
+            'date_to' => $dateTo->format('Y-m-d'),
+            'operacao_id' => $operacaoId,
+        ], fn ($v) => $v !== null && $v !== '');
+
+        $urlVoltarComissoes = route('relatorios.comissoes', $filtrosVoltar);
+
+        return view('relatorios.comissoes-detalhe', compact(
+            'dateFrom',
+            'dateTo',
+            'operacoes',
+            'operacaoId',
+            'consultorId',
+            'consultorNome',
+            'linhas',
+            'totais',
+            'urlVoltarComissoes'
+        ));
+    }
+
+    /**
+     * Relatório: valor emprestado (principal) no período, pela data de início do contrato.
+     * Inclui empréstimos aprovados, ativos ou finalizados; exclui rascunho, pendente e cancelado.
+     */
+    public function valorEmprestadoPrincipal(Request $request): View
+    {
+        $user = auth()->user();
+
+        if (empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
+            abort(403, 'Acesso negado.');
+        }
+
+        $dateFrom = $request->input('date_from') ? Carbon::parse($request->input('date_from'))->startOfDay() : Carbon::now()->startOfMonth();
+        $dateTo = $request->input('date_to') ? Carbon::parse($request->input('date_to'))->endOfDay() : Carbon::now()->endOfMonth();
+        if ($dateFrom->gt($dateTo)) {
+            $dateTo = $dateFrom->copy()->endOfDay();
+        }
+
+        $operacoesIds = $user->isSuperAdmin()
+            ? Operacao::where('ativo', true)->pluck('id')->toArray()
+            : $user->getOperacoesIds();
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoesIds, $user);
+
+        $operacoes = ! empty($operacoesIds)
+            ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
+            : collect([]);
+
+        $query = Emprestimo::with(['cliente', 'operacao', 'consultor'])
+            ->whereIn('status', ['aprovado', 'ativo', 'finalizado'])
+            ->whereBetween('data_inicio', [$dateFrom->toDateString(), $dateTo->toDateString()]);
+
+        if (! $user->isSuperAdmin() || $operacaoId) {
+            if ($operacaoId) {
+                $query->where('operacao_id', $operacaoId);
+            } elseif (! empty($operacoesIds)) {
+                $query->whereIn('operacao_id', $operacoesIds);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+
+        $emprestimos = $query->orderBy('data_inicio')->orderBy('id')->get();
+
+        $totalPrincipal = round((float) $emprestimos->sum(fn (Emprestimo $e) => (float) $e->valor_total), 2);
+        $qtdEmprestimos = $emprestimos->count();
+
+        $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
+            FichaContatoLookup::pairsFromEmprestimos($emprestimos)
+        );
+
+        return view('relatorios.valor-emprestado-principal', compact(
+            'dateFrom',
+            'dateTo',
+            'operacoes',
+            'operacaoId',
+            'emprestimos',
+            'totalPrincipal',
+            'qtdEmprestimos',
+            'fichasContatoPorClienteOperacao'
         ));
     }
 
