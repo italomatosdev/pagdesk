@@ -349,6 +349,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
     // Prestações de Contas (rotas legadas - redirecionam para nova tela)
     Route::get('/prestacoes', fn() => redirect()->route('fechamento-caixa.index'))->name('prestacoes.index');
     Route::get('/prestacoes/{id}', fn($id) => redirect()->route('fechamento-caixa.show', $id))->name('prestacoes.show');
+    Route::post('/prestacoes/{id}/confirmar-recebimento', [App\Modules\Cash\Controllers\FechamentoCaixaController::class, 'confirmarRecebimento'])->name('prestacoes.confirmar-recebimento');
 
     // Operações (administradores e gestores)
     Route::prefix('operacoes')->name('operacoes.')->group(function () {
