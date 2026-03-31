@@ -5,6 +5,7 @@ namespace App\Modules\Approvals\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Approvals\Services\AprovacaoService;
 use App\Support\FichaContatoLookup;
+use App\Support\ClienteVinculosOperacoesLookup;
 use App\Support\OperacaoPreferida;
 use App\Modules\Core\Models\Operacao;
 use Illuminate\Http\Request;
@@ -59,7 +60,32 @@ class AprovacaoController extends Controller
             FichaContatoLookup::pairsFromEmprestimos($pendentes)
         );
 
-        return view('aprovacoes.index', compact('pendentes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
+        $cpfs = $pendentes
+            ->map(fn ($e) => ClienteVinculosOperacoesLookup::cpfFromDocumento($e->cliente?->documento))
+            ->filter()
+            ->values()
+            ->all();
+        $operacoesIdsPorCpf = ClienteVinculosOperacoesLookup::operacoesIdsPorCpf($cpfs);
+
+        $outrosVinculosPorEmprestimoId = [];
+        foreach ($pendentes as $e) {
+            $cpf = ClienteVinculosOperacoesLookup::cpfFromDocumento($e->cliente?->documento);
+            if (!$cpf) {
+                $outrosVinculosPorEmprestimoId[$e->id] = 0;
+                continue;
+            }
+            $ops = $operacoesIdsPorCpf[$cpf] ?? [];
+            $outros = array_values(array_filter($ops, fn ($opId) => (int) $opId !== (int) $e->operacao_id));
+            $outrosVinculosPorEmprestimoId[$e->id] = count($outros);
+        }
+
+        return view('aprovacoes.index', compact(
+            'pendentes',
+            'operacoes',
+            'operacaoId',
+            'fichasContatoPorClienteOperacao',
+            'outrosVinculosPorEmprestimoId'
+        ));
     }
 
     /**

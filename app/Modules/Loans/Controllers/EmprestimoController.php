@@ -8,6 +8,7 @@ use App\Modules\Core\Models\Operacao;
 use App\Modules\Core\Services\ClienteService;
 use App\Modules\Core\Services\OperacaoDadosClienteService;
 use App\Support\ClienteNomeExibicao;
+use App\Support\ClienteVinculosOperacoesLookup;
 use App\Support\FichaContatoLookup;
 use App\Support\OperacaoPreferida;
 use App\Support\NotificacaoClienteDisplayName;
@@ -723,6 +724,15 @@ class EmprestimoController extends Controller
 
         $nomeClienteExibicao = ClienteNomeExibicao::fromFicha($fichaContatoEmprestimo, $emprestimo->cliente);
 
+        $cpf = ClienteVinculosOperacoesLookup::cpfFromDocumento($emprestimo->cliente?->documento);
+        $vinculosOutrasOperacoesCount = 0;
+        if ($cpf) {
+            $operacoesIdsPorCpf = ClienteVinculosOperacoesLookup::operacoesIdsPorCpf([$cpf]);
+            $ops = $operacoesIdsPorCpf[$cpf] ?? [];
+            $outros = array_values(array_filter($ops, fn ($opId) => (int) $opId !== (int) $emprestimo->operacao_id));
+            $vinculosOutrasOperacoesCount = count($outros);
+        }
+
         return view('emprestimos.show', compact(
             'emprestimo',
             'fichaContatoEmprestimo',
@@ -737,6 +747,7 @@ class EmprestimoController extends Controller
             'podeCancelarComDesfazimento',
             'podeConfirmarPagamentoCliente',
             'podeAprovarLiberacao',
+            'vinculosOutrasOperacoesCount',
             'podeAcoesCheque',
             'podeEditarGarantias'
         ));
