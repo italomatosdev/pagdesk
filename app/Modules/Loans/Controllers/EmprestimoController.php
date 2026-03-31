@@ -706,7 +706,7 @@ class EmprestimoController extends Controller
 
         $opId = $emprestimo->operacao_id;
         $podeVerAcoesGestorAdmin = $user->temAlgumPapelNaOperacao($opId, ['gestor', 'administrador']);
-        $podeCancelar = $user->temPapelNaOperacao($opId, 'administrador');
+        $podeCancelar = $podeVerAcoesGestorAdmin;
         $podeExecutarGarantia = $podeVerAcoesGestorAdmin;
         $podeRenovar = $podeVerAcoesGestorAdmin || $emprestimo->consultor_id === $user->id;
         $podeNegociar = $podeRenovar;
@@ -788,15 +788,15 @@ class EmprestimoController extends Controller
     }
 
     /**
-     * Cancelar empréstimo (apenas administradores na operação do empréstimo)
+     * Cancelar empréstimo (gestor ou administrador na operação do empréstimo).
      */
     public function cancelar(Request $request, int $id): RedirectResponse
     {
         $user = auth()->user();
         $emprestimo = Emprestimo::findOrFail($id);
 
-        if (!$user->temPapelNaOperacao($emprestimo->operacao_id, 'administrador')) {
-            abort(403, 'Apenas administradores podem cancelar empréstimos.');
+        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['gestor', 'administrador'])) {
+            abort(403, 'Apenas gestores e administradores podem cancelar empréstimos.');
         }
 
         $request->validate([

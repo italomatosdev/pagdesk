@@ -951,8 +951,8 @@ class EmprestimoService
     }
 
     /**
-     * Cancelar empréstimo (apenas administradores)
-     * 
+     * Cancelar empréstimo (autorização: gestor ou administrador na operação — ver controller).
+     *
      * Só pode cancelar se:
      * - Dinheiro ainda não foi pago ao cliente
      * - Não há parcelas pagas
