@@ -64,7 +64,7 @@ class DashboardController extends Controller
      * Parcelas não pagas com data_vencimento dentro do período exato [dateFrom, dateTo] (datas inclusivas, coluna DATE).
      * Critério: empréstimo ativo; divisão juros / sem juros (taxa_juros) / principal com juros.
      *
-     * @param  array<int>  $operacoesIds
+     * @param  array<int>  $operacaoFiltroIds
      * @return array{
      *     receber_mes_total: float,
      *     receber_mes_juros: float,
@@ -74,8 +74,7 @@ class DashboardController extends Controller
      * }
      */
     protected function estatisticasReceberPorPeriodoVencimento(
-        ?int $operacaoId,
-        array $operacoesIds,
+        array $operacaoFiltroIds,
         Carbon $dateFrom,
         Carbon $dateTo,
         ?int $consultorId = null,
@@ -97,10 +96,8 @@ class DashboardController extends Controller
             $q->where('e.consultor_id', $consultorId);
         }
 
-        if ($operacaoId) {
-            $q->where('e.operacao_id', $operacaoId);
-        } elseif (! empty($operacoesIds)) {
-            $q->whereIn('e.operacao_id', $operacoesIds);
+        if (! empty($operacaoFiltroIds)) {
+            $q->whereIn('e.operacao_id', $operacaoFiltroIds);
         } else {
             $q->whereRaw('1 = 0');
         }
@@ -163,29 +160,25 @@ class DashboardController extends Controller
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
             : collect([]);
 
-        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
-        if ($operacaoId && ! $user->isSuperAdmin() && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds))) {
-            $operacaoId = null;
+        $operacaoFiltroIds = OperacaoPreferida::resolverOperacoesIdsParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if (! $user->isSuperAdmin()) {
+            $operacaoFiltroIds = array_values(array_intersect($operacaoFiltroIds, $operacoesIds));
         }
 
         // Helper para aplicar filtro de operações em queries de Emprestimo
-        $aplicarFiltroOperacaoEmprestimo = function ($query) use ($operacaoId, $operacoesIds) {
-            if ($operacaoId) {
-                $query->where('operacao_id', $operacaoId);
-            } elseif (! empty($operacoesIds)) {
-                $query->whereIn('operacao_id', $operacoesIds);
+        $aplicarFiltroOperacaoEmprestimo = function ($query) use ($operacaoFiltroIds) {
+            if (! empty($operacaoFiltroIds)) {
+                $query->whereIn('operacao_id', $operacaoFiltroIds);
             } else {
                 $query->whereRaw('1 = 0'); // Nenhuma operação = nenhum resultado
             }
         };
 
         // Helper para aplicar filtro de operações em queries de Parcela (via Emprestimo)
-        $aplicarFiltroOperacaoParcela = function ($query) use ($operacaoId, $operacoesIds) {
-            $query->whereHas('emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
-                if ($operacaoId) {
-                    $q->where('operacao_id', $operacaoId);
-                } elseif (! empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
+        $aplicarFiltroOperacaoParcela = function ($query) use ($operacaoFiltroIds) {
+            $query->whereHas('emprestimo', function ($q) use ($operacaoFiltroIds) {
+                if (! empty($operacaoFiltroIds)) {
+                    $q->whereIn('operacao_id', $operacaoFiltroIds);
                 } else {
                     $q->whereRaw('1 = 0');
                 }
@@ -193,12 +186,10 @@ class DashboardController extends Controller
         };
 
         // Helper para aplicar filtro de operações em queries de Pagamento (via Parcela -> Emprestimo)
-        $aplicarFiltroOperacaoPagamento = function ($query) use ($operacaoId, $operacoesIds) {
-            $query->whereHas('parcela.emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
-                if ($operacaoId) {
-                    $q->where('operacao_id', $operacaoId);
-                } elseif (! empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
+        $aplicarFiltroOperacaoPagamento = function ($query) use ($operacaoFiltroIds) {
+            $query->whereHas('parcela.emprestimo', function ($q) use ($operacaoFiltroIds) {
+                if (! empty($operacaoFiltroIds)) {
+                    $q->whereIn('operacao_id', $operacaoFiltroIds);
                 } else {
                     $q->whereRaw('1 = 0');
                 }
@@ -206,12 +197,10 @@ class DashboardController extends Controller
         };
 
         // Helper para aplicar filtro de operações em queries de LiberacaoEmprestimo (via Emprestimo)
-        $aplicarFiltroOperacaoLiberacao = function ($query) use ($operacaoId, $operacoesIds) {
-            $query->whereHas('emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
-                if ($operacaoId) {
-                    $q->where('operacao_id', $operacaoId);
-                } elseif (! empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
+        $aplicarFiltroOperacaoLiberacao = function ($query) use ($operacaoFiltroIds) {
+            $query->whereHas('emprestimo', function ($q) use ($operacaoFiltroIds) {
+                if (! empty($operacaoFiltroIds)) {
+                    $q->whereIn('operacao_id', $operacaoFiltroIds);
                 } else {
                     $q->whereRaw('1 = 0');
                 }
@@ -219,23 +208,19 @@ class DashboardController extends Controller
         };
 
         // Helper para aplicar filtro de operações em queries de CashLedgerEntry
-        $aplicarFiltroOperacaoCash = function ($query) use ($operacaoId, $operacoesIds) {
-            if ($operacaoId) {
-                $query->where('operacao_id', $operacaoId);
-            } elseif (! empty($operacoesIds)) {
-                $query->whereIn('operacao_id', $operacoesIds);
+        $aplicarFiltroOperacaoCash = function ($query) use ($operacaoFiltroIds) {
+            if (! empty($operacaoFiltroIds)) {
+                $query->whereIn('operacao_id', $operacaoFiltroIds);
             } else {
                 $query->whereRaw('1 = 0');
             }
         };
 
         // Helper para aplicar filtro de operações em queries de Cliente (via OperationClient)
-        $aplicarFiltroOperacaoCliente = function ($query) use ($operacaoId, $operacoesIds) {
-            $query->whereHas('operationClients', function ($q) use ($operacaoId, $operacoesIds) {
-                if ($operacaoId) {
-                    $q->where('operacao_id', $operacaoId);
-                } elseif (! empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
+        $aplicarFiltroOperacaoCliente = function ($query) use ($operacaoFiltroIds) {
+            $query->whereHas('operationClients', function ($q) use ($operacaoFiltroIds) {
+                if (! empty($operacaoFiltroIds)) {
+                    $q->whereIn('operacao_id', $operacaoFiltroIds);
                 } else {
                     $q->whereRaw('1 = 0');
                 }
@@ -243,21 +228,21 @@ class DashboardController extends Controller
         };
 
         // Helper para aplicar filtro de operações em queries de EmprestimoCheque (via Emprestimo)
-        $aplicarFiltroOperacaoCheque = function ($query) use ($operacaoId, $operacoesIds) {
-            $query->whereHas('emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
-                if ($operacaoId) {
-                    $q->where('operacao_id', $operacaoId);
-                } elseif (! empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
+        $aplicarFiltroOperacaoCheque = function ($query) use ($operacaoFiltroIds) {
+            $query->whereHas('emprestimo', function ($q) use ($operacaoFiltroIds) {
+                if (! empty($operacaoFiltroIds)) {
+                    $q->whereIn('operacao_id', $operacaoFiltroIds);
                 } else {
                     $q->whereRaw('1 = 0');
                 }
             });
         };
 
-        $ops = $operacoesIds;
-        sort($ops);
-        $cacheKey = 'dashboard:admin:op:'.($operacaoId ?? 'all').':ops:'.md5(implode(',', $ops)).':d:'.$dateFrom->format('Y-m-d').':'.$dateTo->format('Y-m-d');
+        $opsPerm = $operacoesIds;
+        sort($opsPerm);
+        $opsSel = $operacaoFiltroIds;
+        sort($opsSel);
+        $cacheKey = 'dashboard:admin:opsel:'.md5(implode(',', $opsSel)).':perm:'.md5(implode(',', $opsPerm)).':d:'.$dateFrom->format('Y-m-d').':'.$dateTo->format('Y-m-d');
         $stats = Cache::remember($cacheKey, self::DASHBOARD_CACHE_TTL, function () use (
             $aplicarFiltroOperacaoEmprestimo,
             $aplicarFiltroOperacaoParcela,
@@ -266,8 +251,7 @@ class DashboardController extends Controller
             $aplicarFiltroOperacaoCash,
             $aplicarFiltroOperacaoCliente,
             $aplicarFiltroOperacaoCheque,
-            $operacaoId,
-            $operacoesIds,
+            $operacaoFiltroIds,
             $dateFrom,
             $dateTo,
             $user
@@ -321,7 +305,7 @@ class DashboardController extends Controller
             $valorTotalJurosAReceber = (float) (Parcela::where('status', '!=', 'paga')
                 ->when(true, $aplicarFiltroOperacaoParcela)
                 ->selectRaw('COALESCE(SUM(CASE WHEN valor > 0 THEN (COALESCE(valor_juros, 0) / valor) * (valor - COALESCE(valor_pago, 0)) ELSE 0 END), 0) as tot')->value('tot') ?? 0);
-            $receberMesVencimento = $this->estatisticasReceberPorPeriodoVencimento($operacaoId, $operacoesIds, $dateFrom, $dateTo);
+            $receberMesVencimento = $this->estatisticasReceberPorPeriodoVencimento($operacaoFiltroIds, $dateFrom, $dateTo);
             $valorLiberadoHoje = LiberacaoEmprestimo::where('status', 'liberado')
                 ->whereBetween('liberado_em', [$dateFrom, $dateTo])
                 ->when(true, $aplicarFiltroOperacaoLiberacao)
@@ -398,7 +382,7 @@ class DashboardController extends Controller
                 // Métricas do admin
                 'total_clientes' => $clientesEsteMes,
                 'total_emprestimos' => $totalEmprestimos,
-                'total_operacoes' => ! empty($operacoesIds) ? count($operacoesIds) : 0,
+                'total_operacoes' => count($operacaoFiltroIds),
                 'emprestimos_pendentes' => Emprestimo::where('status', 'pendente')
                     ->whereBetween('created_at', [$dateFrom, $dateTo])
                     ->when(true, $aplicarFiltroOperacaoEmprestimo)
@@ -469,20 +453,16 @@ class DashboardController extends Controller
                 ->whereIn('status', ['ativo', 'aprovado'])
                 ->when(true, $aplicarFiltroOperacaoEmprestimo)
                 ->sum('valor_total');
-            $totalGarantias = \App\Modules\Loans\Models\EmprestimoGarantia::whereHas('emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
-                if ($operacaoId) {
-                    $q->where('operacao_id', $operacaoId);
-                } elseif (! empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
+            $totalGarantias = \App\Modules\Loans\Models\EmprestimoGarantia::whereHas('emprestimo', function ($q) use ($operacaoFiltroIds) {
+                if (! empty($operacaoFiltroIds)) {
+                    $q->whereIn('operacao_id', $operacaoFiltroIds);
                 } else {
                     $q->whereRaw('1 = 0');
                 }
             })->count();
-            $valorTotalGarantias = \App\Modules\Loans\Models\EmprestimoGarantia::whereHas('emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
-                if ($operacaoId) {
-                    $q->where('operacao_id', $operacaoId);
-                } elseif (! empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
+            $valorTotalGarantias = \App\Modules\Loans\Models\EmprestimoGarantia::whereHas('emprestimo', function ($q) use ($operacaoFiltroIds) {
+                if (! empty($operacaoFiltroIds)) {
+                    $q->whereIn('operacao_id', $operacaoFiltroIds);
                 } else {
                     $q->whereRaw('1 = 0');
                 }
@@ -740,7 +720,7 @@ class DashboardController extends Controller
             'parcelasVencidas',
             'fichasContatoPorClienteOperacao',
             'operacoes',
-            'operacaoId',
+            'operacaoFiltroIds',
             'dateFrom',
             'dateTo'
         ));
@@ -759,29 +739,23 @@ class DashboardController extends Controller
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
             : collect([]);
 
-        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
-        if ($operacaoId && (empty($operacoesIds) || ! in_array($operacaoId, $operacoesIds))) {
-            $operacaoId = null;
-        }
+        $operacaoFiltroIds = OperacaoPreferida::resolverOperacoesIdsParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        $operacaoFiltroIds = array_values(array_intersect($operacaoFiltroIds, $operacoesIds));
 
         // Helper para aplicar filtro de operações em queries de Emprestimo
-        $aplicarFiltroOperacaoEmprestimo = function ($query) use ($operacaoId, $operacoesIds) {
-            if ($operacaoId) {
-                $query->where('operacao_id', $operacaoId);
-            } elseif (! empty($operacoesIds)) {
-                $query->whereIn('operacao_id', $operacoesIds);
+        $aplicarFiltroOperacaoEmprestimo = function ($query) use ($operacaoFiltroIds) {
+            if (! empty($operacaoFiltroIds)) {
+                $query->whereIn('operacao_id', $operacaoFiltroIds);
             } else {
                 $query->whereRaw('1 = 0');
             }
         };
 
         // Helper para aplicar filtro de operações em queries de Parcela (via Emprestimo)
-        $aplicarFiltroOperacaoParcela = function ($query) use ($operacaoId, $operacoesIds) {
-            $query->whereHas('emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
-                if ($operacaoId) {
-                    $q->where('operacao_id', $operacaoId);
-                } elseif (! empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
+        $aplicarFiltroOperacaoParcela = function ($query) use ($operacaoFiltroIds) {
+            $query->whereHas('emprestimo', function ($q) use ($operacaoFiltroIds) {
+                if (! empty($operacaoFiltroIds)) {
+                    $q->whereIn('operacao_id', $operacaoFiltroIds);
                 } else {
                     $q->whereRaw('1 = 0');
                 }
@@ -789,12 +763,10 @@ class DashboardController extends Controller
         };
 
         // Helper para aplicar filtro de operações em queries de Pagamento (via Parcela -> Emprestimo)
-        $aplicarFiltroOperacaoPagamento = function ($query) use ($operacaoId, $operacoesIds) {
-            $query->whereHas('parcela.emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
-                if ($operacaoId) {
-                    $q->where('operacao_id', $operacaoId);
-                } elseif (! empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
+        $aplicarFiltroOperacaoPagamento = function ($query) use ($operacaoFiltroIds) {
+            $query->whereHas('parcela.emprestimo', function ($q) use ($operacaoFiltroIds) {
+                if (! empty($operacaoFiltroIds)) {
+                    $q->whereIn('operacao_id', $operacaoFiltroIds);
                 } else {
                     $q->whereRaw('1 = 0');
                 }
@@ -802,12 +774,10 @@ class DashboardController extends Controller
         };
 
         // Helper para aplicar filtro de operações em queries de LiberacaoEmprestimo (via Emprestimo)
-        $aplicarFiltroOperacaoLiberacao = function ($query) use ($operacaoId, $operacoesIds) {
-            $query->whereHas('emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
-                if ($operacaoId) {
-                    $q->where('operacao_id', $operacaoId);
-                } elseif (! empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
+        $aplicarFiltroOperacaoLiberacao = function ($query) use ($operacaoFiltroIds) {
+            $query->whereHas('emprestimo', function ($q) use ($operacaoFiltroIds) {
+                if (! empty($operacaoFiltroIds)) {
+                    $q->whereIn('operacao_id', $operacaoFiltroIds);
                 } else {
                     $q->whereRaw('1 = 0');
                 }
@@ -815,32 +785,30 @@ class DashboardController extends Controller
         };
 
         // Helper para aplicar filtro de operações em queries de CashLedgerEntry
-        $aplicarFiltroOperacaoCash = function ($query) use ($operacaoId, $operacoesIds) {
-            if ($operacaoId) {
-                $query->where('operacao_id', $operacaoId);
-            } elseif (! empty($operacoesIds)) {
-                $query->whereIn('operacao_id', $operacoesIds);
+        $aplicarFiltroOperacaoCash = function ($query) use ($operacaoFiltroIds) {
+            if (! empty($operacaoFiltroIds)) {
+                $query->whereIn('operacao_id', $operacaoFiltroIds);
             } else {
                 $query->whereRaw('1 = 0');
             }
         };
 
         // Helper para aplicar filtro de operações em queries de EmprestimoCheque (via Emprestimo)
-        $aplicarFiltroOperacaoCheque = function ($query) use ($operacaoId, $operacoesIds) {
-            $query->whereHas('emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
-                if ($operacaoId) {
-                    $q->where('operacao_id', $operacaoId);
-                } elseif (! empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
+        $aplicarFiltroOperacaoCheque = function ($query) use ($operacaoFiltroIds) {
+            $query->whereHas('emprestimo', function ($q) use ($operacaoFiltroIds) {
+                if (! empty($operacaoFiltroIds)) {
+                    $q->whereIn('operacao_id', $operacaoFiltroIds);
                 } else {
                     $q->whereRaw('1 = 0');
                 }
             });
         };
 
-        $opsGestor = $operacoesIds;
-        sort($opsGestor);
-        $cacheKeyGestor = 'dashboard:gestor:op:'.($operacaoId ?? 'all').':ops:'.md5(implode(',', $opsGestor)).':d:'.$dateFrom->format('Y-m-d').':'.$dateTo->format('Y-m-d');
+        $opsPermG = $operacoesIds;
+        sort($opsPermG);
+        $opsSelG = $operacaoFiltroIds;
+        sort($opsSelG);
+        $cacheKeyGestor = 'dashboard:gestor:opsel:'.md5(implode(',', $opsSelG)).':perm:'.md5(implode(',', $opsPermG)).':d:'.$dateFrom->format('Y-m-d').':'.$dateTo->format('Y-m-d');
         $stats = Cache::remember($cacheKeyGestor, self::DASHBOARD_CACHE_TTL, function () use (
             $aplicarFiltroOperacaoEmprestimo,
             $aplicarFiltroOperacaoParcela,
@@ -848,8 +816,7 @@ class DashboardController extends Controller
             $aplicarFiltroOperacaoLiberacao,
             $aplicarFiltroOperacaoCash,
             $aplicarFiltroOperacaoCheque,
-            $operacaoId,
-            $operacoesIds,
+            $operacaoFiltroIds,
             $dateFrom,
             $dateTo
         ) {
@@ -877,7 +844,7 @@ class DashboardController extends Controller
             $valorTotalJurosAReceber = (float) (Parcela::where('status', '!=', 'paga')
                 ->when(true, $aplicarFiltroOperacaoParcela)
                 ->selectRaw('COALESCE(SUM(CASE WHEN valor > 0 THEN (COALESCE(valor_juros, 0) / valor) * (valor - COALESCE(valor_pago, 0)) ELSE 0 END), 0) as tot')->value('tot') ?? 0);
-            $receberMesVencimento = $this->estatisticasReceberPorPeriodoVencimento($operacaoId, $operacoesIds, $dateFrom, $dateTo);
+            $receberMesVencimento = $this->estatisticasReceberPorPeriodoVencimento($operacaoFiltroIds, $dateFrom, $dateTo);
             $valorLiberadoHoje = LiberacaoEmprestimo::where('status', 'liberado')
                 ->whereBetween('liberado_em', [$dateFrom, $dateTo])
                 ->when(true, $aplicarFiltroOperacaoLiberacao)
@@ -1201,7 +1168,7 @@ class DashboardController extends Controller
             'fichasContatoPorClienteOperacao',
             'rankingConsultores',
             'operacoes',
-            'operacaoId',
+            'operacaoFiltroIds',
             'consultoresLiberacoesNaoPagas',
             'consultoresAltaInadimplencia',
             'resumoPorOperacao',
@@ -1224,29 +1191,23 @@ class DashboardController extends Controller
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
             : collect([]);
 
-        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
-        if ($operacaoId && ! $user->temAcessoOperacao($operacaoId)) {
-            $operacaoId = null;
-        }
+        $operacaoFiltroIds = OperacaoPreferida::resolverOperacoesIdsParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        $operacaoFiltroIds = array_values(array_intersect($operacaoFiltroIds, $operacoesIds));
 
         // Helper para aplicar filtro de operações em queries de Emprestimo
-        $aplicarFiltroOperacaoEmprestimo = function ($query) use ($operacaoId, $operacoesIds) {
-            if ($operacaoId) {
-                $query->where('operacao_id', $operacaoId);
-            } elseif (! empty($operacoesIds)) {
-                $query->whereIn('operacao_id', $operacoesIds);
+        $aplicarFiltroOperacaoEmprestimo = function ($query) use ($operacaoFiltroIds) {
+            if (! empty($operacaoFiltroIds)) {
+                $query->whereIn('operacao_id', $operacaoFiltroIds);
             } else {
                 $query->whereRaw('1 = 0');
             }
         };
 
         // Helper para aplicar filtro de operações em queries de Parcela (via Emprestimo)
-        $aplicarFiltroOperacaoParcela = function ($query) use ($operacaoId, $operacoesIds) {
-            $query->whereHas('emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
-                if ($operacaoId) {
-                    $q->where('operacao_id', $operacaoId);
-                } elseif (! empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
+        $aplicarFiltroOperacaoParcela = function ($query) use ($operacaoFiltroIds) {
+            $query->whereHas('emprestimo', function ($q) use ($operacaoFiltroIds) {
+                if (! empty($operacaoFiltroIds)) {
+                    $q->whereIn('operacao_id', $operacaoFiltroIds);
                 } else {
                     $q->whereRaw('1 = 0');
                 }
@@ -1254,12 +1215,10 @@ class DashboardController extends Controller
         };
 
         // Helper para aplicar filtro de operações em queries de Pagamento (via Parcela -> Emprestimo)
-        $aplicarFiltroOperacaoPagamento = function ($query) use ($operacaoId, $operacoesIds) {
-            $query->whereHas('parcela.emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
-                if ($operacaoId) {
-                    $q->where('operacao_id', $operacaoId);
-                } elseif (! empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
+        $aplicarFiltroOperacaoPagamento = function ($query) use ($operacaoFiltroIds) {
+            $query->whereHas('parcela.emprestimo', function ($q) use ($operacaoFiltroIds) {
+                if (! empty($operacaoFiltroIds)) {
+                    $q->whereIn('operacao_id', $operacaoFiltroIds);
                 } else {
                     $q->whereRaw('1 = 0');
                 }
@@ -1267,12 +1226,10 @@ class DashboardController extends Controller
         };
 
         // Helper para aplicar filtro de operações em queries de LiberacaoEmprestimo (via Emprestimo)
-        $aplicarFiltroOperacaoLiberacao = function ($query) use ($operacaoId, $operacoesIds) {
-            $query->whereHas('emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
-                if ($operacaoId) {
-                    $q->where('operacao_id', $operacaoId);
-                } elseif (! empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
+        $aplicarFiltroOperacaoLiberacao = function ($query) use ($operacaoFiltroIds) {
+            $query->whereHas('emprestimo', function ($q) use ($operacaoFiltroIds) {
+                if (! empty($operacaoFiltroIds)) {
+                    $q->whereIn('operacao_id', $operacaoFiltroIds);
                 } else {
                     $q->whereRaw('1 = 0');
                 }
@@ -1280,11 +1237,9 @@ class DashboardController extends Controller
         };
 
         // Helper para aplicar filtro de operações em queries de CashLedgerEntry
-        $aplicarFiltroOperacaoCash = function ($query) use ($operacaoId, $operacoesIds) {
-            if ($operacaoId) {
-                $query->where('operacao_id', $operacaoId);
-            } elseif (! empty($operacoesIds)) {
-                $query->whereIn('operacao_id', $operacoesIds);
+        $aplicarFiltroOperacaoCash = function ($query) use ($operacaoFiltroIds) {
+            if (! empty($operacaoFiltroIds)) {
+                $query->whereIn('operacao_id', $operacaoFiltroIds);
             } else {
                 $query->whereRaw('1 = 0');
             }
@@ -1330,7 +1285,7 @@ class DashboardController extends Controller
             ->where('status', '!=', 'paga')
             ->when(true, $aplicarFiltroOperacaoParcela)
             ->selectRaw('COALESCE(SUM(CASE WHEN valor > 0 THEN (COALESCE(valor_juros, 0) / valor) * (valor - COALESCE(valor_pago, 0)) ELSE 0 END), 0) as tot')->value('tot') ?? 0);
-        $receberMesVencimento = $this->estatisticasReceberPorPeriodoVencimento($operacaoId, $operacoesIds, $dateFrom, $dateTo, $user->id);
+        $receberMesVencimento = $this->estatisticasReceberPorPeriodoVencimento($operacaoFiltroIds, $dateFrom, $dateTo, $user->id);
 
         // Saldo em caixa (entradas - saídas)
         $entradas = CashLedgerEntry::where('consultor_id', $user->id)
@@ -1489,7 +1444,7 @@ class DashboardController extends Controller
             'minhasLiberacoes',
             'proximasCobrancasLista',
             'operacoes',
-            'operacaoId',
+            'operacaoFiltroIds',
             'dateFrom',
             'dateTo',
             'fichasContatoPorClienteOperacao'
