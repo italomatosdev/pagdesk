@@ -12,6 +12,7 @@ use App\Modules\Loans\Models\SolicitacaoPagamentoJurosParcial;
 use App\Modules\Loans\Models\SolicitacaoRenovacaoAbate;
 use App\Modules\Core\Services\OperacaoDadosClienteService;
 use App\Support\ClienteNomeExibicao;
+use App\Support\ClienteVinculosOperacoesLookup;
 use App\Support\FichaContatoLookup;
 use App\Support\OperacaoPreferida;
 use App\Modules\Loans\Services\EmprestimoService;
@@ -73,7 +74,32 @@ class LiberacaoController extends Controller
             $liberacoes->map(fn ($l) => $l->emprestimo)->filter()
         );
 
-        return view('liberacoes.index', compact('liberacoes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
+        $cpfs = $liberacoes
+            ->map(fn ($l) => ClienteVinculosOperacoesLookup::cpfFromDocumento($l->emprestimo?->cliente?->documento))
+            ->filter()
+            ->values()
+            ->all();
+        $operacoesIdsPorCpf = ClienteVinculosOperacoesLookup::operacoesIdsPorCpf($cpfs);
+
+        $outrosVinculosPorLiberacaoId = [];
+        foreach ($liberacoes as $l) {
+            $cpf = ClienteVinculosOperacoesLookup::cpfFromDocumento($l->emprestimo?->cliente?->documento);
+            if (!$cpf) {
+                $outrosVinculosPorLiberacaoId[$l->id] = 0;
+                continue;
+            }
+            $ops = $operacoesIdsPorCpf[$cpf] ?? [];
+            $outros = array_values(array_filter($ops, fn ($opId) => (int) $opId !== (int) $l->emprestimo?->operacao_id));
+            $outrosVinculosPorLiberacaoId[$l->id] = count($outros);
+        }
+
+        return view('liberacoes.index', compact(
+            'liberacoes',
+            'operacoes',
+            'operacaoId',
+            'fichasContatoPorClienteOperacao',
+            'outrosVinculosPorLiberacaoId'
+        ));
     }
 
     /**
@@ -240,13 +266,23 @@ class LiberacaoController extends Controller
 
         $nomeClienteExibicao = ClienteNomeExibicao::fromFicha($fichaContatoLiberacao, $liberacao->emprestimo->cliente);
 
+        $cpf = ClienteVinculosOperacoesLookup::cpfFromDocumento($liberacao->emprestimo->cliente?->documento);
+        $vinculosOutrasOperacoesCount = 0;
+        if ($cpf) {
+            $operacoesIdsPorCpf = ClienteVinculosOperacoesLookup::operacoesIdsPorCpf([$cpf]);
+            $ops = $operacoesIdsPorCpf[$cpf] ?? [];
+            $outros = array_values(array_filter($ops, fn ($opId) => (int) $opId !== (int) $liberacao->emprestimo->operacao_id));
+            $vinculosOutrasOperacoesCount = count($outros);
+        }
+
         return view('liberacoes.show', compact(
             'liberacao',
             'podeAprovarLiberacao',
             'podeConfirmarPagamentoCliente',
             'ehGestorAdminConfirmando',
             'fichaContatoLiberacao',
-            'nomeClienteExibicao'
+            'nomeClienteExibicao',
+            'vinculosOutrasOperacoesCount'
         ));
     }
 

@@ -96,4 +96,62 @@ class OperacaoPreferida
 
         return ($pref !== null && in_array($pref, $ids, true)) ? $pref : null;
     }
+
+    /**
+     * Filtro GET com múltiplas operações (ex.: dashboard).
+     *
+     * - operacao_id[]: interseção com ids permitidos; com envio do form (dashboard_filtrar=1), lista vazia = todas permitidas.
+     * - operacao_id escalar (legado): uma operação.
+     * - operacao_id vazio no GET (legado): todas permitidas.
+     * - Link manual com operacao_id[]= sem dashboard_filtrar: aplica as selecionadas.
+     * - Sem parâmetros de operação e sem envio do form: usa operação preferida (uma), se válida; senão todas.
+     *
+     * @param  array<int>  $idsPermitidos
+     * @return array<int>
+     */
+    public static function resolverOperacoesIdsParaFiltroGet(Request $request, array $idsPermitidos, ?User $user = null): array
+    {
+        $user = $user ?? auth()->user();
+        $ids = array_values(array_unique(array_map('intval', $idsPermitidos)));
+        if ($ids === []) {
+            return [];
+        }
+
+        $submeteu = $request->boolean('dashboard_filtrar');
+        $raw = $request->input('operacao_id');
+
+        if (is_array($raw)) {
+            $selected = array_values(array_unique(array_intersect(
+                array_values(array_filter(array_map('intval', $raw), fn ($i) => $i > 0)),
+                $ids
+            )));
+
+            if ($submeteu) {
+                return $selected !== [] ? $selected : $ids;
+            }
+
+            if ($selected !== []) {
+                return $selected;
+            }
+        } elseif (is_string($raw) || is_numeric($raw)) {
+            if ($request->filled('operacao_id')) {
+                $id = (int) $raw;
+
+                return in_array($id, $ids, true) ? [$id] : $ids;
+            }
+        }
+
+        if ($request->has('operacao_id') && ! is_array($raw)) {
+            return $ids;
+        }
+
+        if (! $submeteu) {
+            $pref = $user->getOperacaoPrincipalId();
+            if ($pref !== null && in_array($pref, $ids, true)) {
+                return [$pref];
+            }
+        }
+
+        return $ids;
+    }
 }

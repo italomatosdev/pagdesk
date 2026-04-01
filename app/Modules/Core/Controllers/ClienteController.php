@@ -720,6 +720,19 @@ class ClienteController extends Controller
             'total_pago' => $totalPago,
         ];
 
+        $temEmprestimoNaOperacaoContexto = false;
+        $podeDesvincularClienteOperacao = false;
+        $mostrarAvisoEmprestimoBloqueioDesvinculo = false;
+        if (! empty($operacaoContextoShow)) {
+            $oidCtx = (int) $operacaoContextoShow['id'];
+            $temEmprestimoNaOperacaoContexto = Emprestimo::where('cliente_id', $cliente->id)
+                ->where('operacao_id', $oidCtx)
+                ->exists();
+            $podePapelDesvincular = $isSuperAdmin || $user->temAlgumPapelNaOperacao($oidCtx, ['administrador', 'gestor']);
+            $podeDesvincularClienteOperacao = $podePapelDesvincular && ! $temEmprestimoNaOperacaoContexto;
+            $mostrarAvisoEmprestimoBloqueioDesvinculo = $podePapelDesvincular && $temEmprestimoNaOperacaoContexto;
+        }
+
         return view('clientes.show', compact(
             'cliente',
             'emprestimosPorOperacao',
@@ -730,7 +743,9 @@ class ClienteController extends Controller
             'operacaoContextoShow',
             'documentoShow',
             'selfieShow',
-            'anexosShow'
+            'anexosShow',
+            'mostrarAvisoEmprestimoBloqueioDesvinculo',
+            'podeDesvincularClienteOperacao'
         ));
     }
 
@@ -767,6 +782,51 @@ class ClienteController extends Controller
             \Log::error('Erro ao vincular cliente: ' . $e->getMessage());
             return back()->with('error', 'Erro ao vincular cliente: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Remove vínculo cliente ↔ operação (apenas administrador/gestor na operação; sem empréstimo na operação).
+     */
+    public function desvincularOperacao(Request $request, int $id): RedirectResponse
+    {
+        $validated = $request->validate([
+            'operacao_id' => 'required|integer|min:1',
+        ]);
+        $operacaoId = (int) $validated['operacao_id'];
+        $user = auth()->user();
+
+        if (! $user->isSuperAdmin()) {
+            if (! $user->temAlgumPapelNaOperacao($operacaoId, ['administrador', 'gestor'])) {
+                abort(403, 'Apenas administrador ou gestor da operação podem remover o vínculo.');
+            }
+            if (! $user->temAcessoOperacao($operacaoId)) {
+                abort(403);
+            }
+        }
+
+        $cliente = Cliente::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)->findOrFail($id);
+
+        if (! $cliente->operationClients()->where('operacao_id', $operacaoId)->exists()) {
+            return back()->with('error', 'Cliente não está vinculado a esta operação.');
+        }
+
+        try {
+            $this->clienteService->desvincularClienteOperacao($id, $operacaoId);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
+        }
+
+        if (! $user->isSuperAdmin()) {
+            $operacoesIds = $user->getOperacoesIds();
+            $aindaTem = $cliente->fresh()->operationClients()->whereIn('operacao_id', $operacoesIds)->exists();
+            if (! $aindaTem) {
+                return redirect()->route('clientes.index')
+                    ->with('success', 'Vínculo com a operação removido. O cliente não está mais vinculado a nenhuma operação à qual você tem acesso.');
+            }
+        }
+
+        return redirect()->route('clientes.show', ['id' => $id, 'geral' => 1])
+            ->with('success', 'Cliente desvinculado desta operação.');
     }
 
     /**
@@ -1156,6 +1216,7 @@ class ClienteController extends Controller
                 'ficha' => $ficha,
                 'fichas_por_operacao' => $this->fichasPorOperacaoParaCliente((int) $cliente->id, $request),
                 'consulta_cruzada' => false, // Cliente da própria empresa
+                'pode_abrir_ficha' => $this->clientePodeAbrirFichaParaUsuario((int) $cliente->id),
             ]);
         } else {
             // Cliente encontrado em OUTRA empresa - mostrar consulta cruzada
@@ -1210,6 +1271,7 @@ class ClienteController extends Controller
                     })->values(),
                 ],
                 'empresas_com_historico' => $consultaCruzada['empresas_com_historico'],
+                'pode_abrir_ficha' => $this->clientePodeAbrirFichaParaUsuario((int) $consultaCruzada['cliente_id']),
             ]);
             } else {
                 // Cliente existe mas sem histórico (pode ter pendências mesmo sem empréstimos ativos)
@@ -1296,6 +1358,7 @@ class ClienteController extends Controller
                         'pendencias_por_operacao' => $pendenciasPorOperacao,
                     ],
                     'empresas_com_historico' => [],
+                    'pode_abrir_ficha' => $this->clientePodeAbrirFichaParaUsuario((int) $cliente->id),
                 ]);
             }
         }
@@ -1316,6 +1379,29 @@ class ClienteController extends Controller
                 ] : null,
             ], 500);
         }
+    }
+
+    /**
+     * Mesmo critério de {@see ClienteController::show()}: o usuário só abre a ficha se existir
+     * vínculo em operation_clients com alguma operação à qual ele tem acesso.
+     */
+    private function clientePodeAbrirFichaParaUsuario(int $clienteId): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+        $allowed = $user->getOperacoesIds();
+        if (empty($allowed)) {
+            return false;
+        }
+
+        return OperationClient::where('cliente_id', $clienteId)
+            ->whereIn('operacao_id', $allowed)
+            ->exists();
     }
 
     /**

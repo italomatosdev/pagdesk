@@ -6,8 +6,10 @@ use App\Modules\Core\Models\Cliente;
 use App\Modules\Core\Models\ClienteDadosEmpresa;
 use App\Modules\Core\Models\ClientDocument;
 use App\Modules\Core\Models\EmpresaClienteVinculo;
+use App\Modules\Core\Models\OperacaoDadosCliente;
 use App\Modules\Core\Models\OperationClient;
 use App\Modules\Core\Traits\Auditable;
+use App\Modules\Loans\Models\Emprestimo;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -686,6 +688,55 @@ class ClienteService
             );
             
             return $vinculo;
+        });
+    }
+
+    /**
+     * Remove o vínculo cliente ↔ operação (operation_clients), desde que não exista empréstimo
+     * naquela operação (qualquer status; exclui apenas soft-deletados).
+     * Remove também a ficha em operacao_dados_clientes e documentos escopados à operação.
+     *
+     * @throws ValidationException
+     */
+    public function desvincularClienteOperacao(int $clienteId, int $operacaoId): void
+    {
+        DB::transaction(function () use ($clienteId, $operacaoId) {
+            $vinculo = OperationClient::where('cliente_id', $clienteId)
+                ->where('operacao_id', $operacaoId)
+                ->first();
+
+            if (! $vinculo) {
+                throw ValidationException::withMessages([
+                    'operacao_id' => 'Cliente não está vinculado a esta operação.',
+                ]);
+            }
+
+            if (Emprestimo::where('cliente_id', $clienteId)->where('operacao_id', $operacaoId)->exists()) {
+                throw ValidationException::withMessages([
+                    'operacao_id' => 'Não é possível remover o vínculo: já existe empréstimo registrado nesta operação (incluindo não ativos).',
+                ]);
+            }
+
+            $oldValues = $vinculo->toArray();
+
+            OperacaoDadosCliente::where('cliente_id', $clienteId)
+                ->where('operacao_id', $operacaoId)
+                ->delete();
+
+            ClientDocument::where('cliente_id', $clienteId)
+                ->where('operacao_id', $operacaoId)
+                ->get()
+                ->each(fn (ClientDocument $doc) => $doc->delete());
+
+            $vinculo->delete();
+
+            self::auditar(
+                'desvincular_cliente_operacao',
+                $vinculo,
+                $oldValues,
+                [],
+                "Cliente ID: {$clienteId}, operação ID: {$operacaoId}"
+            );
         });
     }
 

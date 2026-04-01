@@ -47,6 +47,7 @@
                                     <tr>
                                         <th>ID</th>
                                         <th>Cliente</th>
+                                        <th>Outras ops</th>
                                         <th>Operação</th>
                                         <th>Tipo</th>
                                         <th>Valor</th>
@@ -63,6 +64,18 @@
                                             <td>#{{ $emprestimo->id }}</td>
                                             <td>
                                                 <a href="{{ \App\Support\ClienteUrl::show($emprestimo->cliente_id, $emprestimo->operacao_id) }}">{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}</a>
+                                            </td>
+                                            <td class="text-center">
+                                                @php
+                                                    $qtdOutrasOps = (int) ($outrosVinculosPorEmprestimoId[$emprestimo->id] ?? 0);
+                                                @endphp
+                                                @if($qtdOutrasOps > 0)
+                                                    <a href="{{ \App\Support\ClienteUrl::show($emprestimo->cliente_id, $emprestimo->operacao_id) }}" class="text-decoration-none" title="Ver cliente para detalhes">
+                                                        <span class="badge bg-warning text-dark">Possui ({{ $qtdOutrasOps }})</span>
+                                                    </a>
+                                                @else
+                                                    <span class="text-muted">—</span>
+                                                @endif
                                             </td>
                                             <td>{{ $emprestimo->operacao->nome }}</td>
                                             <td>{{ ($tipoLabels ?? [
@@ -132,7 +145,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="10" class="text-center">Nenhum empréstimo pendente de aprovação.</td>
+                                            <td colspan="11" class="text-center">Nenhum empréstimo pendente de aprovação.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>

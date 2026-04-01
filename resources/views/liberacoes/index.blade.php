@@ -138,6 +138,7 @@
                                         <th>Tipo</th>
                                         <th>Frequência</th>
                                         <th>Cliente</th>
+                                        <th>Outras ops</th>
                                         <th>Operação</th>
                                         <th>Consultor</th>
                                         <th>Valor</th>
@@ -189,6 +190,18 @@
                                             <td>
                                                 <a href="{{ \App\Support\ClienteUrl::show($liberacao->emprestimo->cliente_id, $liberacao->emprestimo->operacao_id) }}">{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($liberacao->emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}</a>
                                             </td>
+                                            <td class="text-center">
+                                                @php
+                                                    $qtdOutrasOps = (int) ($outrosVinculosPorLiberacaoId[$liberacao->id] ?? 0);
+                                                @endphp
+                                                @if($qtdOutrasOps > 0)
+                                                    <a href="{{ \App\Support\ClienteUrl::show($liberacao->emprestimo->cliente_id, $liberacao->emprestimo->operacao_id) }}" class="text-decoration-none" title="Ver cliente para detalhes">
+                                                        <span class="badge bg-warning text-dark">Possui ({{ $qtdOutrasOps }})</span>
+                                                    </a>
+                                                @else
+                                                    <span class="text-muted">—</span>
+                                                @endif
+                                            </td>
                                             <td>{{ $liberacao->emprestimo->operacao->nome }}</td>
                                             <td>{{ $liberacao->consultor->name }}</td>
                                             <td class="h6 text-primary">
@@ -224,7 +237,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="13" class="text-center">Nenhuma liberação aguardando.</td>
+                                            <td colspan="14" class="text-center">Nenhuma liberação aguardando.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>

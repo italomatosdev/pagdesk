@@ -51,6 +51,14 @@
                                 @endif
                             </div>
                         @endif
+                        @if(($vinculosOutrasOperacoesCount ?? 0) > 0)
+                            <div class="alert alert-warning mb-3">
+                                <i class="bx bx-link-alt"></i>
+                                <strong>Vínculo em outras operações:</strong>
+                                este CPF possui vínculo com <strong>{{ $vinculosOutrasOperacoesCount }}</strong> outra(s) operação(ões) nesta empresa.
+                                <a href="{{ \App\Support\ClienteUrl::show($emprestimo->cliente_id, $emprestimo->operacao_id) }}" class="alert-link ms-1">Ver cliente</a>
+                            </div>
+                        @endif
                         @php
                             $solicitacaoQuitacaoDesconto = \App\Modules\Loans\Models\SolicitacaoQuitacao::where('emprestimo_id', $emprestimo->id)->where('status', 'aprovado')->first();
                         @endphp

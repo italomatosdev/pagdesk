@@ -50,6 +50,16 @@
                                     </a>
                                 @endif
                             </div>
+                            @if(($vinculosOutrasOperacoesCount ?? 0) > 0)
+                                <div class="col-12 mb-3">
+                                    <div class="alert alert-warning mb-0">
+                                        <i class="bx bx-link-alt"></i>
+                                        <strong>Vínculo em outras operações:</strong>
+                                        este CPF possui vínculo com <strong>{{ $vinculosOutrasOperacoesCount }}</strong> outra(s) operação(ões) nesta empresa.
+                                        <a href="{{ \App\Support\ClienteUrl::show($liberacao->emprestimo->cliente_id, $liberacao->emprestimo->operacao_id) }}" class="alert-link ms-1">Ver cliente</a>
+                                    </div>
+                                </div>
+                            @endif
                             <div class="col-md-6 mb-3">
                                 <strong>Operação:</strong> {{ $liberacao->emprestimo->operacao->nome }}
                             </div>

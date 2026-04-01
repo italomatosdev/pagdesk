@@ -16,6 +16,7 @@
                 <div class="card">
                     <div class="card-body">
                         <form method="GET" action="{{ route('dashboard.index') }}" class="d-flex flex-wrap gap-3 align-items-end">
+                            <input type="hidden" name="dashboard_filtrar" value="1">
                             <div>
                                 <label for="date_from" class="form-label">Data inicial</label>
                                 <input type="date" name="date_from" id="date_from" class="form-control"
@@ -26,34 +27,19 @@
                                 <input type="date" name="date_to" id="date_to" class="form-control"
                                     value="{{ $dateTo->format('Y-m-d') }}">
                             </div>
-                            <div class="flex-grow-1">
-                                @php
-                                    $operacaoIdSelecionadaDash = request()->has('operacao_id')
-                                        ? (request()->filled('operacao_id') ? (int) request('operacao_id') : null)
-                                        : ($operacaoId ?? null);
-                                @endphp
-                                <label for="operacao_id" class="form-label">Operação</label>
-                                <select name="operacao_id" id="operacao_id" class="form-select">
-                                    <option value="" {{ $operacaoIdSelecionadaDash === null ? 'selected' : '' }}>Todas as Operações</option>
-                                    @foreach($operacoes as $operacao)
-                                        <option value="{{ $operacao->id }}" {{ (int) $operacaoIdSelecionadaDash === (int) $operacao->id ? 'selected' : '' }}>
-                                            {{ $operacao->nome }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
+                            @include('dashboard.partials.filtro-operacoes-checkboxes', ['prefix' => 'gestor'])
                             <div>
                                 <button type="submit" class="btn btn-primary">
                                     <i class="bx bx-filter"></i> Filtrar
                                 </button>
-                                @if(request('operacao_id') || request('date_from') || request('date_to'))
+                                @if(request()->has('operacao_id') || request()->has('date_from') || request()->has('date_to'))
                                     <a href="{{ route('dashboard.index') }}" class="btn btn-secondary">
                                         <i class="bx bx-x"></i> Limpar
                                     </a>
                                 @endif
                             </div>
                         </form>
-                        <small class="text-muted mt-2 d-block">Período: {{ $dateFrom->format('d/m/Y') }} a {{ $dateTo->format('d/m/Y') }}. Máximo 1 ano.</small>
+                        <small class="text-muted mt-2 d-block">Período: {{ $dateFrom->format('d/m/Y') }} a {{ $dateTo->format('d/m/Y') }}. Máximo 1 ano. Marque uma ou mais operações no menu; nenhuma marcada ao enviar &quot;Filtrar&quot; equivale a todas.</small>
                     </div>
                 </div>
             </div>

@@ -53,9 +53,25 @@
                             Ficha da operação <strong>{{ $operacaoContextoShow['nome'] }}</strong>
                             — nome, contato e endereço abaixo são os dados cadastrados para esta operação.
                         </span>
-                        <a href="{{ route('clientes.show', ['id' => $cliente->id, 'geral' => 1]) }}" class="btn btn-sm btn-outline-secondary">
-                            Ver cadastro geral (sem filtro)
-                        </a>
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            @if(!empty($podeDesvincularClienteOperacao))
+                                <form method="POST" action="{{ route('clientes.desvincular-operacao', $cliente->id) }}" class="d-inline"
+                                    onsubmit="return confirm('Remover o vínculo deste cliente com a operação {{ addslashes($operacaoContextoShow['nome']) }}? A ficha e documentos desta operação serão excluídos. Esta ação só é permitida quando não há empréstimo nesta operação.');">
+                                    @csrf
+                                    <input type="hidden" name="operacao_id" value="{{ $operacaoContextoShow['id'] }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bx bx-unlink"></i> Remover vínculo com esta operação
+                                    </button>
+                                </form>
+                            @elseif(!empty($mostrarAvisoEmprestimoBloqueioDesvinculo))
+                                <span class="text-muted small">
+                                    <i class="bx bx-info-circle"></i> Não é possível remover o vínculo: existe empréstimo nesta operação.
+                                </span>
+                            @endif
+                            <a href="{{ route('clientes.show', ['id' => $cliente->id, 'geral' => 1]) }}" class="btn btn-sm btn-outline-secondary">
+                                Ver cadastro geral (sem filtro)
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>

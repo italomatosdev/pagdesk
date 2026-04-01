@@ -140,6 +140,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::get('/create', [App\Modules\Core\Controllers\ClienteController::class, 'create'])->name('create');
         Route::post('/', [App\Modules\Core\Controllers\ClienteController::class, 'store'])->name('store');
         Route::get('/{id}/vincular', [App\Modules\Core\Controllers\ClienteController::class, 'vincular'])->name('vincular');
+        Route::post('/{id}/desvincular-operacao', [App\Modules\Core\Controllers\ClienteController::class, 'desvincularOperacao'])->name('desvincular-operacao');
         Route::get('/{id}', [App\Modules\Core\Controllers\ClienteController::class, 'show'])->name('show');
         Route::get('/{id}/edit', [App\Modules\Core\Controllers\ClienteController::class, 'edit'])->name('edit');
         Route::put('/{id}', [App\Modules\Core\Controllers\ClienteController::class, 'update'])->name('update');

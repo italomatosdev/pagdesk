@@ -436,6 +436,7 @@
                         if (data?.existe && data?.consulta_cruzada) {
                             const cliente = data.cliente;
                             const ficha = data.ficha || {};
+                            const podeAbrirFichaCruzada = data.pode_abrir_ficha === true;
 
                             const fmtMoeda = (v) => {
                                 const n = Number(v || 0);
@@ -654,19 +655,22 @@
                                     </div>
                                 `,
                                 showCancelButton: true,
-                                showDenyButton: true,
-                                confirmButtonText: 'Usar cadastro',
+                                showDenyButton: podeAbrirFichaCruzada,
+                                confirmButtonText: podeAbrirFichaCruzada ? 'Usar cadastro' : 'Continuar preenchimento',
                                 denyButtonText: 'Continuar preenchimento',
                                 cancelButtonText: 'Cancelar',
-                                confirmButtonColor: '#038edc',
+                                confirmButtonColor: podeAbrirFichaCruzada ? '#038edc' : '#f1b44c',
                                 denyButtonColor: '#f1b44c',
                                 cancelButtonColor: '#6c757d',
                             }).then((result) => {
-                                if (result.isConfirmed) {
-                                    // Usar cadastro existente - redirecionar para vincular
-                                    window.location.href = `{{ url('/clientes') }}/${cliente.id}`;
-                                } else if (result.isDenied) {
-                                    // Preencher dados e enviar: backend vincula à operação (mesmo fluxo do link)
+                                if (podeAbrirFichaCruzada) {
+                                    if (result.isConfirmed) {
+                                        window.location.href = `{{ url('/clientes') }}/${cliente.id}`;
+                                    } else if (result.isDenied) {
+                                        setEtapa2Ativa(true);
+                                        nomeInput?.focus();
+                                    }
+                                } else if (result.isConfirmed) {
                                     setEtapa2Ativa(true);
                                     nomeInput?.focus();
                                 }
@@ -790,6 +794,9 @@
                                     Nenhuma pendência atrasada encontrada.
                                 </div>`;
 
+                            const podeAbrirFicha = data.pode_abrir_ficha === true;
+                            const temVinculoOperacao = podeAbrirFicha;
+
                             const fichasListMesmaEmpresa = data.fichas_por_operacao || [];
                             const fichasBlockMesmaEmpresa = fichasListMesmaEmpresa.length
                                 ? `
@@ -807,6 +814,14 @@
                                         </div>
                                     </div>
                                 `
+                                : '';
+
+                            const avisoSemVinculoMesmaEmpresa = !podeAbrirFicha
+                                ? `<div class="alert alert-warning mb-0 mt-3 text-start">
+                                        <i class="bx bx-info-circle me-1"></i>
+                                        <strong>Sem vínculo com operação.</strong> Não é possível abrir a ficha até existir vínculo.
+                                        Use <strong>Continuar preenchimento</strong>, preencha os dados e envie o formulário com a operação selecionada — o sistema vinculará este cadastro à operação (sem duplicar o CPF/CNPJ).
+                                   </div>`
                                 : '';
 
                             Swal.fire({
@@ -905,21 +920,29 @@
                                                 </div>
                                             </div>
                                         </div>
+                                        ${avisoSemVinculoMesmaEmpresa}
                                     </div>
                                 `,
                                 showCancelButton: true,
-                                showDenyButton: true,
-                                confirmButtonText: 'Usar cadastro',
+                                showDenyButton: temVinculoOperacao,
+                                confirmButtonText: temVinculoOperacao ? 'Usar cadastro' : 'Continuar preenchimento',
                                 denyButtonText: 'Ver/Editar ficha',
                                 cancelButtonText: 'Cancelar',
-                                confirmButtonColor: '#038edc',
+                                confirmButtonColor: temVinculoOperacao ? '#038edc' : '#f1b44c',
                                 denyButtonColor: '#f1b44c',
                                 cancelButtonColor: '#6c757d',
                             }).then((result) => {
-                                if (result.isConfirmed) {
-                                    window.location.href = `{{ url('/clientes') }}/${cliente.id}`;
-                                } else if (result.isDenied) {
-                                    window.location.href = `{{ url('/clientes') }}/${cliente.id}/edit`;
+                                if (temVinculoOperacao) {
+                                    if (result.isConfirmed) {
+                                        window.location.href = `{{ url('/clientes') }}/${cliente.id}`;
+                                    } else if (result.isDenied) {
+                                        window.location.href = `{{ url('/clientes') }}/${cliente.id}/edit`;
+                                    }
+                                } else {
+                                    if (result.isConfirmed) {
+                                        setEtapa2Ativa(true);
+                                        nomeInput?.focus();
+                                    }
                                 }
                             });
 
