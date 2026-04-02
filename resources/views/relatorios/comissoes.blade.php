@@ -16,7 +16,7 @@
                     <h5 class="card-title mb-0">Filtros</h5>
                 </div>
                 <div class="card-body">
-                    <p class="text-muted small mb-2">Selecione o período e a operação. Em cada linha, escolha o tipo de comissão (Diária = em cima do valor quitado / Mensal = em cima dos juros) e informe a taxa % para calcular.</p>
+                    <p class="text-muted small mb-2">Selecione o período, a operação e, se quiser, a frequência do contrato (diária, semanal, mensal). Em cada linha, escolha o tipo de comissão (Diária = em cima do valor quitado / Mensal = em cima dos juros) e informe a taxa % para calcular.</p>
                     <form method="GET" action="{{ route('relatorios.comissoes') }}" class="row g-3 align-items-end">
                         <div class="col-6 col-sm-4 col-md-2">
                             <label class="form-label">Data inicial</label>
@@ -37,6 +37,15 @@
                             </select>
                         </div>
                         @endif
+                        <div class="col-6 col-sm-4 col-md-2">
+                            <label class="form-label">Frequência</label>
+                            <select name="frequencia" class="form-select">
+                                <option value="" {{ ($frequencia ?? '') === '' ? 'selected' : '' }}>Todas</option>
+                                <option value="diaria" {{ ($frequencia ?? '') === 'diaria' ? 'selected' : '' }}>Diária</option>
+                                <option value="semanal" {{ ($frequencia ?? '') === 'semanal' ? 'selected' : '' }}>Semanal</option>
+                                <option value="mensal" {{ ($frequencia ?? '') === 'mensal' ? 'selected' : '' }}>Mensal</option>
+                            </select>
+                        </div>
                         <div class="col-12 col-sm-6 col-md-2 d-flex align-items-end gap-2">
                             <button type="submit" class="btn btn-primary">
                                 <i class="bx bx-search"></i> Gerar
@@ -53,7 +62,15 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">Comissões por consultor ({{ $dateFrom->format('d/m/Y') }} a {{ $dateTo->format('d/m/Y') }})</h5>
+                    <h5 class="card-title mb-0">
+                        Comissões por consultor ({{ $dateFrom->format('d/m/Y') }} a {{ $dateTo->format('d/m/Y') }})
+                        @if(!empty($frequencia))
+                            @php
+                                $freqTitulo = ['diaria' => 'Diária', 'semanal' => 'Semanal', 'mensal' => 'Mensal'][$frequencia] ?? ucfirst($frequencia);
+                            @endphp
+                            <span class="text-muted fw-normal">— {{ $freqTitulo }}</span>
+                        @endif
+                    </h5>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
@@ -78,6 +95,7 @@
                                             'date_from' => $dateFrom->format('Y-m-d'),
                                             'date_to' => $dateTo->format('Y-m-d'),
                                             'operacao_id' => $operacaoId,
+                                            'frequencia' => !empty($frequencia) ? $frequencia : null,
                                         ], fn ($v) => $v !== null && $v !== '');
                                     @endphp
                                     <tr class="row-comissao"

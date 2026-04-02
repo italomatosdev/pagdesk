@@ -18,6 +18,14 @@
                 @elseif($operacaoId === null)
                     — <strong>Todas as operações</strong> (no seu escopo)
                 @endif
+                @if(!empty($frequencia))
+                    @php
+                        $freqDetalhe = ['diaria' => 'Diária', 'semanal' => 'Semanal', 'mensal' => 'Mensal'][$frequencia] ?? ucfirst($frequencia);
+                    @endphp
+                    — Frequência: <strong>{{ $freqDetalhe }}</strong>
+                @else
+                    — Frequência: <strong>Todas</strong>
+                @endif
             </p>
             <p class="text-muted small mb-0">
                 Valores do período; <strong>valor quitado (principal)</strong> e <strong>juros recebidos</strong> usam a mesma repartição por pagamento do relatório principal.
