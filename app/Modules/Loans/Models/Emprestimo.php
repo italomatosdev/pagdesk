@@ -118,18 +118,20 @@ class Emprestimo extends Model
      */
     public function getProximoVencimento(): ?Carbon
     {
-        $quitados = ['paga', 'quitada_garantia'];
+        $quitados = ['paga', 'paga_parcial', 'quitada_garantia'];
         if ($this->relationLoaded('parcelas')) {
             $proxima = $this->parcelas
-                ->filter(fn (Parcela $p) => !in_array($p->status, $quitados, true))
+                ->filter(fn (Parcela $p) => ! in_array($p->status, $quitados, true))
                 ->sortBy('data_vencimento')
                 ->first();
+
             return $proxima?->data_vencimento;
         }
         $p = $this->parcelas()
             ->whereNotIn('status', $quitados)
             ->orderBy('data_vencimento')
             ->first();
+
         return $p?->data_vencimento;
     }
 
@@ -244,6 +246,7 @@ class Emprestimo extends Model
     {
         $totalCheques = $this->getValorTotalChequesAttribute();
         $totalJuros = $this->getValorTotalJurosChequesAttribute();
+
         return $totalCheques - $totalJuros;
     }
 
@@ -333,10 +336,11 @@ class Emprestimo extends Model
      */
     public function foiLiberado(): bool
     {
-        if (!$this->relationLoaded('liberacao')) {
+        if (! $this->relationLoaded('liberacao')) {
             $this->load('liberacao');
         }
         $lib = $this->liberacao;
+
         return $lib && ($lib->isLiberado() || $lib->isPagoAoCliente());
     }
 
@@ -353,19 +357,20 @@ class Emprestimo extends Model
      */
     public function todasParcelasPagas(): bool
     {
-        if (!$this->relationLoaded('parcelas')) {
+        if (! $this->relationLoaded('parcelas')) {
             $this->load('parcelas');
         }
-        
+
         $totalParcelas = $this->parcelas->count();
         if ($totalParcelas === 0) {
             return false;
         }
-        
+
         // Considerar parcelas pagas OU quitadas por garantia
         $parcelasQuitadas = $this->parcelas->filter(function ($parcela) {
             return $parcela->status === 'paga' || $parcela->status === 'quitada_garantia';
         })->count();
+
         return $parcelasQuitadas === $totalParcelas;
     }
 
@@ -374,7 +379,7 @@ class Emprestimo extends Model
      */
     public function isRenovacao(): bool
     {
-        return !is_null($this->emprestimo_origem_id);
+        return ! is_null($this->emprestimo_origem_id);
     }
 
     /**
@@ -386,11 +391,13 @@ class Emprestimo extends Model
     {
         if ($this->isPrice()) {
             $parcela = $this->calcularParcelaPrice();
+
             return round($parcela * $this->numero_parcelas, 2);
         }
 
         $taxaJuros = $this->taxa_juros ?? 0;
         $valorComJuros = $this->valor_total * (1 + ($taxaJuros / 100));
+
         return round($valorComJuros, 2);
     }
 
@@ -403,11 +410,13 @@ class Emprestimo extends Model
     {
         if ($this->isPrice()) {
             $totalPago = $this->calcularValorTotalComJuros();
+
             return round($totalPago - (float) $this->valor_total, 2);
         }
 
         $taxaJuros = $this->taxa_juros ?? 0;
         $valorJuros = $this->valor_total * ($taxaJuros / 100);
+
         return round($valorJuros, 2);
     }
 
@@ -433,7 +442,7 @@ class Emprestimo extends Model
      */
     public function calcularParcelaPrice(): float
     {
-        if (!$this->isPrice() || $this->numero_parcelas <= 0) {
+        if (! $this->isPrice() || $this->numero_parcelas <= 0) {
             return 0;
         }
 
@@ -449,13 +458,13 @@ class Emprestimo extends Model
         // Fórmula Price
         $numerador = $taxaDecimal * pow(1 + $taxaDecimal, $numeroParcelas);
         $denominador = pow(1 + $taxaDecimal, $numeroParcelas) - 1;
-        
+
         if ($denominador == 0) {
             return 0;
         }
 
         $parcelaFixa = $valorPresente * ($numerador / $denominador);
-        
+
         return round($parcelaFixa, 2);
     }
 
@@ -476,6 +485,7 @@ class Emprestimo extends Model
 
         // Senão, usa cálculo atual (juros simples)
         $valorTotalComJuros = $this->calcularValorTotalComJuros();
+
         return round($valorTotalComJuros / $this->numero_parcelas, 2);
     }
 
@@ -485,7 +495,7 @@ class Emprestimo extends Model
      */
     public function gerarTabelaAmortizacaoPrice(): array
     {
-        if (!$this->isPrice()) {
+        if (! $this->isPrice()) {
             return [];
         }
 
@@ -529,7 +539,7 @@ class Emprestimo extends Model
         }
 
         $parcela = $this->parcelas->first();
-        if (!$parcela) {
+        if (! $parcela) {
             return false;
         }
 
@@ -537,6 +547,7 @@ class Emprestimo extends Model
         if ($valorJuros <= 0) {
             return false;
         }
+
         return $parcela->valor_pago >= $valorJuros;
     }
 
@@ -546,36 +557,35 @@ class Emprestimo extends Model
     public function getHistoricoRenovacoes(): \Illuminate\Support\Collection
     {
         $historico = collect([$this]);
-        
+
         // Buscar empréstimo original (se este for uma renovação)
         $origem = $this;
         while ($origem->emprestimo_origem_id) {
             $origem = self::with(['cliente', 'operacao', 'consultor'])->find($origem->emprestimo_origem_id);
-            if (!$origem) {
+            if (! $origem) {
                 break;
             }
             $historico->prepend($origem);
         }
-        
+
         // Buscar todas as renovações deste empréstimo recursivamente
         $idsProcessados = $historico->pluck('id')->toArray();
         $renovacoes = $this->renovacoes()->with(['cliente', 'operacao', 'consultor'])->orderBy('data_inicio')->get();
         foreach ($renovacoes as $renovacao) {
-            if (!in_array($renovacao->id, $idsProcessados)) {
+            if (! in_array($renovacao->id, $idsProcessados)) {
                 $historico->push($renovacao);
                 $idsProcessados[] = $renovacao->id;
             }
             // Buscar renovações das renovações recursivamente
             $subRenovacoes = $renovacao->renovacoes()->with(['cliente', 'operacao', 'consultor'])->orderBy('data_inicio')->get();
             foreach ($subRenovacoes as $subRenovacao) {
-                if (!in_array($subRenovacao->id, $idsProcessados)) {
+                if (! in_array($subRenovacao->id, $idsProcessados)) {
                     $historico->push($subRenovacao);
                     $idsProcessados[] = $subRenovacao->id;
                 }
             }
         }
-        
+
         return $historico->unique('id')->values();
     }
 }
-

@@ -283,7 +283,26 @@
                                     <span class="text-muted small">Aguarde a aprovação do gestor ou administrador.</span>
                                 @endif
                             </div>
-                        @elseif($podeRenovar && $parcela)
+                        @endif
+                        @if(!empty($temDiariaParcialPendente))
+                            <hr>
+                            <div class="alert alert-warning mb-3">
+                                <h6 class="alert-heading">
+                                    <i class="bx bx-time-five"></i> Pagamento parcial (diária) aguardando aprovação
+                                </h6>
+                                <p class="mb-2">
+                                    Existe solicitação de <strong>pagamento parcial</strong> em contrato diário com várias parcelas. A parcela permanece <strong>em atraso</strong> até o gestor ou administrador aprovar em Liberações.
+                                </p>
+                                @if($podeVerAcoesGestorAdmin ?? false)
+                                    <a href="{{ route('liberacoes.diaria-parcial') }}" class="btn btn-outline-warning btn-sm">
+                                        <i class="bx bx-list-ul"></i> Ver em Liberações
+                                    </a>
+                                @else
+                                    <span class="text-muted small">Aguarde a aprovação do gestor ou administrador.</span>
+                                @endif
+                            </div>
+                        @endif
+                        @if($podeRenovar && $parcela)
                             <hr>
                             <div class="alert alert-info mb-3">
                                 <h6 class="alert-heading">
@@ -310,7 +329,8 @@
                                     </a>
                                 </div>
                             </div>
-                        @elseif($emprestimo->isAtivo() && $emprestimo->numero_parcelas === 1 && $emprestimo->jurosJaForamPagos())
+                        @endif
+                        @if($emprestimo->isAtivo() && $emprestimo->numero_parcelas === 1 && $emprestimo->jurosJaForamPagos() && !($podeRenovar && $parcela))
                             <hr>
                             <div class="alert alert-warning mb-0">
                                 <i class="bx bx-info-circle"></i>
@@ -1822,6 +1842,7 @@
                                         <th>#</th>
                                         <th>Valor</th>
                                         <th>Valor Pago</th>
+                                        <th class="text-nowrap" title="Saldo nominal da parcela (não inclui juros de atraso calculados no pagamento)">Falta pagar (parcela)</th>
                                         <th>Vencimento</th>
                                         <th>Status</th>
                                         <th>Pagamentos</th>
@@ -1842,6 +1863,16 @@
                                                 @endif
                                             </td>
                                             <td>R$ {{ number_format($parcela->valor_pago, 2, ',', '.') }}</td>
+                                            <td>
+                                                @php
+                                                    $faltaParcelaShow = max(0, round((float) $parcela->valor - (float) ($parcela->valor_pago ?? 0), 2));
+                                                @endphp
+                                                @if($parcela->isQuitada() || $faltaParcelaShow <= 0)
+                                                    <span class="text-muted">—</span>
+                                                @else
+                                                    R$ {{ number_format($faltaParcelaShow, 2, ',', '.') }}
+                                                @endif
+                                            </td>
                                             <td>{{ $parcela->data_vencimento->format('d/m/Y') }}</td>
                                             <td>
                                                 <span class="badge bg-{{ $parcela->status_cor }}">
@@ -1888,7 +1919,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="7" class="text-center">
+                                            <td colspan="8" class="text-center">
                                                 Nenhuma parcela gerada ainda.
                                                 @if($emprestimo->status === 'pendente')
                                                     <br><small class="text-muted">Aguarde a aprovação do empréstimo.</small>

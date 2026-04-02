@@ -20,6 +20,7 @@
                                 $pendentesJurosParcial = \App\Modules\Loans\Models\SolicitacaoPagamentoJurosParcial::where('status', 'aguardando');
                                 $pendentesJurosContratoReduzido = \App\Modules\Loans\Models\SolicitacaoPagamentoJurosContratoReduzido::where('status', 'aguardando');
                                 $pendentesRenovacaoAbate = \App\Modules\Loans\Models\SolicitacaoRenovacaoAbate::where('status', 'aguardando');
+                                $pendentesDiariaParcial = \App\Modules\Loans\Models\SolicitacaoPagamentoDiariaParcial::where('status', 'aguardando');
                                 $pendentesQuitacaoDesconto = \App\Modules\Loans\Models\SolicitacaoQuitacao::where('status', 'pendente');
                                 $pendentesNegociacao = \App\Modules\Loans\Models\SolicitacaoNegociacao::where('status', 'pendente');
                                 $pendentesRetroativo = \App\Modules\Loans\Models\SolicitacaoEmprestimoRetroativo::where('status', 'aguardando');
@@ -31,6 +32,7 @@
                                         $pendentesJurosParcial->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
                                         $pendentesJurosContratoReduzido->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
                                         $pendentesRenovacaoAbate->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
+                                        $pendentesDiariaParcial->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
                                         $pendentesQuitacaoDesconto->whereHas('emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
                                         $pendentesNegociacao->whereIn('operacao_id', $opsIds);
                                         $pendentesRetroativo->whereHas('emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
@@ -39,6 +41,7 @@
                                         $pendentesJurosParcial->whereRaw('1 = 0');
                                         $pendentesJurosContratoReduzido->whereRaw('1 = 0');
                                         $pendentesRenovacaoAbate->whereRaw('1 = 0');
+                                        $pendentesDiariaParcial->whereRaw('1 = 0');
                                         $pendentesQuitacaoDesconto->whereRaw('1 = 0');
                                         $pendentesNegociacao->whereRaw('1 = 0');
                                         $pendentesRetroativo->whereRaw('1 = 0');
@@ -48,6 +51,7 @@
                                 $countJurosParcial = $pendentesJurosParcial->count();
                                 $countJurosContratoReduzido = $pendentesJurosContratoReduzido->count();
                                 $countRenovacaoAbate = $pendentesRenovacaoAbate->count();
+                                $countDiariaParcial = $pendentesDiariaParcial->count();
                                 $countQuitacaoDesconto = $pendentesQuitacaoDesconto->count();
                                 $countNegociacao = $pendentesNegociacao->count();
                                 $countRetroativo = $pendentesRetroativo->count();
@@ -74,6 +78,12 @@
                                 <i class="bx bx-percentage"></i> Juros parcial
                                 @if($countJurosParcial > 0)
                                     <span class="badge bg-info">{{ $countJurosParcial }}</span>
+                                @endif
+                            </a>
+                            <a href="{{ route('liberacoes.diaria-parcial') }}" class="btn btn-outline-info btn-sm">
+                                <i class="bx bx-calendar"></i> Diária parcial
+                                @if($countDiariaParcial > 0)
+                                    <span class="badge bg-info">{{ $countDiariaParcial }}</span>
                                 @endif
                             </a>
                             <a href="{{ route('liberacoes.pagamentos-produto-objeto') }}" class="btn btn-outline-warning btn-sm">

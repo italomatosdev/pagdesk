@@ -4,23 +4,24 @@ namespace App\Modules\Loans\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Core\Models\Operacao;
+use App\Modules\Core\Services\OperacaoDadosClienteService;
 use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\PagamentoProdutoObjetoItem;
 use App\Modules\Loans\Models\SolicitacaoNegociacao;
+use App\Modules\Loans\Models\SolicitacaoPagamentoDiariaParcial;
 use App\Modules\Loans\Models\SolicitacaoPagamentoJurosContratoReduzido;
 use App\Modules\Loans\Models\SolicitacaoPagamentoJurosParcial;
 use App\Modules\Loans\Models\SolicitacaoRenovacaoAbate;
-use App\Modules\Core\Services\OperacaoDadosClienteService;
+use App\Modules\Loans\Services\EmprestimoService;
+use App\Modules\Loans\Services\LiberacaoService;
+use App\Modules\Loans\Services\PagamentoService;
 use App\Support\ClienteNomeExibicao;
 use App\Support\ClienteVinculosOperacoesLookup;
 use App\Support\FichaContatoLookup;
 use App\Support\OperacaoPreferida;
-use App\Modules\Loans\Services\EmprestimoService;
-use App\Modules\Loans\Services\LiberacaoService;
-use App\Modules\Loans\Services\PagamentoService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
-use Illuminate\Http\RedirectResponse;
 
 class LiberacaoController extends Controller
 {
@@ -84,8 +85,9 @@ class LiberacaoController extends Controller
         $outrosVinculosPorLiberacaoId = [];
         foreach ($liberacoes as $l) {
             $cpf = ClienteVinculosOperacoesLookup::cpfFromDocumento($l->emprestimo?->cliente?->documento);
-            if (!$cpf) {
+            if (! $cpf) {
                 $outrosVinculosPorLiberacaoId[$l->id] = 0;
+
                 continue;
             }
             $ops = $operacoesIdsPorCpf[$cpf] ?? [];
@@ -109,7 +111,7 @@ class LiberacaoController extends Controller
     {
         $user = auth()->user();
         $liberacao = \App\Modules\Loans\Models\LiberacaoEmprestimo::with('emprestimo')->findOrFail($id);
-        if (!$user->temAlgumPapelNaOperacao($liberacao->emprestimo->operacao_id, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($liberacao->emprestimo->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado.');
         }
 
@@ -137,13 +139,15 @@ class LiberacaoController extends Controller
                 return redirect()->route('emprestimos.show', (int) $redirectEmprestimoId)
                     ->with('success', 'Dinheiro liberado com sucesso!');
             }
+
             return redirect()->route('liberacoes.index')
                 ->with('success', 'Dinheiro liberado com sucesso!');
         } catch (\Illuminate\Validation\ValidationException $e) {
             $mensagem = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
             return back()->with('error', $mensagem)->withInput();
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao liberar dinheiro: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Erro ao liberar dinheiro: '.$e->getMessage())->withInput();
         }
     }
 
@@ -158,7 +162,7 @@ class LiberacaoController extends Controller
         }
 
         $liberacaoIds = $request->input('liberacao_ids', []);
-        if (!is_array($liberacaoIds)) {
+        if (! is_array($liberacaoIds)) {
             $liberacaoIds = $liberacaoIds ? [$liberacaoIds] : [];
         }
 
@@ -186,15 +190,17 @@ class LiberacaoController extends Controller
             );
 
             $qtd = count($liberadas);
+
             return redirect()->route('liberacoes.index')
                 ->with('success', $qtd === 1
                     ? 'Dinheiro liberado com sucesso!'
                     : "{$qtd} liberações realizadas com sucesso!");
         } catch (\Illuminate\Validation\ValidationException $e) {
             $mensagem = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
             return back()->with('error', $mensagem)->withInput();
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao liberar em lote: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Erro ao liberar em lote: '.$e->getMessage())->withInput();
         }
     }
 
@@ -240,7 +246,7 @@ class LiberacaoController extends Controller
             'emprestimo.consultor',
             'consultor',
             'gestor',
-            'confirmadoPagamentoPor'
+            'confirmadoPagamentoPor',
         ])->findOrFail($id);
 
         $user = auth()->user();
@@ -313,19 +319,20 @@ class LiberacaoController extends Controller
             // Redirecionar para a página de origem (empréstimo ou minhas liberações)
             $emprestimoId = \App\Modules\Loans\Models\LiberacaoEmprestimo::find($id)->emprestimo_id;
             $redirectTo = $request->input('redirect_to', 'emprestimos.show');
-            
+
             if ($redirectTo === 'emprestimos.show') {
                 return redirect()->route('emprestimos.show', $emprestimoId)
                     ->with('success', 'Pagamento ao cliente confirmado com sucesso!');
             }
-            
+
             return redirect()->route('liberacoes.minhas')
                 ->with('success', 'Pagamento ao cliente confirmado com sucesso!');
         } catch (\Illuminate\Validation\ValidationException $e) {
             $mensagem = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
             return back()->with('error', $mensagem)->withInput();
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao confirmar pagamento: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Erro ao confirmar pagamento: '.$e->getMessage())->withInput();
         }
     }
 
@@ -337,7 +344,7 @@ class LiberacaoController extends Controller
     {
         $user = auth()->user();
         $liberacao = \App\Modules\Loans\Models\LiberacaoEmprestimo::with('emprestimo')->findOrFail($id);
-        if (!$user->temAlgumPapelNaOperacao($liberacao->emprestimo->operacao_id, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($liberacao->emprestimo->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado.');
         }
 
@@ -355,10 +362,12 @@ class LiberacaoController extends Controller
                 return redirect()->route('emprestimos.show', $liberacao->emprestimo_id)
                     ->with('success', 'Comprovante de liberação anexado com sucesso.');
             }
+
             return redirect()->route('liberacoes.show', $id)
                 ->with('success', 'Comprovante de liberação anexado com sucesso.');
         } catch (\Illuminate\Validation\ValidationException $e) {
             $mensagem = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
             return back()->with('error', $mensagem)->withInput();
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage())->withInput();
@@ -390,10 +399,12 @@ class LiberacaoController extends Controller
                 return redirect()->route('emprestimos.show', $liberacao->emprestimo_id)
                     ->with('success', 'Comprovante de pagamento anexado com sucesso.');
             }
+
             return redirect()->route('liberacoes.show', $id)
                 ->with('success', 'Comprovante de pagamento anexado com sucesso.');
         } catch (\Illuminate\Validation\ValidationException $e) {
             $mensagem = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
             return back()->with('error', $mensagem)->withInput();
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage())->withInput();
@@ -435,9 +446,9 @@ class LiberacaoController extends Controller
             'pagamento.consultor',
         ])->whereHas('pagamento.parcela.emprestimo', function ($q) use ($user) {
             $q->where('empresa_id', $user->empresa_id);
-            if (!$user->isSuperAdmin()) {
+            if (! $user->isSuperAdmin()) {
                 $opsIds = $user->getOperacoesIds();
-                if (!empty($opsIds)) {
+                if (! empty($opsIds)) {
                     $q->whereIn('operacao_id', $opsIds);
                 } else {
                     $q->whereRaw('1 = 0');
@@ -500,9 +511,9 @@ class LiberacaoController extends Controller
         if ($operacaoId) {
             $query->whereHas('parcela.emprestimo', fn ($q) => $q->where('operacao_id', $operacaoId));
         }
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
-            if (!empty($operacoesIds)) {
+            if (! empty($operacoesIds)) {
                 $query->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $operacoesIds));
             } else {
                 $query->whereRaw('1 = 0');
@@ -524,19 +535,21 @@ class LiberacaoController extends Controller
         $user = auth()->user();
         $pagamento = Pagamento::with('parcela.emprestimo')->findOrFail($id);
         $operacaoId = $pagamento->parcela->emprestimo->operacao_id;
-        if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado.');
         }
 
         try {
             $this->pagamentoService->aceitarPagamentoProdutoObjeto($id, $user->id);
+
             return redirect()->route('liberacoes.pagamentos-produto-objeto')
                 ->with('success', 'Pagamento em produto/objeto aceito. A parcela foi creditada (sem movimentação de caixa).');
         } catch (\Illuminate\Validation\ValidationException $e) {
             $msg = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
             return back()->with('error', $msg);
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao aceitar: ' . $e->getMessage());
+            return back()->with('error', 'Erro ao aceitar: '.$e->getMessage());
         }
     }
 
@@ -548,19 +561,21 @@ class LiberacaoController extends Controller
         $user = auth()->user();
         $pagamento = Pagamento::with('parcela.emprestimo')->findOrFail($id);
         $operacaoId = $pagamento->parcela->emprestimo->operacao_id;
-        if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado.');
         }
 
         try {
             $this->pagamentoService->rejeitarPagamentoProdutoObjeto($id, $user->id);
+
             return redirect()->route('liberacoes.pagamentos-produto-objeto')
                 ->with('success', 'Pagamento em produto/objeto rejeitado. A parcela permanece pendente.');
         } catch (\Illuminate\Validation\ValidationException $e) {
             $msg = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
             return back()->with('error', $msg);
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao rejeitar: ' . $e->getMessage());
+            return back()->with('error', 'Erro ao rejeitar: '.$e->getMessage());
         }
     }
 
@@ -600,9 +615,9 @@ class LiberacaoController extends Controller
         if ($operacaoId) {
             $query->whereHas('parcela.emprestimo', fn ($q) => $q->where('operacao_id', $operacaoId));
         }
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
-            if (!empty($opsIds)) {
+            if (! empty($opsIds)) {
                 $query->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
             } else {
                 $query->whereRaw('1 = 0');
@@ -623,11 +638,11 @@ class LiberacaoController extends Controller
     {
         $user = auth()->user();
         $solicitacao = SolicitacaoPagamentoJurosParcial::with('parcela.emprestimo')->findOrFail($id);
-        if (!$solicitacao->isAguardando()) {
+        if (! $solicitacao->isAguardando()) {
             return back()->with('error', 'Esta solicitação já foi processada.');
         }
         $operacaoId = $solicitacao->parcela->emprestimo->operacao_id;
-        if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado.');
         }
 
@@ -638,13 +653,15 @@ class LiberacaoController extends Controller
                 'aprovado_por_id' => $user->id,
                 'aprovado_em' => now(),
             ]);
+
             return redirect()->route('liberacoes.juros-parcial')
                 ->with('success', 'Solicitação aprovada. O pagamento foi registrado na parcela.');
         } catch (\Illuminate\Validation\ValidationException $e) {
             $msg = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
             return back()->with('error', $msg);
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao aprovar: ' . $e->getMessage());
+            return back()->with('error', 'Erro ao aprovar: '.$e->getMessage());
         }
     }
 
@@ -655,11 +672,11 @@ class LiberacaoController extends Controller
     {
         $user = auth()->user();
         $solicitacao = SolicitacaoPagamentoJurosParcial::with('parcela.emprestimo')->findOrFail($id);
-        if (!$solicitacao->isAguardando()) {
+        if (! $solicitacao->isAguardando()) {
             return back()->with('error', 'Esta solicitação já foi processada.');
         }
         $operacaoId = $solicitacao->parcela->emprestimo->operacao_id;
-        if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado.');
         }
 
@@ -668,6 +685,7 @@ class LiberacaoController extends Controller
             'rejeitado_por_id' => $user->id,
             'rejeitado_em' => now(),
         ]);
+
         return redirect()->route('liberacoes.juros-parcial')
             ->with('success', 'Solicitação rejeitada. O consultor pode registrar um novo pagamento com o valor de juros devido.');
     }
@@ -708,9 +726,9 @@ class LiberacaoController extends Controller
         if ($operacaoId) {
             $query->whereHas('parcela.emprestimo', fn ($q) => $q->where('operacao_id', $operacaoId));
         }
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
-            if (!empty($opsIds)) {
+            if (! empty($opsIds)) {
                 $query->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
             } else {
                 $query->whereRaw('1 = 0');
@@ -731,11 +749,11 @@ class LiberacaoController extends Controller
     {
         $user = auth()->user();
         $solicitacao = SolicitacaoPagamentoJurosContratoReduzido::with('parcela.emprestimo')->findOrFail($id);
-        if (!$solicitacao->isAguardando()) {
+        if (! $solicitacao->isAguardando()) {
             return back()->with('error', 'Esta solicitação já foi processada.');
         }
         $operacaoId = $solicitacao->parcela->emprestimo->operacao_id;
-        if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado.');
         }
 
@@ -746,13 +764,15 @@ class LiberacaoController extends Controller
                 'aprovado_por_id' => $user->id,
                 'aprovado_em' => now(),
             ]);
+
             return redirect()->route('liberacoes.juros-contrato-reduzido')
                 ->with('success', 'Solicitação aprovada. O pagamento foi registrado na parcela.');
         } catch (\Illuminate\Validation\ValidationException $e) {
             $msg = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
             return back()->with('error', $msg);
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao aprovar: ' . $e->getMessage());
+            return back()->with('error', 'Erro ao aprovar: '.$e->getMessage());
         }
     }
 
@@ -763,11 +783,11 @@ class LiberacaoController extends Controller
     {
         $user = auth()->user();
         $solicitacao = SolicitacaoPagamentoJurosContratoReduzido::with('parcela.emprestimo')->findOrFail($id);
-        if (!$solicitacao->isAguardando()) {
+        if (! $solicitacao->isAguardando()) {
             return back()->with('error', 'Esta solicitação já foi processada.');
         }
         $operacaoId = $solicitacao->parcela->emprestimo->operacao_id;
-        if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado.');
         }
 
@@ -776,6 +796,7 @@ class LiberacaoController extends Controller
             'rejeitado_por_id' => $user->id,
             'rejeitado_em' => now(),
         ]);
+
         return redirect()->route('liberacoes.juros-contrato-reduzido')
             ->with('success', 'Solicitação rejeitada. O consultor pode registrar um novo pagamento.');
     }
@@ -816,9 +837,9 @@ class LiberacaoController extends Controller
         if ($operacaoId) {
             $query->whereHas('parcela.emprestimo', fn ($q) => $q->where('operacao_id', $operacaoId));
         }
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
-            if (!empty($opsIds)) {
+            if (! empty($opsIds)) {
                 $query->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
             } else {
                 $query->whereRaw('1 = 0');
@@ -839,11 +860,11 @@ class LiberacaoController extends Controller
     {
         $user = auth()->user();
         $solicitacao = SolicitacaoRenovacaoAbate::with('parcela.emprestimo')->findOrFail($id);
-        if (!$solicitacao->isAguardando()) {
+        if (! $solicitacao->isAguardando()) {
             return redirect()->route('liberacoes.renovacao-abate')->with('error', 'Esta solicitação já foi processada.');
         }
         $operacaoId = $solicitacao->parcela->emprestimo->operacao_id;
-        if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado.');
         }
 
@@ -876,19 +897,20 @@ class LiberacaoController extends Controller
                     'user_id' => $solicitacao->consultor_id,
                     'tipo' => 'renovacao_abate_aprovada',
                     'titulo' => 'Renovação com abate aprovada',
-                    'mensagem' => 'Sua solicitação de renovação com abate do empréstimo #' . $solicitacao->parcela->emprestimo_id . ' foi aprovada. O novo empréstimo #' . $novoEmprestimo->id . ' foi criado.',
+                    'mensagem' => 'Sua solicitação de renovação com abate do empréstimo #'.$solicitacao->parcela->emprestimo_id.' foi aprovada. O novo empréstimo #'.$novoEmprestimo->id.' foi criado.',
                     'url' => route('emprestimos.show', $novoEmprestimo->id),
                     'dados' => ['emprestimo_id' => $novoEmprestimo->id, 'emprestimo_origem_id' => $solicitacao->parcela->emprestimo_id],
                 ]);
             }
 
             return redirect()->route('liberacoes.renovacao-abate')
-                ->with('success', 'Solicitação aprovada. A renovação foi realizada e o novo empréstimo #' . $novoEmprestimo->id . ' foi criado.');
+                ->with('success', 'Solicitação aprovada. A renovação foi realizada e o novo empréstimo #'.$novoEmprestimo->id.' foi criado.');
         } catch (\Illuminate\Validation\ValidationException $e) {
             $msg = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
             return redirect()->route('liberacoes.renovacao-abate')->with('error', $msg);
         } catch (\Exception $e) {
-            return redirect()->route('liberacoes.renovacao-abate')->with('error', 'Erro ao aprovar: ' . $e->getMessage());
+            return redirect()->route('liberacoes.renovacao-abate')->with('error', 'Erro ao aprovar: '.$e->getMessage());
         }
     }
 
@@ -899,11 +921,11 @@ class LiberacaoController extends Controller
     {
         $user = auth()->user();
         $solicitacao = SolicitacaoRenovacaoAbate::with('parcela.emprestimo')->findOrFail($id);
-        if (!$solicitacao->isAguardando()) {
+        if (! $solicitacao->isAguardando()) {
             return redirect()->route('liberacoes.renovacao-abate')->with('error', 'Esta solicitação já foi processada.');
         }
         $operacaoId = $solicitacao->parcela->emprestimo->operacao_id;
-        if (!$user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado.');
         }
 
@@ -920,7 +942,7 @@ class LiberacaoController extends Controller
                 'user_id' => $solicitacao->consultor_id,
                 'tipo' => 'renovacao_abate_rejeitada',
                 'titulo' => 'Renovação com abate rejeitada',
-                'mensagem' => 'Sua solicitação de renovação com abate do empréstimo #' . $emprestimoId . ' foi rejeitada. Você pode enviar uma nova solicitação.',
+                'mensagem' => 'Sua solicitação de renovação com abate do empréstimo #'.$emprestimoId.' foi rejeitada. Você pode enviar uma nova solicitação.',
                 'url' => route('emprestimos.show', $emprestimoId),
                 'dados' => ['emprestimo_id' => $emprestimoId],
             ]);
@@ -928,6 +950,130 @@ class LiberacaoController extends Controller
 
         return redirect()->route('liberacoes.renovacao-abate')
             ->with('success', 'Solicitação rejeitada. O consultor pode enviar uma nova solicitação.');
+    }
+
+    /**
+     * Listar solicitações de pagamento parcial em diária (aguardando aprovação).
+     */
+    public function solicitacoesDiariaParcial(Request $request): View
+    {
+        $user = auth()->user();
+        if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
+            abort(403, 'Acesso negado. Apenas gestores e administradores podem aprovar estas solicitações.');
+        }
+
+        if ($user->isSuperAdmin()) {
+            $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
+        } else {
+            $opsIdsList = $user->getOperacoesIds();
+            $operacoes = ! empty($opsIdsList)
+                ? Operacao::where('ativo', true)->whereIn('id', $opsIdsList)->orderBy('nome')->get()
+                : collect([]);
+        }
+
+        $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
+        if ($operacaoId && ! $user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (empty($opsIds) || ! in_array((int) $operacaoId, $opsIds, true)) {
+                $operacaoId = null;
+            }
+        }
+
+        $query = SolicitacaoPagamentoDiariaParcial::with([
+            'parcela.emprestimo.cliente',
+            'parcela.emprestimo.operacao',
+            'consultor',
+        ])->where('status', 'aguardando');
+
+        if ($operacaoId) {
+            $query->whereHas('parcela.emprestimo', fn ($q) => $q->where('operacao_id', $operacaoId));
+        }
+        if (! $user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIds();
+            if (! empty($opsIds)) {
+                $query->whereHas('parcela.emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+
+        $solicitacoes = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
+
+        $fichasContatoPorClienteOperacao = $this->fichasContatoMapFromParcelas($solicitacoes->map(fn ($s) => $s->parcela)->filter());
+
+        return view('liberacoes.solicitacoes-diaria-parcial', compact('solicitacoes', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
+    }
+
+    public function aprovarSolicitacaoDiariaParcial(int $id): RedirectResponse
+    {
+        $user = auth()->user();
+        $solicitacao = SolicitacaoPagamentoDiariaParcial::with('parcela.emprestimo')->findOrFail($id);
+        if (! $solicitacao->isAguardando()) {
+            return redirect()->route('liberacoes.diaria-parcial')->with('error', 'Esta solicitação já foi processada.');
+        }
+        $operacaoId = $solicitacao->parcela->emprestimo->operacao_id;
+        if (! $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+            abort(403, 'Acesso negado.');
+        }
+
+        try {
+            $this->pagamentoService->aprovarSolicitacaoPagamentoDiariaParcial($solicitacao, $user->id);
+
+            $notificacaoService = app(\App\Modules\Core\Services\NotificacaoService::class);
+            if ($solicitacao->consultor_id) {
+                $notificacaoService->criar([
+                    'user_id' => $solicitacao->consultor_id,
+                    'tipo' => 'pagamento_diaria_parcial_aprovado',
+                    'titulo' => 'Pagamento parcial (diária) aprovado',
+                    'mensagem' => 'Sua solicitação de pagamento parcial do empréstimo #'.$solicitacao->emprestimo_id.' foi aprovada. A parcela foi marcada como paga (parcial) e o faltante foi acrescido à última parcela.',
+                    'url' => route('emprestimos.show', $solicitacao->emprestimo_id),
+                    'dados' => ['emprestimo_id' => $solicitacao->emprestimo_id],
+                ]);
+            }
+
+            return redirect()->route('liberacoes.diaria-parcial')
+                ->with('success', 'Solicitação aprovada. Parcela atualizada como paga (parcial) e última parcela ajustada.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $msg = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
+            return redirect()->route('liberacoes.diaria-parcial')->with('error', $msg);
+        } catch (\Exception $e) {
+            return redirect()->route('liberacoes.diaria-parcial')->with('error', 'Erro ao aprovar: '.$e->getMessage());
+        }
+    }
+
+    public function rejeitarSolicitacaoDiariaParcial(int $id): RedirectResponse
+    {
+        $user = auth()->user();
+        $solicitacao = SolicitacaoPagamentoDiariaParcial::with('parcela.emprestimo')->findOrFail($id);
+        if (! $solicitacao->isAguardando()) {
+            return redirect()->route('liberacoes.diaria-parcial')->with('error', 'Esta solicitação já foi processada.');
+        }
+        $operacaoId = $solicitacao->parcela->emprestimo->operacao_id;
+        if (! $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+            abort(403, 'Acesso negado.');
+        }
+
+        try {
+            $this->pagamentoService->rejeitarSolicitacaoPagamentoDiariaParcial($solicitacao, $user->id);
+        } catch (\Exception $e) {
+            return redirect()->route('liberacoes.diaria-parcial')->with('error', 'Erro ao rejeitar: '.$e->getMessage());
+        }
+
+        $notificacaoService = app(\App\Modules\Core\Services\NotificacaoService::class);
+        if ($solicitacao->consultor_id) {
+            $notificacaoService->criar([
+                'user_id' => $solicitacao->consultor_id,
+                'tipo' => 'pagamento_diaria_parcial_rejeitado',
+                'titulo' => 'Pagamento parcial (diária) rejeitado',
+                'mensagem' => 'Sua solicitação de pagamento parcial do empréstimo #'.$solicitacao->emprestimo_id.' foi rejeitada. O valor foi estornado no caixa.',
+                'url' => route('emprestimos.show', $solicitacao->emprestimo_id),
+                'dados' => ['emprestimo_id' => $solicitacao->emprestimo_id],
+            ]);
+        }
+
+        return redirect()->route('liberacoes.diaria-parcial')
+            ->with('success', 'Solicitação rejeitada. A entrada em caixa foi estornada.');
     }
 
     /**
@@ -967,9 +1113,9 @@ class LiberacaoController extends Controller
         if ($operacaoId) {
             $query->where('operacao_id', $operacaoId);
         }
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
-            if (!empty($opsIds)) {
+            if (! empty($opsIds)) {
                 $query->whereIn('operacao_id', $opsIds);
             } else {
                 $query->whereRaw('1 = 0');
@@ -990,26 +1136,27 @@ class LiberacaoController extends Controller
     {
         $user = auth()->user();
         $solicitacao = SolicitacaoNegociacao::with('emprestimo')->findOrFail($id);
-        if (!$solicitacao->isPendente()) {
+        if (! $solicitacao->isPendente()) {
             return redirect()->route('liberacoes.negociacoes')->with('error', 'Esta solicitação já foi processada.');
         }
-        if (!$user->temAlgumPapelNaOperacao($solicitacao->operacao_id, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($solicitacao->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado.');
         }
 
         try {
             $emprestimoService = app(EmprestimoService::class);
             $observacao = $request->input('observacao');
-            
+
             $novoEmprestimo = $emprestimoService->aprovarNegociacao($id, $user->id, $observacao);
-            
+
             return redirect()->route('liberacoes.negociacoes')
                 ->with('success', "Negociação aprovada! Novo empréstimo #{$novoEmprestimo->id} criado.");
         } catch (\Illuminate\Validation\ValidationException $e) {
             $msg = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
             return redirect()->route('liberacoes.negociacoes')->with('error', $msg);
         } catch (\Exception $e) {
-            return redirect()->route('liberacoes.negociacoes')->with('error', 'Erro ao aprovar: ' . $e->getMessage());
+            return redirect()->route('liberacoes.negociacoes')->with('error', 'Erro ao aprovar: '.$e->getMessage());
         }
     }
 
@@ -1020,23 +1167,23 @@ class LiberacaoController extends Controller
     {
         $user = auth()->user();
         $solicitacao = SolicitacaoNegociacao::with('emprestimo')->findOrFail($id);
-        if (!$solicitacao->isPendente()) {
+        if (! $solicitacao->isPendente()) {
             return redirect()->route('liberacoes.negociacoes')->with('error', 'Esta solicitação já foi processada.');
         }
-        if (!$user->temAlgumPapelNaOperacao($solicitacao->operacao_id, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($solicitacao->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado.');
         }
 
         try {
             $emprestimoService = app(EmprestimoService::class);
             $observacao = $request->input('observacao');
-            
+
             $emprestimoService->rejeitarNegociacao($id, $user->id, $observacao);
-            
+
             return redirect()->route('liberacoes.negociacoes')
                 ->with('success', 'Solicitação de negociação rejeitada.');
         } catch (\Exception $e) {
-            return redirect()->route('liberacoes.negociacoes')->with('error', 'Erro ao rejeitar: ' . $e->getMessage());
+            return redirect()->route('liberacoes.negociacoes')->with('error', 'Erro ao rejeitar: '.$e->getMessage());
         }
     }
 

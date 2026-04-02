@@ -5,12 +5,13 @@ namespace App\Modules\Loans\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\Parcela;
+use App\Modules\Loans\Services\DiariaPagamentoAntecipacaoService;
 use App\Modules\Loans\Services\PagamentoService;
 use App\Support\ClienteNomeExibicao;
 use App\Support\NotificacaoClienteDisplayName;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
-use Illuminate\Http\RedirectResponse;
 
 class PagamentoController extends Controller
 {
@@ -37,9 +38,9 @@ class PagamentoController extends Controller
         if ($parcelaId) {
             $parcela = Parcela::with(['emprestimo.cliente', 'emprestimo.operacao'])->findOrFail($parcelaId);
             $user = auth()->user();
-            if (!$user->isSuperAdmin()) {
+            if (! $user->isSuperAdmin()) {
                 $opsIds = $user->getOperacoesIds();
-                if (empty($opsIds) || !in_array((int) $parcela->emprestimo->operacao_id, $opsIds, true)) {
+                if (empty($opsIds) || ! in_array((int) $parcela->emprestimo->operacao_id, $opsIds, true)) {
                     abort(403, 'Sem acesso a esta operação.');
                 }
             }
@@ -49,7 +50,35 @@ class PagamentoController extends Controller
             ? ClienteNomeExibicao::forEmprestimo($parcela->emprestimo)
             : null;
 
-        return view('pagamentos.create', compact('parcela', 'returnTo', 'renovar', 'renovacaoTipo', 'executarGarantia', 'nomeClienteExibicao'));
+        $diariaMultiplasParcelas = false;
+        $diariaValorDevido = null;
+        $diariaMaxAntecipacao = null;
+        if ($parcela) {
+            $parcela->loadMissing(['emprestimo.parcelas', 'emprestimo.operacao']);
+            $em = $parcela->emprestimo;
+            if ($em->isFrequenciaDiaria() && (int) $em->numero_parcelas > 1) {
+                $diariaMultiplasParcelas = true;
+                $ctxDiariaCreate = [
+                    'tipo_juros' => $parcela->isAtrasada() ? 'automatico' : 'nenhum',
+                    'data_pagamento' => now()->format('Y-m-d'),
+                ];
+                $diariaSvcCreate = app(DiariaPagamentoAntecipacaoService::class);
+                $diariaValorDevido = $diariaSvcCreate->valorDevidoNoPagamento($parcela, $ctxDiariaCreate);
+                $diariaMaxAntecipacao = $diariaSvcCreate->calcularMaximoPermitido($parcela, $ctxDiariaCreate);
+            }
+        }
+
+        return view('pagamentos.create', compact(
+            'parcela',
+            'returnTo',
+            'renovar',
+            'renovacaoTipo',
+            'executarGarantia',
+            'nomeClienteExibicao',
+            'diariaMultiplasParcelas',
+            'diariaValorDevido',
+            'diariaMaxAntecipacao'
+        ));
     }
 
     /**
@@ -59,7 +88,7 @@ class PagamentoController extends Controller
     {
         // Determinar se é execução de garantia para ajustar validação
         $isExecutarGarantia = $request->input('tipo_juros') === 'executar_garantia';
-        
+
         $validated = $request->validate([
             'parcela_id' => 'required|exists:parcelas,id',
             'valor' => $isExecutarGarantia ? 'nullable|numeric|min:0' : 'required|numeric|min:0',
@@ -104,16 +133,17 @@ class PagamentoController extends Controller
                 $path = $request->file('comprovante')->store('comprovantes', 'public');
                 $validated['comprovante_path'] = $path;
             } catch (\Exception $e) {
-                \Log::error('Erro ao fazer upload do comprovante: ' . $e->getMessage());
+                \Log::error('Erro ao fazer upload do comprovante: '.$e->getMessage());
+
                 return back()->with('error', 'Erro ao fazer upload do comprovante. Tente novamente.')->withInput();
             }
         }
 
         $user = auth()->user();
         $parcelaAcesso = Parcela::with('emprestimo')->findOrFail($validated['parcela_id']);
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $parcelaAcesso->emprestimo->operacao_id, $opsIds, true)) {
+            if (empty($opsIds) || ! in_array((int) $parcelaAcesso->emprestimo->operacao_id, $opsIds, true)) {
                 return back()->with('error', 'Sem acesso a esta operação.')->withInput();
             }
         }
@@ -123,7 +153,7 @@ class PagamentoController extends Controller
         // Se método é produto/objeto: operação deve permitir e processar itens (upload por item)
         if (($validated['metodo'] ?? '') === 'produto_objeto') {
             $parcelaCheck = Parcela::with('emprestimo.operacao')->findOrFail($validated['parcela_id']);
-            if (!$parcelaCheck->emprestimo->operacao->requer_autorizacao_pagamento_produto) {
+            if (! $parcelaCheck->emprestimo->operacao->requer_autorizacao_pagamento_produto) {
                 return back()->with('error', 'A operação deste empréstimo não permite pagamento em produto/objeto.')->withInput();
             }
             $itensInput = $request->input('itens', []);
@@ -155,12 +185,12 @@ class PagamentoController extends Controller
                 ->where('data_pagamento', $validated['data_pagamento'])
                 ->where('created_at', '>=', now()->subSeconds(5))
                 ->first();
-            
+
             if ($pagamentoRecente) {
                 // Se já existe um pagamento idêntico recente, redireciona sem criar outro
                 $emprestimoId = $parcela->emprestimo_id;
                 $returnTo = $request->input('return_to');
-                
+
                 if ($returnTo === 'cobrancas') {
                     return redirect()->route('cobrancas.index')
                         ->with('success', 'Pagamento já foi registrado anteriormente.');
@@ -172,19 +202,19 @@ class PagamentoController extends Controller
                         ->with('success', 'Pagamento já foi registrado anteriormente.');
                 }
             }
-            
+
             // Verificar se é execução de garantia
             if (isset($validated['tipo_juros']) && $validated['tipo_juros'] === 'executar_garantia') {
                 // Carregar empréstimo com garantias
                 $parcela = Parcela::with('emprestimo.garantias')->findOrFail($validated['parcela_id']);
                 $emprestimo = $parcela->emprestimo;
-                
+
                 // Verificar condições
-                if (!$emprestimo->isEmpenho()) {
+                if (! $emprestimo->isEmpenho()) {
                     return back()->with('error', 'Apenas empréstimos do tipo empenho podem ter garantias executadas.')->withInput();
                 }
-                
-                if (!$emprestimo->isAtivo()) {
+
+                if (! $emprestimo->isAtivo()) {
                     return back()->with('error', 'Apenas empréstimos ativos podem ter garantias executadas.')->withInput();
                 }
                 // Permite executar garantia mesmo sem parcela atrasada (cliente pode desistir de pagar antes)
@@ -193,11 +223,11 @@ class PagamentoController extends Controller
                 if ($garantiasAtivas->count() === 0) {
                     return back()->with('error', 'Não há garantias ativas para executar.')->withInput();
                 }
-                
+
                 // Executar a primeira garantia ativa (ou todas, dependendo da regra de negócio)
                 // Por enquanto, vamos executar apenas a primeira
                 $garantia = $garantiasAtivas->first();
-                
+
                 $emprestimoService = app(\App\Modules\Loans\Services\EmprestimoService::class);
                 $emprestimoService->executarGarantia(
                     $emprestimo->id,
@@ -205,10 +235,10 @@ class PagamentoController extends Controller
                     auth()->id(),
                     $validated['observacoes_executar_garantia']
                 );
-                
+
                 $returnTo = $request->input('return_to');
-                $mensagem = "Garantia executada com sucesso! O empréstimo foi finalizado automaticamente.";
-                
+                $mensagem = 'Garantia executada com sucesso! O empréstimo foi finalizado automaticamente.';
+
                 if ($returnTo === 'cobrancas') {
                     return redirect()->route('cobrancas.index')
                         ->with('success', $mensagem);
@@ -220,34 +250,34 @@ class PagamentoController extends Controller
                         ->with('success', $mensagem);
                 }
             }
-            
+
             // Verificar se é renovação
             if (isset($validated['tipo_juros']) && $validated['tipo_juros'] === 'renovacao') {
                 // Carregar empréstimo com parcelas para verificar se pode renovar
                 $parcela = Parcela::with('emprestimo')->findOrFail($validated['parcela_id']);
                 $emprestimo = $parcela->emprestimo;
-                
+
                 // Carregar parcelas se não estiverem carregadas
-                if (!$emprestimo->relationLoaded('parcelas')) {
+                if (! $emprestimo->relationLoaded('parcelas')) {
                     $emprestimo->load('parcelas');
                 }
-                
+
                 // Verificar condições de renovação
-                if ($emprestimo->status === 'ativo' 
+                if ($emprestimo->status === 'ativo'
                     && $emprestimo->numero_parcelas === 1) {
-                    
+
                     // Verificar se os juros já foram pagos
                     if ($emprestimo->jurosJaForamPagos()) {
                         return back()->with('error', 'Os juros deste empréstimo já foram pagos. Não é necessário renovar.')->withInput();
                     }
-                    
+
                     // Obter sub-opção de renovação escolhida (default: automático se não informado)
                     $tipoJurosRenovacao = $validated['tipo_juros_renovacao'] ?? 'automatico';
-                    $taxaJurosRenovacaoManual = isset($validated['taxa_juros_renovacao_manual']) && $validated['taxa_juros_renovacao_manual'] > 0 
-                        ? (float) $validated['taxa_juros_renovacao_manual'] 
+                    $taxaJurosRenovacaoManual = isset($validated['taxa_juros_renovacao_manual']) && $validated['taxa_juros_renovacao_manual'] > 0
+                        ? (float) $validated['taxa_juros_renovacao_manual']
                         : null;
-                    $valorJurosRenovacaoFixo = isset($validated['valor_juros_renovacao_fixo']) && $validated['valor_juros_renovacao_fixo'] > 0 
-                        ? (float) $validated['valor_juros_renovacao_fixo'] 
+                    $valorJurosRenovacaoFixo = isset($validated['valor_juros_renovacao_fixo']) && $validated['valor_juros_renovacao_fixo'] > 0
+                        ? (float) $validated['valor_juros_renovacao_fixo']
                         : null;
                     $valorRenovacaoAbate = null;
                     if ($tipoJurosRenovacao === 'com_abate') {
@@ -289,10 +319,11 @@ class PagamentoController extends Controller
                         ];
                         $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, $dadosNotif);
                         $notificacaoService->criarParaRoleComOperacao('administrador', $operacaoId, $dadosNotif);
+
                         return redirect()->route('emprestimos.show', $emprestimo->id)
                             ->with('success', 'Solicitação de renovação com abate enviada para aprovação do gestor/administrador. Acompanhe em Liberações.');
                     }
-                    
+
                     $emprestimoService = app(\App\Modules\Loans\Services\EmprestimoService::class);
                     $novoEmprestimo = $emprestimoService->renovar(
                         $emprestimo->id,
@@ -305,12 +336,12 @@ class PagamentoController extends Controller
                         $dataPagamento,
                         false
                     );
-                    
+
                     $returnTo = $request->input('return_to');
                     $mensagem = $tipoJurosRenovacao === 'com_abate'
-                        ? "Empréstimo renovado com abate! O pagamento foi registrado e o novo empréstimo foi gerado com o saldo devedor restante."
-                        : "Empréstimo renovado com sucesso! O pagamento dos juros foi registrado automaticamente.";
-                    
+                        ? 'Empréstimo renovado com abate! O pagamento foi registrado e o novo empréstimo foi gerado com o saldo devedor restante.'
+                        : 'Empréstimo renovado com sucesso! O pagamento dos juros foi registrado automaticamente.';
+
                     if ($returnTo === 'cobrancas') {
                         return redirect()->route('cobrancas.index')
                             ->with('success', $mensagem);
@@ -319,23 +350,32 @@ class PagamentoController extends Controller
                             ->with('success', $mensagem);
                     } else {
                         return redirect()->route('emprestimos.show', $novoEmprestimo->id)
-                            ->with('success', $mensagem . " Este empréstimo é a renovação do empréstimo #{$emprestimo->id}.");
+                            ->with('success', $mensagem." Este empréstimo é a renovação do empréstimo #{$emprestimo->id}.");
                     }
                 } else {
                     return back()->with('error', 'Não é possível renovar este empréstimo. Verifique se é mensal com 1 parcela e está ativo.')->withInput();
                 }
             }
 
-            $parcela = Parcela::with('emprestimo.operacao')->findOrFail($validated['parcela_id']);
+            $parcela = Parcela::with(['emprestimo.operacao', 'emprestimo.parcelas'])->findOrFail($validated['parcela_id']);
             $valorPagamento = is_numeric($validated['valor']) ? (float) $validated['valor'] : $this->parseBrDecimal($validated['valor'] ?? 0);
             $valorPrincipal = $parcela->valor_amortizacao !== null && (float) $parcela->valor_amortizacao > 0
                 ? (float) $parcela->valor_amortizacao
                 : (float) $parcela->valor;
             $valorParcelaTotal = (float) $parcela->valor;
+            $tipoJurosForm = $validated['tipo_juros'] ?? 'nenhum';
 
-            // Nunca permitir pagamento menor que o principal (valor emprestado)
-            if ($valorPagamento < $valorPrincipal) {
-                return back()->with('error', 'O valor do pagamento não pode ser menor que o principal (R$ ' . number_format($valorPrincipal, 2, ',', '.') . ').')->withInput();
+            $faltaNominal = max(0, round($valorParcelaTotal - (float) ($parcela->valor_pago ?? 0), 2));
+            $pisoEfetivo = $tipoJurosForm === 'valor_inferior'
+                ? $valorPrincipal
+                : ($faltaNominal > 0 ? min($valorPrincipal, $faltaNominal) : $valorPrincipal);
+
+            if (round($valorPagamento, 2) < round($pisoEfetivo, 2)) {
+                $msg = round($pisoEfetivo, 2) < round($valorPrincipal, 2)
+                    ? 'O valor do pagamento não pode ser menor que o mínimo permitido (R$ '.number_format($pisoEfetivo, 2, ',', '.').'; principal da parcela R$ '.number_format($valorPrincipal, 2, ',', '.').').'
+                    : 'O valor do pagamento não pode ser menor que o principal (R$ '.number_format($pisoEfetivo, 2, ',', '.').').';
+
+                return back()->with('error', $msg)->withInput();
             }
 
             $isConsultor = empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']));
@@ -343,8 +383,94 @@ class PagamentoController extends Controller
             $isRenovacao = ($validated['tipo_juros'] ?? '') === 'renovacao';
             $isExecutarGarantia = ($validated['tipo_juros'] ?? '') === 'executar_garantia';
 
+            $emprestimoPg = $parcela->emprestimo;
+            $isDiariaVariasParcelas = $emprestimoPg->isFrequenciaDiaria() && (int) $emprestimoPg->numero_parcelas > 1
+                && ! $isProdutoObjetoMetodo && ! $isRenovacao && ! $isExecutarGarantia && $tipoJurosForm !== 'valor_inferior';
+
+            if ($isDiariaVariasParcelas) {
+                $diariaSvc = app(DiariaPagamentoAntecipacaoService::class);
+                $dadosBase = array_merge($validated, ['consultor_id' => $validated['consultor_id']]);
+                $valorDevido = $diariaSvc->valorDevidoNoPagamento($parcela, $dadosBase);
+
+                if ($parcela->hasSolicitacaoDiariaParcialPendente()) {
+                    return back()->with('error', 'Já existe uma solicitação de pagamento parcial (diária) aguardando aprovação para esta parcela.')->withInput();
+                }
+
+                if (round($valorPagamento, 2) < round($valorDevido, 2)) {
+                    $faltante = round($valorDevido - $valorPagamento, 2);
+                    if ($isConsultor) {
+                        $this->pagamentoService->criarPagamentoDiariaParcialAguardandoAprovacao([
+                            'parcela_id' => $parcela->id,
+                            'consultor_id' => $validated['consultor_id'],
+                            'valor' => $valorPagamento,
+                            'valor_recebido' => $valorPagamento,
+                            'valor_esperado' => $valorDevido,
+                            'faltante' => $faltante,
+                            'metodo' => $validated['metodo'],
+                            'data_pagamento' => $validated['data_pagamento'],
+                            'comprovante_path' => $validated['comprovante_path'] ?? null,
+                            'observacoes' => $validated['observacoes'] ?? null,
+                        ]);
+                        $notificacaoService = app(\App\Modules\Core\Services\NotificacaoService::class);
+                        $operacaoId = (int) $emprestimoPg->operacao_id;
+                        $clienteNome = NotificacaoClienteDisplayName::forEmprestimo($emprestimoPg);
+                        $dadosNotif = [
+                            'tipo' => 'pagamento_diaria_parcial_pendente',
+                            'titulo' => 'Pagamento parcial (diária) – aguardando aprovação',
+                            'mensagem' => sprintf(
+                                'Empréstimo #%d – %s. Parcela #%d. Recebido R$ %s | Devido R$ %s. A parcela permanece em atraso até a aprovação.',
+                                $emprestimoPg->id,
+                                $clienteNome,
+                                $parcela->numero,
+                                number_format($valorPagamento, 2, ',', '.'),
+                                number_format($valorDevido, 2, ',', '.')
+                            ),
+                            'url' => route('liberacoes.diaria-parcial'),
+                            'dados' => ['emprestimo_id' => $emprestimoPg->id, 'parcela_id' => $parcela->id],
+                        ];
+                        $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, $dadosNotif);
+                        $notificacaoService->criarParaRoleComOperacao('administrador', $operacaoId, $dadosNotif);
+                    } else {
+                        $this->pagamentoService->registrarDiarioParcialGestorDireto([
+                            'parcela_id' => $parcela->id,
+                            'consultor_id' => $validated['consultor_id'],
+                            'valor' => $valorPagamento,
+                            'valor_esperado' => $valorDevido,
+                            'metodo' => $validated['metodo'],
+                            'data_pagamento' => $validated['data_pagamento'],
+                            'comprovante_path' => $validated['comprovante_path'] ?? null,
+                            'observacoes' => $validated['observacoes'] ?? null,
+                        ]);
+                    }
+                    $returnTo = $request->input('return_to');
+                    $msg = $isConsultor
+                        ? 'Pagamento parcial registrado e enviado para aprovação. A parcela permanece em atraso até o gestor ou administrador aprovar em Liberações (Diária parcial).'
+                        : 'Pagamento parcial aplicado. A parcela foi marcada como paga (parcial) e o faltante foi acrescido à última parcela.';
+                    if ($returnTo === 'cobrancas') {
+                        return redirect()->route('cobrancas.index')->with('success', $msg);
+                    }
+                    if ($returnTo === 'parcelas_atrasadas') {
+                        return redirect()->route('parcelas.atrasadas')->with('success', $msg);
+                    }
+
+                    return redirect()->route('emprestimos.show', $parcela->emprestimo_id)->with('success', $msg);
+                }
+
+                $diariaSvc->executarAntecipacao($parcela, $valorPagamento, $dadosBase);
+                $returnTo = $request->input('return_to');
+                $msgOk = 'Pagamento registrado com sucesso (antecipação nas parcelas finais quando aplicável).';
+                if ($returnTo === 'cobrancas') {
+                    return redirect()->route('cobrancas.index')->with('success', $msgOk);
+                }
+                if ($returnTo === 'parcelas_atrasadas') {
+                    return redirect()->route('parcelas.atrasadas')->with('success', $msgOk);
+                }
+
+                return redirect()->route('emprestimos.show', $parcela->emprestimo_id)->with('success', $msgOk);
+            }
+
             // Se consultor está pagando valor inferior ao devido (juros do contrato reduzido), exige aprovação de gestor/admin
-            if ($isConsultor && !$isProdutoObjetoMetodo && !$isRenovacao && !$isExecutarGarantia && $valorPagamento >= $valorPrincipal && $valorPagamento < $valorParcelaTotal) {
+            if ($isConsultor && ! $isProdutoObjetoMetodo && ! $isRenovacao && ! $isExecutarGarantia && ! $isDiariaVariasParcelas && $valorPagamento >= $valorPrincipal && $valorPagamento < $valorParcelaTotal) {
                 $solicitacao = \App\Modules\Loans\Models\SolicitacaoPagamentoJurosContratoReduzido::create([
                     'parcela_id' => $parcela->id,
                     'consultor_id' => auth()->id(),
@@ -379,11 +505,12 @@ class PagamentoController extends Controller
                 if ($returnTo === 'parcelas_atrasadas') {
                     return redirect()->route('parcelas.atrasadas')->with('success', $msg);
                 }
+
                 return redirect()->route('emprestimos.show', $parcela->emprestimo_id)->with('success', $msg);
             }
 
             // Se consultor está pagando juros de atraso abaixo do devido, exige aprovação de gestor/admin
-            if ($isConsultor && !$isProdutoObjetoMetodo && $parcela->isAtrasada()) {
+            if ($isConsultor && ! $isProdutoObjetoMetodo && ! $isDiariaVariasParcelas && $parcela->isAtrasada()) {
                 $dataPagamentoRef = isset($validated['data_pagamento']) ? $validated['data_pagamento'] : null;
                 $jurosDevido = $this->pagamentoService->getJurosDevidoAutomatico($parcela, $dataPagamentoRef);
                 if ($jurosDevido > 0) {
@@ -426,6 +553,7 @@ class PagamentoController extends Controller
                         if ($returnTo === 'parcelas_atrasadas') {
                             return redirect()->route('parcelas.atrasadas')->with('success', $msg);
                         }
+
                         return redirect()->route('emprestimos.show', $parcela->emprestimo_id)->with('success', $msg);
                     }
                 }
@@ -433,19 +561,19 @@ class PagamentoController extends Controller
 
             $validated['valor'] = $valorPagamento;
             $pagamento = $this->pagamentoService->registrar($validated);
-            
+
             // Obter o empréstimo da parcela para redirecionar
             $parcela = Parcela::findOrFail($validated['parcela_id']);
             $emprestimoId = $parcela->emprestimo_id;
-            
+
             $isProdutoObjeto = ($validated['metodo'] ?? '') === \App\Modules\Loans\Models\Pagamento::METODO_PRODUTO_OBJETO;
             $mensagemSucesso = $isProdutoObjeto
                 ? 'Pagamento em produto/objeto registrado. Ele será creditado na parcela após aceite de um gestor ou administrador em Liberações.'
                 : 'Pagamento registrado com sucesso!';
-            
+
             // Verificar se há um return_to específico
             $returnTo = $request->input('return_to');
-            
+
             if ($returnTo === 'cobrancas') {
                 return redirect()->route('cobrancas.index')
                     ->with('success', $mensagemSucesso);
@@ -459,9 +587,10 @@ class PagamentoController extends Controller
             }
         } catch (\Illuminate\Validation\ValidationException $e) {
             $mensagem = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
             return back()->with('error', $mensagem)->withInput();
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao registrar pagamento: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Erro ao registrar pagamento: '.$e->getMessage())->withInput();
         }
     }
 
@@ -473,14 +602,14 @@ class PagamentoController extends Controller
         $emprestimo = \App\Modules\Loans\Models\Emprestimo::with(['parcelas', 'operacao', 'cliente'])->findOrFail($emprestimo);
 
         $user = auth()->user();
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
+            if (empty($opsIds) || ! in_array((int) $emprestimo->operacao_id, $opsIds, true)) {
                 abort(403, 'Sem acesso a esta operação.');
             }
         }
 
-        if (!$emprestimo->isFrequenciaDiaria()) {
+        if (! $emprestimo->isFrequenciaDiaria()) {
             return redirect()->route('emprestimos.show', $emprestimo->id)
                 ->with('error', 'Quitação em lote só está disponível para empréstimos de frequência diária.');
         }
@@ -529,9 +658,9 @@ class PagamentoController extends Controller
     {
         $emprestimoModel = \App\Modules\Loans\Models\Emprestimo::findOrFail($emprestimo);
         $user = auth()->user();
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $emprestimoModel->operacao_id, $opsIds, true)) {
+            if (empty($opsIds) || ! in_array((int) $emprestimoModel->operacao_id, $opsIds, true)) {
                 return back()->with('error', 'Sem acesso a esta operação.')->withInput();
             }
         }
@@ -554,7 +683,8 @@ class PagamentoController extends Controller
             try {
                 $validated['comprovante_path'] = $request->file('comprovante')->store('comprovantes', 'public');
             } catch (\Exception $e) {
-                \Log::error('Erro upload comprovante quitação diárias: ' . $e->getMessage());
+                \Log::error('Erro upload comprovante quitação diárias: '.$e->getMessage());
+
                 return back()->with('error', 'Erro ao enviar comprovante.')->withInput();
             }
         } else {
@@ -590,25 +720,29 @@ class PagamentoController extends Controller
                         'motivo_desconto' => $validated['motivo_desconto'],
                     ]
                 );
+
                 return redirect()->route('emprestimos.show', $emprestimo)
                     ->with('success', 'Solicitação de quitação com valor inferior enviada. Aguarde a aprovação do gestor ou administrador em Liberações.');
             } catch (\Illuminate\Validation\ValidationException $e) {
                 $msg = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
                 return back()->with('error', $msg)->withInput();
             } catch (\Exception $e) {
-                return back()->with('error', 'Erro ao enviar solicitação: ' . $e->getMessage())->withInput();
+                return back()->with('error', 'Erro ao enviar solicitação: '.$e->getMessage())->withInput();
             }
         }
 
         try {
             $this->pagamentoService->registrarQuitacaoDiarias((int) $emprestimo, $validated);
+
             return redirect()->route('emprestimos.show', $emprestimo)
                 ->with('success', 'Todas as parcelas diárias foram quitadas com sucesso. Um único comprovante foi associado a todos os pagamentos.');
         } catch (\Illuminate\Validation\ValidationException $e) {
             $msg = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
             return back()->with('error', $msg)->withInput();
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao quitar parcelas: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Erro ao quitar parcelas: '.$e->getMessage())->withInput();
         }
     }
 
@@ -619,7 +753,7 @@ class PagamentoController extends Controller
     {
         $emprestimo = \App\Modules\Loans\Models\Emprestimo::with(['parcelas', 'operacao', 'cliente'])->findOrFail($emprestimo);
 
-        if (!$emprestimo->isAtivo()) {
+        if (! $emprestimo->isAtivo()) {
             return redirect()->route('emprestimos.show', $emprestimo->id)
                 ->with('error', 'O empréstimo não está ativo.');
         }
@@ -669,7 +803,7 @@ class PagamentoController extends Controller
             try {
                 $validated['comprovante_path'] = $request->file('comprovante')->store('comprovantes', 'public');
             } catch (\Exception $e) {
-                \Log::error('Erro upload comprovante multi-parcelas: ' . $e->getMessage());
+                \Log::error('Erro upload comprovante multi-parcelas: '.$e->getMessage());
 
                 return back()->with('error', 'Erro ao enviar comprovante.')->withInput();
             }
@@ -677,7 +811,7 @@ class PagamentoController extends Controller
             $validated['comprovante_path'] = null;
         }
 
-        if (!empty($validated['valor_juros_fixo']) && $validated['tipo_juros'] === 'fixo') {
+        if (! empty($validated['valor_juros_fixo']) && $validated['tipo_juros'] === 'fixo') {
             $validated['valor_juros_fixo'] = is_numeric($validated['valor_juros_fixo'])
                 ? (float) $validated['valor_juros_fixo']
                 : $this->parseBrDecimal($validated['valor_juros_fixo']);
@@ -695,7 +829,7 @@ class PagamentoController extends Controller
 
             return back()->with('error', $msg)->withInput();
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao registrar pagamento: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Erro ao registrar pagamento: '.$e->getMessage())->withInput();
         }
     }
 
@@ -723,10 +857,12 @@ class PagamentoController extends Controller
             $this->pagamentoService->anexarComprovante($id, $comprovantePath);
         } catch (\Illuminate\Validation\ValidationException $e) {
             $mensagem = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
             return back()->with('error', $mensagem)->withInput();
         }
 
         $emprestimoId = $pagamento->parcela->emprestimo_id;
+
         return redirect()->route('emprestimos.show', $emprestimoId)
             ->with('success', 'Comprovante anexado ao pagamento com sucesso.');
     }
@@ -739,6 +875,7 @@ class PagamentoController extends Controller
         $str = preg_replace('/\s+/', '', (string) $value);
         $str = str_replace('.', '', $str);
         $str = str_replace(',', '.', $str);
+
         return (float) $str;
     }
 }

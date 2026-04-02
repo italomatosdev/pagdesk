@@ -7,20 +7,20 @@ use App\Modules\Core\Models\Cliente;
 use App\Modules\Core\Models\Operacao;
 use App\Modules\Core\Services\ClienteService;
 use App\Modules\Core\Services\OperacaoDadosClienteService;
-use App\Support\ClienteNomeExibicao;
-use App\Support\ClienteVinculosOperacoesLookup;
-use App\Support\FichaContatoLookup;
-use App\Support\OperacaoPreferida;
-use App\Support\NotificacaoClienteDisplayName;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Parcela;
 use App\Modules\Loans\Models\SolicitacaoEmprestimoRetroativo;
 use App\Modules\Loans\Services\EmprestimoService;
+use App\Support\ClienteNomeExibicao;
+use App\Support\ClienteVinculosOperacoesLookup;
+use App\Support\FichaContatoLookup;
+use App\Support\NotificacaoClienteDisplayName;
+use App\Support\OperacaoPreferida;
 use Carbon\Carbon;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
-use Illuminate\Http\RedirectResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EmprestimoController extends Controller
@@ -51,9 +51,9 @@ class EmprestimoController extends Controller
         $query = Emprestimo::with(['cliente', 'operacao', 'consultor', 'parcelas']);
 
         // Aplicar filtro de operações (Super Admin vê tudo; admin/gestor/consultor só suas operações)
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
-            if (!empty($operacoesIds)) {
+            if (! empty($operacoesIds)) {
                 $query->whereIn('operacao_id', $operacoesIds);
             } else {
                 $query->whereRaw('1 = 0');
@@ -84,7 +84,7 @@ class EmprestimoController extends Controller
         }
 
         $statuses = array_filter((array) $request->input('status', []));
-        if (!empty($statuses)) {
+        if (! empty($statuses)) {
             $query->whereIn('status', $statuses);
         }
 
@@ -105,16 +105,16 @@ class EmprestimoController extends Controller
             if ($termo !== '') {
                 $digits = preg_replace('/[^0-9]/', '', $termo);
                 $query->whereHas('cliente', function ($q) use ($termo, $digits) {
-                    $q->where('nome', 'like', '%' . $termo . '%');
+                    $q->where('nome', 'like', '%'.$termo.'%');
                     if ($digits !== '') {
-                        $q->orWhere('documento', 'like', '%' . $digits . '%');
+                        $q->orWhere('documento', 'like', '%'.$digits.'%');
                     }
                 });
             }
         }
 
         // Filtro: próximo vencimento (data de/até = primeira parcela não paga)
-        $quitados = ['paga', 'quitada_garantia'];
+        $quitados = ['paga', 'paga_parcial', 'quitada_garantia'];
         $proxVencDe = $request->filled('proximo_vencimento_de') ? $request->proximo_vencimento_de : null;
         $proxVencAte = $request->filled('proximo_vencimento_ate') ? $request->proximo_vencimento_ate : null;
         if ($proxVencDe !== null || $proxVencAte !== null) {
@@ -171,9 +171,9 @@ class EmprestimoController extends Controller
         $user = auth()->user();
         $query = Emprestimo::with(['cliente', 'operacao', 'consultor']);
 
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
-            if (!empty($operacoesIds)) {
+            if (! empty($operacoesIds)) {
                 $query->whereIn('operacao_id', $operacoesIds);
             } else {
                 $query->whereRaw('1 = 0');
@@ -192,7 +192,7 @@ class EmprestimoController extends Controller
             $query->where('operacao_id', $request->operacao_id);
         }
         $statusesExport = array_filter((array) $request->input('status', []));
-        if (!empty($statusesExport)) {
+        if (! empty($statusesExport)) {
             $query->whereIn('status', $statusesExport);
         }
         if ($request->filled('tipo')) {
@@ -210,9 +210,9 @@ class EmprestimoController extends Controller
             if ($termo !== '') {
                 $digits = preg_replace('/[^0-9]/', '', $termo);
                 $query->whereHas('cliente', function ($q) use ($termo, $digits) {
-                    $q->where('nome', 'like', '%' . $termo . '%');
+                    $q->where('nome', 'like', '%'.$termo.'%');
                     if ($digits !== '') {
-                        $q->orWhere('documento', 'like', '%' . $digits . '%');
+                        $q->orWhere('documento', 'like', '%'.$digits.'%');
                     }
                 });
             }
@@ -221,7 +221,7 @@ class EmprestimoController extends Controller
         $proxVencAteExport = $request->filled('proximo_vencimento_ate') ? $request->proximo_vencimento_ate : null;
         if ($proxVencDeExport !== null || $proxVencAteExport !== null) {
             $subExport = Parcela::selectRaw('emprestimo_id')
-                ->whereNotIn('status', ['paga', 'quitada_garantia'])
+                ->whereNotIn('status', ['paga', 'paga_parcial', 'quitada_garantia'])
                 ->groupBy('emprestimo_id');
             if ($proxVencDeExport !== null && $proxVencAteExport !== null) {
                 $subExport->havingRaw('MIN(data_vencimento) BETWEEN ? AND ?', [$proxVencDeExport, $proxVencAteExport]);
@@ -243,11 +243,11 @@ class EmprestimoController extends Controller
             FichaContatoLookup::pairsFromEmprestimos($emprestimos)
         );
 
-        $filename = 'emprestimos_' . now()->format('Y-m-d_His') . '.csv';
+        $filename = 'emprestimos_'.now()->format('Y-m-d_His').'.csv';
 
         return response()->streamDownload(function () use ($emprestimos, $fichasContatoExport) {
             $out = fopen('php://output', 'w');
-            fprintf($out, chr(0xEF) . chr(0xBB) . chr(0xBF));
+            fprintf($out, chr(0xEF).chr(0xBB).chr(0xBF));
 
             fputcsv($out, ['ID', 'Cliente', 'Operação', 'Valor', 'Status', 'Tipo', 'Data início', 'Consultor'], ';');
 
@@ -275,20 +275,20 @@ class EmprestimoController extends Controller
     public function create(Request $request): View
     {
         $user = auth()->user();
-        
+
         // Super Admin não pode criar empréstimos
         if ($user->isSuperAdmin()) {
             abort(403, 'Super Admin não pode criar empréstimos.');
         }
-        
+
         try {
-            
+
             // Operações disponíveis (Super Admin: todas; admin/gestor: apenas as suas)
             if ($user->isSuperAdmin()) {
                 $operacoes = Operacao::where('ativo', true)->get();
             } else {
                 $operacoesIds = $user->getOperacoesIds();
-                $operacoes = !empty($operacoesIds)
+                $operacoes = ! empty($operacoesIds)
                     ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->get()
                     : collect([]);
             }
@@ -305,43 +305,43 @@ class EmprestimoController extends Controller
                     ->toArray();
                 // Gestor ou admin na operação: adicionar "Nome (Você)" ao final da lista
                 if ($user->temAlgumPapelNaOperacao($op->id, ['gestor', 'administrador'])) {
-                    $lista[] = ['id' => $user->id, 'name' => $user->name . ' (Você)'];
+                    $lista[] = ['id' => $user->id, 'name' => $user->name.' (Você)'];
                 }
                 $consultoresPorOperacao[$op->id] = $lista;
             }
-            
+
             // Se o usuário tem apenas 1 operação, já vir selecionada
             $operacaoSelecionadaId = $operacoes->count() === 1 ? $operacoes->first()->id : null;
-            
+
             // Verificar se há cliente_id na query string (vindo da página de detalhes do cliente)
             $clientePreSelecionado = null;
             if ($request->has('cliente_id')) {
                 $clienteId = $request->input('cliente_id');
                 $clientePreSelecionado = Cliente::find($clienteId);
             }
-            
+
             // Verificar se é uma negociação de empréstimo existente
             $negociacao = false;
             $emprestimoOrigem = null;
             $saldoDevedor = null;
-            
+
             if ($request->has('negociacao_de')) {
                 $emprestimoOrigemId = (int) $request->input('negociacao_de');
                 $emprestimoOrigem = Emprestimo::with(['cliente', 'operacao', 'parcelas'])->find($emprestimoOrigemId);
-                
+
                 if ($emprestimoOrigem) {
-                    if (!$user->temAlgumPapelNaOperacao($emprestimoOrigem->operacao_id, ['administrador', 'gestor'])) {
+                    if (! $user->temAlgumPapelNaOperacao($emprestimoOrigem->operacao_id, ['administrador', 'gestor'])) {
                         if ($emprestimoOrigem->consultor_id !== $user->id) {
                             abort(403, 'Você só pode negociar seus próprios empréstimos.');
                         }
                     } else {
-                        if (!$user->temAcessoOperacao($emprestimoOrigem->operacao_id)) {
+                        if (! $user->temAcessoOperacao($emprestimoOrigem->operacao_id)) {
                             abort(403, 'Sem acesso a esta operação.');
                         }
                     }
 
                     // Verificar se pode ser negociado
-                    if (!$emprestimoOrigem->isAtivo()) {
+                    if (! $emprestimoOrigem->isAtivo()) {
                         return redirect()->route('emprestimos.show', $emprestimoOrigem->id)
                             ->with('error', 'Apenas empréstimos ativos podem ser negociados.');
                     }
@@ -351,15 +351,15 @@ class EmprestimoController extends Controller
                         return redirect()->route('emprestimos.show', $emprestimoOrigem->id)
                             ->with('error', 'Este empréstimo já é resultado de uma negociação anterior e não pode ser negociado novamente.');
                     }
-                    
+
                     $quitacaoService = app(\App\Modules\Loans\Services\QuitacaoService::class);
                     $saldoDevedor = $quitacaoService->getSaldoDevedor($emprestimoOrigem);
-                    
+
                     if ($saldoDevedor <= 0) {
                         return redirect()->route('emprestimos.show', $emprestimoOrigem->id)
                             ->with('error', 'Este empréstimo não possui saldo devedor para negociação.');
                     }
-                    
+
                     $negociacao = true;
                     $clientePreSelecionado = $emprestimoOrigem->cliente;
                     $operacaoSelecionadaId = $emprestimoOrigem->operacao_id;
@@ -373,7 +373,7 @@ class EmprestimoController extends Controller
             $nomeClienteExibicaoOrigem = $emprestimoOrigem !== null
                 ? ClienteNomeExibicao::forEmprestimo($emprestimoOrigem)
                 : null;
-            
+
             return view('emprestimos.create', compact(
                 'operacoes',
                 'consultoresPorOperacao',
@@ -385,8 +385,8 @@ class EmprestimoController extends Controller
                 'nomeClienteExibicaoOrigem'
             ));
         } catch (\Exception $e) {
-            \Log::error('Erro ao carregar formulário de empréstimo: ' . $e->getMessage());
-            if (!isset($operacoes)) {
+            \Log::error('Erro ao carregar formulário de empréstimo: '.$e->getMessage());
+            if (! isset($operacoes)) {
                 $operacoes = collect([]);
             }
             $consultoresPorOperacao = $consultoresPorOperacao ?? [];
@@ -401,6 +401,7 @@ class EmprestimoController extends Controller
             $emprestimoOrigem = null;
             $saldoDevedor = null;
             $nomeClienteExibicaoOrigem = null;
+
             return view('emprestimos.create', compact(
                 'operacoes',
                 'consultoresPorOperacao',
@@ -420,7 +421,7 @@ class EmprestimoController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $user = auth()->user();
-        
+
         // Super Admin não pode criar empréstimos
         if ($user->isSuperAdmin()) {
             abort(403, 'Super Admin não pode criar empréstimos.');
@@ -473,7 +474,7 @@ class EmprestimoController extends Controller
                             ? $value->format('Y-m-d')
                             : Carbon::parse($value)->format('Y-m-d');
                         if ($data < $hojeBrasil) {
-                            $fail('A data de início deve ser igual ou posterior a ' . Carbon::parse($hojeBrasil)->format('d/m/Y') . '.');
+                            $fail('A data de início deve ser igual ou posterior a '.Carbon::parse($hojeBrasil)->format('d/m/Y').'.');
                         }
                     },
                 ],
@@ -505,7 +506,7 @@ class EmprestimoController extends Controller
                 return back()->withErrors(['consultor_id' => 'Selecione o consultor responsável pelo empréstimo.'])->withInput();
             }
             $consultor = \App\Models\User::find($consultorId);
-            if (!$consultor || !$consultor->temAcessoOperacao($validated['operacao_id'])) {
+            if (! $consultor || ! $consultor->temAcessoOperacao($validated['operacao_id'])) {
                 return back()->withErrors(['consultor_id' => 'O consultor selecionado não pertence a esta operação.'])->withInput();
             }
             $validated['consultor_id'] = (int) $consultorId;
@@ -513,10 +514,10 @@ class EmprestimoController extends Controller
 
         // Empréstimo retroativo: consultor (não gestor/admin) cria com aceite
         if ($isRetroativo) {
-            if (!$user->temAcessoOperacao($validated['operacao_id'])) {
+            if (! $user->temAcessoOperacao($validated['operacao_id'])) {
                 return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
             }
-            if (!$ehGestorOuAdminQueEscolhe) {
+            if (! $ehGestorOuAdminQueEscolhe) {
                 // Consultor: ele é o responsável; empréstimo fica aguardando aceite de gestor/admin
                 $validated['consultor_id'] = $user->id;
                 $validated['is_retroativo'] = true;
@@ -524,7 +525,7 @@ class EmprestimoController extends Controller
             } else {
                 $validated['is_retroativo'] = true;
             }
-        } elseif (!$ehGestorOuAdminQueEscolhe) {
+        } elseif (! $ehGestorOuAdminQueEscolhe) {
             // Apenas consultor (sem gestor/admin): empréstimo normal fica para ele
             $validated['consultor_id'] = $user->id;
         }
@@ -545,16 +546,16 @@ class EmprestimoController extends Controller
         }
 
         // Validar se o usuário tem acesso à operação (Super Admin: qualquer; demais: apenas as suas)
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $operacoesIds = $user->getOperacoesIds();
-            if (empty($operacoesIds) || !in_array($validated['operacao_id'], $operacoesIds)) {
+            if (empty($operacoesIds) || ! in_array($validated['operacao_id'], $operacoesIds)) {
                 return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
             }
         }
 
         // Verificar se é uma negociação
         $negociacaoEmprestimoId = $request->input('negociacao_emprestimo_id');
-        
+
         if ($negociacaoEmprestimoId) {
             return $this->processarNegociacao($request, $user, $validated, (int) $negociacaoEmprestimoId);
         }
@@ -575,8 +576,9 @@ class EmprestimoController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             return back()->withErrors($e->errors())->withInput();
         } catch (\Exception $e) {
-            \Log::error('Erro ao criar empréstimo: ' . $e->getMessage());
-            return back()->with('error', 'Erro ao criar empréstimo: ' . $e->getMessage())->withInput();
+            \Log::error('Erro ao criar empréstimo: '.$e->getMessage());
+
+            return back()->with('error', 'Erro ao criar empréstimo: '.$e->getMessage())->withInput();
         }
     }
 
@@ -586,7 +588,7 @@ class EmprestimoController extends Controller
     protected function processarNegociacao(Request $request, $user, array $validated, int $emprestimoOrigemId): RedirectResponse
     {
         $motivo = $request->input('motivo_negociacao');
-        
+
         if (empty($motivo)) {
             return back()->withErrors(['motivo_negociacao' => 'O motivo da negociação é obrigatório.'])->withInput();
         }
@@ -598,7 +600,7 @@ class EmprestimoController extends Controller
             if ($emprestimoOrigem->consultor_id !== $user->id) {
                 return back()->with('error', 'Você só pode negociar seus próprios empréstimos.')->withInput();
             }
-        } elseif (!$user->isSuperAdmin() && !$user->temAcessoOperacao($emprestimoOrigem->operacao_id)) {
+        } elseif (! $user->isSuperAdmin() && ! $user->temAcessoOperacao($emprestimoOrigem->operacao_id)) {
             return back()->with('error', 'Sem acesso a esta operação.')->withInput();
         }
 
@@ -645,7 +647,7 @@ class EmprestimoController extends Controller
             $dadosNotif = [
                 'tipo' => 'negociacao_pendente',
                 'titulo' => 'Nova Solicitação de Negociação',
-                'mensagem' => "{$user->name} solicitou negociação do empréstimo #{$emprestimoOrigemId} - Cliente: " . NotificacaoClienteDisplayName::forEmprestimo($emprestimoOrigem) . '. Saldo devedor: R$ ' . number_format($saldoDevedor, 2, ',', '.'),
+                'mensagem' => "{$user->name} solicitou negociação do empréstimo #{$emprestimoOrigemId} - Cliente: ".NotificacaoClienteDisplayName::forEmprestimo($emprestimoOrigem).'. Saldo devedor: R$ '.number_format($saldoDevedor, 2, ',', '.'),
                 'url' => route('liberacoes.negociacoes'),
                 'dados' => ['solicitacao_id' => $solicitacao->id],
             ];
@@ -658,8 +660,9 @@ class EmprestimoController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             return back()->withErrors($e->errors())->withInput();
         } catch (\Exception $e) {
-            \Log::error('Erro ao processar negociação: ' . $e->getMessage());
-            return back()->with('error', 'Erro ao processar negociação: ' . $e->getMessage())->withInput();
+            \Log::error('Erro ao processar negociação: '.$e->getMessage());
+
+            return back()->with('error', 'Erro ao processar negociação: '.$e->getMessage())->withInput();
         }
     }
 
@@ -691,11 +694,15 @@ class EmprestimoController extends Controller
         ])->findOrFail($id);
 
         $user = auth()->user();
-        if (!$user->temAcessoOperacao($emprestimo->operacao_id)) {
+        if (! $user->temAcessoOperacao($emprestimo->operacao_id)) {
             abort(403, 'Sem acesso a esta operação.');
         }
 
         $temRenovacaoAbatePendente = \App\Modules\Loans\Models\SolicitacaoRenovacaoAbate::whereHas('parcela', fn ($q) => $q->where('emprestimo_id', $id))
+            ->where('status', 'aguardando')
+            ->exists();
+
+        $temDiariaParcialPendente = \App\Modules\Loans\Models\SolicitacaoPagamentoDiariaParcial::where('emprestimo_id', $id)
             ->where('status', 'aguardando')
             ->exists();
 
@@ -715,7 +722,7 @@ class EmprestimoController extends Controller
         $podeAprovarLiberacao = $podeVerAcoesGestorAdmin;
         $podeAcoesCheque = $podeVerAcoesGestorAdmin;
         // Garantias só podem ser editadas/excluídas antes da liberação e se empréstimo não finalizado (apenas empenho)
-        $podeEditarGarantias = $emprestimo->isEmpenho() && !$emprestimo->isFinalizado() && !$emprestimo->foiLiberado();
+        $podeEditarGarantias = $emprestimo->isEmpenho() && ! $emprestimo->isFinalizado() && ! $emprestimo->foiLiberado();
 
         $fichaContatoEmprestimo = $this->operacaoDadosClienteService->obterParaOperacao(
             (int) $emprestimo->cliente_id,
@@ -738,6 +745,7 @@ class EmprestimoController extends Controller
             'fichaContatoEmprestimo',
             'nomeClienteExibicao',
             'temRenovacaoAbatePendente',
+            'temDiariaParcialPendente',
             'solicitacoesRenovacaoAbate',
             'podeVerAcoesGestorAdmin',
             'podeCancelar',
@@ -762,11 +770,11 @@ class EmprestimoController extends Controller
         $emprestimo = Emprestimo::findOrFail($id);
         $operacaoId = $emprestimo->operacao_id;
 
-        if (!$user->temAlgumPapelNaOperacao($operacaoId, ['administrador', 'gestor'])) {
+        if (! $user->temAlgumPapelNaOperacao($operacaoId, ['administrador', 'gestor'])) {
             if ($emprestimo->consultor_id !== $user->id) {
                 abort(403, 'Você só pode renovar seus próprios empréstimos.');
             }
-        } elseif (!$user->temAcessoOperacao($operacaoId)) {
+        } elseif (! $user->temAcessoOperacao($operacaoId)) {
             abort(403, 'Sem acesso a esta operação.');
         }
 
@@ -782,8 +790,9 @@ class EmprestimoController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             return back()->withErrors($e->errors());
         } catch (\Exception $e) {
-            \Log::error('Erro ao renovar empréstimo: ' . $e->getMessage());
-            return back()->with('error', 'Erro ao renovar empréstimo: ' . $e->getMessage());
+            \Log::error('Erro ao renovar empréstimo: '.$e->getMessage());
+
+            return back()->with('error', 'Erro ao renovar empréstimo: '.$e->getMessage());
         }
     }
 
@@ -795,7 +804,7 @@ class EmprestimoController extends Controller
         $user = auth()->user();
         $emprestimo = Emprestimo::findOrFail($id);
 
-        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Apenas gestores e administradores podem cancelar empréstimos.');
         }
 
@@ -816,8 +825,9 @@ class EmprestimoController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             return back()->withErrors($e->errors());
         } catch (\Exception $e) {
-            \Log::error('Erro ao cancelar empréstimo: ' . $e->getMessage());
-            return back()->with('error', 'Erro ao cancelar empréstimo: ' . $e->getMessage());
+            \Log::error('Erro ao cancelar empréstimo: '.$e->getMessage());
+
+            return back()->with('error', 'Erro ao cancelar empréstimo: '.$e->getMessage());
         }
     }
 
@@ -830,7 +840,7 @@ class EmprestimoController extends Controller
         $user = auth()->user();
         $emprestimo = Emprestimo::findOrFail($id);
 
-        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor'])) {
+        if (! $user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor'])) {
             abort(403, 'Apenas gestores e administradores podem cancelar empréstimo com desfazimento.');
         }
 
@@ -851,8 +861,9 @@ class EmprestimoController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             return back()->withErrors($e->errors());
         } catch (\Exception $e) {
-            \Log::error('Erro ao cancelar empréstimo com desfazimento: ' . $e->getMessage());
-            return back()->with('error', 'Erro ao cancelar empréstimo: ' . $e->getMessage());
+            \Log::error('Erro ao cancelar empréstimo com desfazimento: '.$e->getMessage());
+
+            return back()->with('error', 'Erro ao cancelar empréstimo: '.$e->getMessage());
         }
     }
 
@@ -864,7 +875,7 @@ class EmprestimoController extends Controller
         $user = auth()->user();
         $emprestimo = Emprestimo::findOrFail($id);
 
-        if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor'])) {
+        if (! $user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor'])) {
             abort(403, 'Apenas gestores e administradores podem executar garantias.');
         }
 
@@ -886,8 +897,9 @@ class EmprestimoController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             return back()->withErrors($e->errors())->withInput();
         } catch (\Exception $e) {
-            \Log::error('Erro ao executar garantia: ' . $e->getMessage());
-            return back()->with('error', 'Erro ao executar garantia: ' . $e->getMessage());
+            \Log::error('Erro ao executar garantia: '.$e->getMessage());
+
+            return back()->with('error', 'Erro ao executar garantia: '.$e->getMessage());
         }
     }
 
@@ -899,7 +911,7 @@ class EmprestimoController extends Controller
         $user = auth()->user();
         $emprestimo = Emprestimo::findOrFail($id);
 
-        if (!$emprestimo->is_retroativo) {
+        if (! $emprestimo->is_retroativo) {
             return back()->with('error', 'Este empréstimo não é retroativo.');
         }
         if ($emprestimo->isAguardandoAceiteRetroativo()) {
@@ -908,7 +920,7 @@ class EmprestimoController extends Controller
 
         $podeRegistrar = $user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor'])
             || $emprestimo->consultor_id === $user->id;
-        if (!$podeRegistrar) {
+        if (! $podeRegistrar) {
             abort(403, 'Você não pode registrar parcelas pagas deste empréstimo.');
         }
 
@@ -931,7 +943,7 @@ class EmprestimoController extends Controller
         \Illuminate\Support\Facades\DB::transaction(function () use ($emprestimo, $request, $gerarCaixaGlobal, $cashService) {
             foreach ($request->input('parcelas') as $item) {
                 $parcela = Parcela::where('emprestimo_id', $emprestimo->id)->find($item['parcela_id']);
-                if (!$parcela || $parcela->status === 'paga') {
+                if (! $parcela || $parcela->status === 'paga') {
                     continue;
                 }
                 // Só aceita parcelas cujo vencimento já passou (ou é hoje)
@@ -969,7 +981,7 @@ class EmprestimoController extends Controller
                         'tipo' => 'entrada',
                         'origem' => 'automatica',
                         'valor' => $pagamento->valor,
-                        'descricao' => 'Pagamento retroativo - Parcela #' . $parcela->numero . ' - Empréstimo #' . $emprestimo->id,
+                        'descricao' => 'Pagamento retroativo - Parcela #'.$parcela->numero.' - Empréstimo #'.$emprestimo->id,
                         'data_movimentacao' => $dataPagamento,
                         'referencia_tipo' => 'pagamento_parcela',
                         'referencia_id' => $parcela->id,
@@ -998,7 +1010,7 @@ class EmprestimoController extends Controller
             $operacoes = \App\Modules\Core\Models\Operacao::where('ativo', true)->orderBy('nome')->get();
         } else {
             $opsIds = $user->getOperacoesIds();
-            $operacoes = !empty($opsIds)
+            $operacoes = ! empty($opsIds)
                 ? \App\Modules\Core\Models\Operacao::where('ativo', true)->whereIn('id', $opsIds)->orderBy('nome')->get()
                 : collect([]);
         }
@@ -1007,9 +1019,9 @@ class EmprestimoController extends Controller
 
         $query = SolicitacaoEmprestimoRetroativo::with(['emprestimo.cliente', 'emprestimo.operacao', 'emprestimo.parcelas', 'solicitante'])
             ->where('status', 'aguardando');
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $opsIds = $user->getOperacoesIds();
-            if (!empty($opsIds)) {
+            if (! empty($opsIds)) {
                 $query->whereHas('emprestimo', fn ($q) => $q->whereIn('operacao_id', $opsIds));
             } else {
                 $query->whereRaw('1 = 0');
@@ -1038,7 +1050,7 @@ class EmprestimoController extends Controller
             return back()->with('error', 'Esta solicitação já foi processada.');
         }
 
-        if (!$user->temAlgumPapelNaOperacao($solicitacao->emprestimo->operacao_id, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($solicitacao->emprestimo->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Apenas gestores e administradores da operação podem aprovar empréstimos retroativos.');
         }
 
@@ -1056,7 +1068,7 @@ class EmprestimoController extends Controller
         app(\App\Modules\Loans\Services\ParcelaService::class)->marcarAtrasadasDoEmprestimo($solicitacao->emprestimo);
 
         return redirect()->route('emprestimos.retroativo.pendentes')
-            ->with('success', 'Empréstimo retroativo aprovado. O empréstimo #' . $solicitacao->emprestimo_id . ' está ativo.');
+            ->with('success', 'Empréstimo retroativo aprovado. O empréstimo #'.$solicitacao->emprestimo_id.' está ativo.');
     }
 
     /**
@@ -1078,10 +1090,10 @@ class EmprestimoController extends Controller
 
         foreach ($request->input('ids') as $id) {
             $solicitacao = SolicitacaoEmprestimoRetroativo::with('emprestimo')->find($id);
-            if (!$solicitacao || $solicitacao->status !== 'aguardando') {
+            if (! $solicitacao || $solicitacao->status !== 'aguardando') {
                 continue;
             }
-            if (!$user->temAlgumPapelNaOperacao($solicitacao->emprestimo->operacao_id, ['gestor', 'administrador'])) {
+            if (! $user->temAlgumPapelNaOperacao($solicitacao->emprestimo->operacao_id, ['gestor', 'administrador'])) {
                 continue;
             }
             $solicitacao->update([
@@ -1098,7 +1110,7 @@ class EmprestimoController extends Controller
 
         $msg = $aprovados === 0
             ? 'Nenhuma solicitação elegível para aprovação.'
-            : ($aprovados === 1 ? '1 empréstimo retroativo aprovado.' : $aprovados . ' empréstimos retroativos aprovados.');
+            : ($aprovados === 1 ? '1 empréstimo retroativo aprovado.' : $aprovados.' empréstimos retroativos aprovados.');
 
         return redirect()->route('emprestimos.retroativo.pendentes')->with('success', $msg);
     }
@@ -1114,7 +1126,7 @@ class EmprestimoController extends Controller
             return back()->with('error', 'Esta solicitação já foi processada.');
         }
 
-        if (!$user->temAlgumPapelNaOperacao($solicitacao->emprestimo->operacao_id, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($solicitacao->emprestimo->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Apenas gestores e administradores podem rejeitar empréstimos retroativos.');
         }
 

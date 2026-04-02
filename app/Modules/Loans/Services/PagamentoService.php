@@ -8,6 +8,7 @@ use App\Modules\Core\Traits\Auditable;
 use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\PagamentoProdutoObjetoItem;
 use App\Modules\Loans\Models\Parcela;
+use App\Modules\Loans\Models\SolicitacaoPagamentoDiariaParcial;
 use App\Support\NotificacaoClienteDisplayName;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -26,9 +27,6 @@ class PagamentoService
 
     /**
      * Registrar pagamento
-     *
-     * @param array $dados
-     * @return Pagamento
      */
     public function registrar(array $dados): Pagamento
     {
@@ -38,51 +36,51 @@ class PagamentoService
             $emprestimo = $parcela->emprestimo;
 
             // VALIDAÇÃO 1: Empréstimo deve estar ATIVO
-            if (!$emprestimo->isAtivo()) {
+            if (! $emprestimo->isAtivo()) {
                 throw ValidationException::withMessages([
-                    'emprestimo' => 'Não é possível registrar pagamento. O empréstimo precisa estar ATIVO. Status atual: ' . $emprestimo->status
+                    'emprestimo' => 'Não é possível registrar pagamento. O empréstimo precisa estar ATIVO. Status atual: '.$emprestimo->status,
                 ]);
             }
 
             // VALIDAÇÃO 2: Verificar se dinheiro foi liberado e pago ao cliente
             // EXCEÇÃO: Empréstimos renovados não precisam de liberação (dinheiro já foi pago no empréstimo original)
-            if (!$emprestimo->isRenovacao()) {
+            if (! $emprestimo->isRenovacao()) {
                 $liberacao = $emprestimo->liberacao;
-                if (!$liberacao) {
+                if (! $liberacao) {
                     throw ValidationException::withMessages([
-                        'liberacao' => 'Não é possível registrar pagamento. O dinheiro ainda não foi liberado pelo gestor.'
+                        'liberacao' => 'Não é possível registrar pagamento. O dinheiro ainda não foi liberado pelo gestor.',
                     ]);
                 }
 
                 if ($liberacao->status !== 'pago_ao_cliente') {
                     $statusLiberacao = $liberacao->status;
-                    $mensagem = match($statusLiberacao) {
+                    $mensagem = match ($statusLiberacao) {
                         'aguardando' => 'Não é possível registrar pagamento. O dinheiro ainda não foi liberado pelo gestor.',
                         'liberado' => 'Não é possível registrar pagamento. Você precisa confirmar o pagamento ao cliente primeiro.',
-                        default => 'Não é possível registrar pagamento. Status da liberação: ' . $statusLiberacao
+                        default => 'Não é possível registrar pagamento. Status da liberação: '.$statusLiberacao
                     };
                     throw ValidationException::withMessages([
-                        'liberacao' => $mensagem
+                        'liberacao' => $mensagem,
                     ]);
                 }
             }
 
             // VALIDAÇÃO 3: Verificar se a parcela já está totalmente paga ou quitada por garantia
             if ($parcela->isQuitada()) {
-                $mensagem = $parcela->isQuitadaGarantia() 
+                $mensagem = $parcela->isQuitadaGarantia()
                     ? 'Esta parcela foi quitada via execução de garantia. Não é possível registrar novos pagamentos.'
                     : 'Esta parcela já está totalmente paga.';
-                    
+
                 throw ValidationException::withMessages([
-                    'parcela' => $mensagem
+                    'parcela' => $mensagem,
                 ]);
             }
 
             // VALIDAÇÃO 4: Verificar se o consultor é o dono do empréstimo (ou admin/gestor na operação)
             $user = auth()->user();
-            if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
+            if (! $user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
                 throw ValidationException::withMessages([
-                    'permissao' => 'Você não tem permissão para registrar pagamento deste empréstimo.'
+                    'permissao' => 'Você não tem permissão para registrar pagamento deste empréstimo.',
                 ]);
             }
 
@@ -104,6 +102,8 @@ class PagamentoService
                 'valor_juros' => $dadosJuros['valor_juros'] ?? 0,
                 'aceite_gestor_id' => null,
                 'aceite_gestor_em' => null,
+                'lote_id' => $dados['lote_id'] ?? null,
+                'aguardando_aprovacao_diaria_parcial' => ! empty($dados['aguardando_aprovacao_diaria_parcial']),
             ];
             $itens = $dados['itens'] ?? null;
             if ($isProdutoObjeto && empty($itens)) {
@@ -116,7 +116,7 @@ class PagamentoService
             $pagamento = Pagamento::create($createData);
 
             // Itens produto/objeto (fluxo novo: 1 pagamento = N itens)
-            if ($isProdutoObjeto && !empty($itens)) {
+            if ($isProdutoObjeto && ! empty($itens)) {
                 foreach ($itens as $ordem => $item) {
                     PagamentoProdutoObjetoItem::create([
                         'pagamento_id' => $pagamento->id,
@@ -152,6 +152,7 @@ class PagamentoService
                 ];
                 $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, $dadosNotif);
                 $notificacaoService->criarParaRoleComOperacao('administrador', $operacaoId, $dadosNotif);
+
                 return $pagamento->fresh();
             }
 
@@ -159,12 +160,12 @@ class PagamentoService
             // O valor do pagamento já inclui os juros
             $novoValorPago = $parcela->valor_pago + $dados['valor'];
             $dataPagamento = Carbon::parse($dados['data_pagamento'] ?? Carbon::today());
-            
+
             // Verificar se está totalmente paga: valor alcançou o total OU é pagamento aprovado "valor inferior" OU renovação com abate
-            $encerraValorInferior = !empty($dados['encerra_parcela_valor_inferior']);
-            $encerraRenovacaoAbate = !empty($dados['encerra_parcela_renovacao_abate']);
+            $encerraValorInferior = ! empty($dados['encerra_parcela_valor_inferior']);
+            $encerraRenovacaoAbate = ! empty($dados['encerra_parcela_renovacao_abate']);
             $estaTotalmentePaga = $encerraValorInferior || $encerraRenovacaoAbate || ($novoValorPago >= $parcela->valor);
-            
+
             // Atualizar parcela
             $parcela->update([
                 'valor_pago' => $novoValorPago,
@@ -230,6 +231,7 @@ class PagamentoService
         foreach ($parcelasPendentes as $parcela) {
             $total += (float) $parcela->valor + ($valorJurosPorParcela[$parcela->id] ?? 0);
         }
+
         return round($total, 2);
     }
 
@@ -237,8 +239,7 @@ class PagamentoService
      * Registrar quitação de todas as parcelas diárias de um empréstimo em um único ato.
      * Um comprovante único vale para todos os pagamentos; opções de juros: sem juros ou com juros (automático, manual, fixo).
      *
-     * @param int $emprestimoId
-     * @param array $dados metodo, data_pagamento, comprovante_path, observacoes, tipo_juros, taxa_juros_manual?, valor_juros_fixo?, consultor_id
+     * @param  array  $dados  metodo, data_pagamento, comprovante_path, observacoes, tipo_juros, taxa_juros_manual?, valor_juros_fixo?, consultor_id
      * @return array Lista de Pagamento criados
      */
     public function registrarQuitacaoDiarias(int $emprestimoId, array $dados): array
@@ -246,20 +247,20 @@ class PagamentoService
         return DB::transaction(function () use ($emprestimoId, $dados) {
             $emprestimo = \App\Modules\Loans\Models\Emprestimo::with(['parcelas', 'operacao', 'liberacao'])->lockForUpdate()->findOrFail($emprestimoId);
 
-            if (!$emprestimo->isFrequenciaDiaria()) {
+            if (! $emprestimo->isFrequenciaDiaria()) {
                 throw ValidationException::withMessages([
                     'emprestimo' => 'Quitação em lote só é permitida para empréstimos de frequência diária.',
                 ]);
             }
 
-            if (!$emprestimo->isAtivo()) {
+            if (! $emprestimo->isAtivo()) {
                 throw ValidationException::withMessages([
                     'emprestimo' => 'O empréstimo não está ativo.',
                 ]);
             }
 
             $liberacao = $emprestimo->liberacao;
-            if (!$emprestimo->isRenovacao() && (!$liberacao || $liberacao->status !== 'pago_ao_cliente')) {
+            if (! $emprestimo->isRenovacao() && (! $liberacao || $liberacao->status !== 'pago_ao_cliente')) {
                 throw ValidationException::withMessages([
                     'liberacao' => 'O dinheiro do empréstimo ainda não foi liberado/pago ao cliente.',
                 ]);
@@ -273,7 +274,7 @@ class PagamentoService
             }
 
             $user = auth()->user();
-            if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
+            if (! $user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
                 throw ValidationException::withMessages([
                     'permissao' => 'Você não tem permissão para quitar este empréstimo.',
                 ]);
@@ -358,9 +359,8 @@ class PagamentoService
      * Registrar pagamento de múltiplas parcelas em um único ato (um comprovante).
      * Parcelas devem estar em aberto; usa a mesma lógica de juros de atraso da quitação diária.
      *
-     * @param int $emprestimoId
-     * @param array $parcelaIds IDs das parcelas a pagar (mínimo 2), mesma ordem de vencimento/número
-     * @param array $dados metodo, data_pagamento, comprovante_path, observacoes, tipo_juros, taxa_juros_manual?, valor_juros_fixo?, consultor_id
+     * @param  array  $parcelaIds  IDs das parcelas a pagar (mínimo 2), mesma ordem de vencimento/número
+     * @param  array  $dados  metodo, data_pagamento, comprovante_path, observacoes, tipo_juros, taxa_juros_manual?, valor_juros_fixo?, consultor_id
      * @return array Lista de Pagamento criados
      */
     public function registrarPagamentoMultiplasParcelas(int $emprestimoId, array $parcelaIds, array $dados): array
@@ -375,21 +375,21 @@ class PagamentoService
         return DB::transaction(function () use ($emprestimoId, $parcelaIds, $dados) {
             $emprestimo = \App\Modules\Loans\Models\Emprestimo::with(['parcelas', 'operacao', 'liberacao'])->lockForUpdate()->findOrFail($emprestimoId);
 
-            if (!$emprestimo->isAtivo()) {
+            if (! $emprestimo->isAtivo()) {
                 throw ValidationException::withMessages([
                     'emprestimo' => 'O empréstimo não está ativo.',
                 ]);
             }
 
             $liberacao = $emprestimo->liberacao;
-            if (!$emprestimo->isRenovacao() && (!$liberacao || $liberacao->status !== 'pago_ao_cliente')) {
+            if (! $emprestimo->isRenovacao() && (! $liberacao || $liberacao->status !== 'pago_ao_cliente')) {
                 throw ValidationException::withMessages([
                     'liberacao' => 'O dinheiro do empréstimo ainda não foi liberado/pago ao cliente.',
                 ]);
             }
 
             $user = auth()->user();
-            if (!$user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
+            if (! $user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
                 throw ValidationException::withMessages([
                     'permissao' => 'Você não tem permissão para registrar pagamento neste empréstimo.',
                 ]);
@@ -398,20 +398,20 @@ class PagamentoService
             $parcelasSelecionadas = collect();
             foreach ($parcelaIds as $pid) {
                 $parcela = $emprestimo->parcelas->firstWhere('id', $pid);
-                if (!$parcela) {
+                if (! $parcela) {
                     throw ValidationException::withMessages([
-                        'parcelas' => 'Parcela #' . $pid . ' não pertence a este empréstimo.',
+                        'parcelas' => 'Parcela #'.$pid.' não pertence a este empréstimo.',
                     ]);
                 }
                 if ($parcela->isQuitada()) {
                     throw ValidationException::withMessages([
-                        'parcelas' => 'A parcela #' . $parcela->numero . ' já está quitada e não pode ser selecionada.',
+                        'parcelas' => 'A parcela #'.$parcela->numero.' já está quitada e não pode ser selecionada.',
                     ]);
                 }
                 $falta = (float) $parcela->valor - (float) ($parcela->valor_pago ?? 0);
                 if ($falta <= 0) {
                     throw ValidationException::withMessages([
-                        'parcelas' => 'A parcela #' . $parcela->numero . ' não possui saldo em aberto.',
+                        'parcelas' => 'A parcela #'.$parcela->numero.' não possui saldo em aberto.',
                     ]);
                 }
                 $parcelasSelecionadas->push($parcela);
@@ -469,7 +469,7 @@ class PagamentoService
                 $parcela = Parcela::lockForUpdate()->findOrFail($parcela->id);
                 if ($parcela->isQuitada()) {
                     throw ValidationException::withMessages([
-                        'parcelas' => 'A parcela #' . $parcela->numero . ' foi quitada durante o processamento.',
+                        'parcelas' => 'A parcela #'.$parcela->numero.' foi quitada durante o processamento.',
                     ]);
                 }
                 $falta = (float) $parcela->valor - (float) ($parcela->valor_pago ?? 0);
@@ -486,7 +486,7 @@ class PagamentoService
                     'metodo' => $dados['metodo'] ?? 'dinheiro',
                     'data_pagamento' => $dataPagamento,
                     'comprovante_path' => $comprovantePath,
-                    'observacoes' => isset($dados['observacoes']) ? ('Pagamento em lote. ' . $dados['observacoes']) : 'Pagamento em lote (múltiplas parcelas).',
+                    'observacoes' => isset($dados['observacoes']) ? ('Pagamento em lote. '.$dados['observacoes']) : 'Pagamento em lote (múltiplas parcelas).',
                     'tipo_juros' => $tipoJuros === 'nenhum' ? null : $tipoJurosRegistro,
                     'taxa_juros_aplicada' => $taxaRegistro,
                     'valor_juros' => $valorJuros,
@@ -515,10 +515,6 @@ class PagamentoService
     /**
      * Aceitar pagamento em produto/objeto (gestor ou administrador).
      * Atualiza a parcela, não gera caixa.
-     *
-     * @param int $pagamentoId
-     * @param int $gestorId
-     * @return Pagamento
      */
     public function aceitarPagamentoProdutoObjeto(int $pagamentoId, int $gestorId): Pagamento
     {
@@ -571,10 +567,6 @@ class PagamentoService
     /**
      * Rejeitar pagamento em produto/objeto (gestor ou administrador).
      * O pagamento continua pendente (parcela não é creditada).
-     *
-     * @param int $pagamentoId
-     * @param int $gestorId
-     * @return Pagamento
      */
     public function rejeitarPagamentoProdutoObjeto(int $pagamentoId, int $gestorId): Pagamento
     {
@@ -611,10 +603,6 @@ class PagamentoService
     /**
      * Anexar comprovante a um pagamento já registrado (apenas se ainda não tiver).
      * Não permite editar/substituir comprovante existente.
-     *
-     * @param int $pagamentoId
-     * @param string $comprovantePath
-     * @return Pagamento
      */
     public function anexarComprovante(int $pagamentoId, string $comprovantePath): Pagamento
     {
@@ -635,8 +623,7 @@ class PagamentoService
     /**
      * Verificar se o empréstimo está totalmente quitado e finalizá-lo (uso externo, ex: QuitacaoService).
      *
-     * @param \App\Modules\Loans\Models\Emprestimo $emprestimo
-     * @return void
+     * @param  \App\Modules\Loans\Models\Emprestimo  $emprestimo
      */
     public function verificarEFinalizarEmprestimo($emprestimo): void
     {
@@ -646,52 +633,51 @@ class PagamentoService
     /**
      * Verificar se todas as parcelas do empréstimo foram pagas
      * Se sim, finaliza o empréstimo automaticamente
-     * 
+     *
      * Usa Strategy Pattern para verificar finalização baseada no tipo
      *
-     * @param \App\Modules\Loans\Models\Emprestimo $emprestimo
-     * @return void
+     * @param  \App\Modules\Loans\Models\Emprestimo  $emprestimo
      */
     public function verificarFinalizacaoEmprestimo($emprestimo): void
     {
         // Usar Strategy Pattern para verificar se pode finalizar
         $strategy = \App\Modules\Loans\Services\Strategies\LoanStrategyFactory::create($emprestimo);
-        
+
         if ($strategy->podeFinalizar($emprestimo)) {
             $statusAnterior = $emprestimo->status;
-            
+
             // Finalizar empréstimo
             $emprestimo->update([
                 'status' => 'finalizado',
             ]);
-            
+
             // Ações específicas por tipo
             // Se for empréstimo tipo empenho, liberar garantias automaticamente
             if ($emprestimo->isEmpenho()) {
                 $emprestimo->load('garantias');
-                
+
                 foreach ($emprestimo->garantias as $garantia) {
                     if ($garantia->isAtiva()) {
                         $oldStatusGarantia = $garantia->status;
-                        
+
                         $garantia->update([
                             'status' => 'liberada',
                             'data_liberacao' => \Carbon\Carbon::now(),
                         ]);
-                        
+
                         // Auditoria da liberação da garantia
                         self::auditar(
                             'liberar_garantia',
                             $garantia,
                             ['status' => $oldStatusGarantia],
                             ['status' => 'liberada', 'data_liberacao' => $garantia->data_liberacao],
-                            "Garantia liberada automaticamente - Todas as parcelas do empréstimo foram quitadas"
+                            'Garantia liberada automaticamente - Todas as parcelas do empréstimo foram quitadas'
                         );
-                        
+
                         // Notificar consultor sobre liberação
                         $notificacaoService = app(\App\Modules\Core\Services\NotificacaoService::class);
                         $nomeCliente = NotificacaoClienteDisplayName::forEmprestimo($emprestimo);
-                        
+
                         if ($emprestimo->consultor_id) {
                             $notificacaoService->criar([
                                 'user_id' => $emprestimo->consultor_id,
@@ -708,11 +694,11 @@ class PagamentoService
                     }
                 }
             }
-            
+
             // Mensagem de auditoria baseada no tipo
-            $mensagemAuditoria = match($emprestimo->tipo) {
-                'troca_cheque' => "Empréstimo finalizado automaticamente - Todos os cheques foram compensados",
-                default => "Empréstimo finalizado automaticamente - Todas as parcelas foram quitadas"
+            $mensagemAuditoria = match ($emprestimo->tipo) {
+                'troca_cheque' => 'Empréstimo finalizado automaticamente - Todos os cheques foram compensados',
+                default => 'Empréstimo finalizado automaticamente - Todas as parcelas foram quitadas'
             };
 
             // Auditoria da finalização
@@ -728,9 +714,6 @@ class PagamentoService
 
     /**
      * Criar movimentação de caixa a partir de um pagamento
-     *
-     * @param Pagamento $pagamento
-     * @return CashLedgerEntry
      */
     private function criarMovimentacaoCaixa(Pagamento $pagamento): CashLedgerEntry
     {
@@ -744,7 +727,7 @@ class PagamentoService
             'tipo' => 'entrada',
             'origem' => 'automatica',
             'valor' => $pagamento->valor,
-            'descricao' => 'Pagamento de parcela #' . $pagamento->parcela->numero . ' - Empréstimo #' . $emprestimo->id,
+            'descricao' => 'Pagamento de parcela #'.$pagamento->parcela->numero.' - Empréstimo #'.$emprestimo->id,
             'data_movimentacao' => $pagamento->data_pagamento,
             'referencia_tipo' => 'pagamento_parcela',
             'referencia_id' => $pagamento->parcela_id,
@@ -753,10 +736,6 @@ class PagamentoService
 
     /**
      * Calcular juros para uma parcela atrasada
-     *
-     * @param Parcela $parcela
-     * @param array $dados
-     * @return array
      */
     private function calcularJuros(Parcela $parcela, array $dados): array
     {
@@ -767,7 +746,7 @@ class PagamentoService
         ];
 
         // Só calcula juros se a parcela estiver atrasada
-        if (!$parcela->isAtrasada()) {
+        if (! $parcela->isAtrasada()) {
             return $resultado;
         }
 
@@ -785,6 +764,7 @@ class PagamentoService
                 : (float) $parcela->valor;
             $valorTotal = (float) ($dados['valor'] ?? 0);
             $valorJuros = $valorTotal - $principal;
+
             return [
                 'tipo_juros' => 'fixo',
                 'taxa_juros_aplicada' => null,
@@ -856,7 +836,7 @@ class PagamentoService
      * Para empréstimo diário: não gera "multa" (juros devido = 0) quando o pagamento
      * está dentro do prazo da última parcela (data_pagamento <= data_vencimento da última).
      *
-     * @param \Carbon\Carbon|null $dataPagamento Data do pagamento (quando null, usa hoje).
+     * @param  \Carbon\Carbon|null  $dataPagamento  Data do pagamento (quando null, usa hoje).
      */
     public function getJurosDevidoAutomatico(Parcela $parcela, $dataPagamento = null): float
     {
@@ -874,7 +854,7 @@ class PagamentoService
             }
         }
 
-        if (!$parcela->isAtrasada()) {
+        if (! $parcela->isAtrasada()) {
             return 0.0;
         }
         if ($operacao->taxa_juros_atraso <= 0) {
@@ -887,6 +867,7 @@ class PagamentoService
         if ($tipoCalculo === 'por_dia') {
             return round($valorParcela * ($taxa / 100) * $diasAtraso, 2);
         }
+
         return round($valorParcela * ($taxa / 100) * ($diasAtraso / 30), 2);
     }
 
@@ -897,5 +878,254 @@ class PagamentoService
     {
         return $this->calcularJuros($parcela, $dados);
     }
-}
 
+    /**
+     * Consultor: pagamento diário abaixo do devido — gera entrada em caixa, parcela permanece em atraso até aprovação.
+     *
+     * @param  array<string, mixed>  $dados
+     */
+    public function criarPagamentoDiariaParcialAguardandoAprovacao(array $dados): SolicitacaoPagamentoDiariaParcial
+    {
+        return DB::transaction(function () use ($dados) {
+            $parcela = Parcela::lockForUpdate()->with(['emprestimo.liberacao', 'emprestimo.operacao'])->findOrFail($dados['parcela_id']);
+            $emprestimo = $parcela->emprestimo;
+
+            if (! $emprestimo->isAtivo()) {
+                throw ValidationException::withMessages([
+                    'emprestimo' => 'Não é possível registrar pagamento. O empréstimo precisa estar ATIVO.',
+                ]);
+            }
+
+            if (! $emprestimo->isRenovacao()) {
+                $liberacao = $emprestimo->liberacao;
+                if (! $liberacao || $liberacao->status !== 'pago_ao_cliente') {
+                    throw ValidationException::withMessages([
+                        'liberacao' => 'Não é possível registrar pagamento. O dinheiro ainda não foi liberado pelo gestor.',
+                    ]);
+                }
+            }
+
+            $user = auth()->user();
+            if (! $user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor']) && $emprestimo->consultor_id !== $user->id) {
+                throw ValidationException::withMessages([
+                    'permissao' => 'Você não tem permissão para registrar pagamento deste empréstimo.',
+                ]);
+            }
+
+            $valor = round((float) $dados['valor'], 2);
+            $dataPagamento = Carbon::parse($dados['data_pagamento'] ?? Carbon::today());
+
+            $pagamento = Pagamento::create([
+                'parcela_id' => $parcela->id,
+                'consultor_id' => $dados['consultor_id'],
+                'valor' => $valor,
+                'metodo' => $dados['metodo'] ?? 'dinheiro',
+                'data_pagamento' => $dataPagamento,
+                'comprovante_path' => $dados['comprovante_path'] ?? null,
+                'observacoes' => $dados['observacoes'] ?? null,
+                'tipo_juros' => null,
+                'taxa_juros_aplicada' => null,
+                'valor_juros' => 0,
+                'aguardando_aprovacao_diaria_parcial' => true,
+            ]);
+
+            $this->criarMovimentacaoCaixa($pagamento);
+
+            $dias = $parcela->calcularDiasAtraso($dataPagamento);
+            $parcela->update([
+                'status' => 'atrasada',
+                'dias_atraso' => max(1, $dias, (int) $parcela->dias_atraso),
+            ]);
+
+            self::auditar('registrar_pagamento_diaria_parcial_pendente', $pagamento, null, $pagamento->toArray());
+
+            return SolicitacaoPagamentoDiariaParcial::create([
+                'parcela_id' => $parcela->id,
+                'emprestimo_id' => $emprestimo->id,
+                'consultor_id' => $dados['consultor_id'],
+                'valor_recebido' => $dados['valor_recebido'],
+                'valor_esperado' => $dados['valor_esperado'],
+                'faltante' => $dados['faltante'],
+                'metodo' => $dados['metodo'] ?? 'dinheiro',
+                'data_pagamento' => $dataPagamento->format('Y-m-d'),
+                'comprovante_path' => $dados['comprovante_path'] ?? null,
+                'observacoes' => $dados['observacoes'] ?? null,
+                'pagamento_id' => $pagamento->id,
+                'status' => 'aguardando',
+                'empresa_id' => $parcela->empresa_id ?? $emprestimo->operacao->empresa_id ?? null,
+            ]);
+        });
+    }
+
+    public function aprovarSolicitacaoPagamentoDiariaParcial(SolicitacaoPagamentoDiariaParcial $solicitacao, int $gestorId): void
+    {
+        DB::transaction(function () use ($solicitacao, $gestorId) {
+            $solicitacao = SolicitacaoPagamentoDiariaParcial::lockForUpdate()->findOrFail($solicitacao->id);
+            if (! $solicitacao->isAguardando()) {
+                throw ValidationException::withMessages([
+                    'solicitacao' => 'Esta solicitação já foi processada.',
+                ]);
+            }
+
+            $parcela = Parcela::lockForUpdate()->with('emprestimo.parcelas')->findOrFail($solicitacao->parcela_id);
+            $emprestimo = $parcela->emprestimo;
+            $pagamento = Pagamento::lockForUpdate()->findOrFail($solicitacao->pagamento_id);
+
+            $valorRecebido = (float) $solicitacao->valor_recebido;
+            $faltante = (float) $solicitacao->faltante;
+            $dataPagamento = Carbon::parse($solicitacao->data_pagamento);
+
+            $novoValorPago = round((float) $parcela->valor_pago + $valorRecebido, 2);
+            $parcela->update([
+                'valor_pago' => $novoValorPago,
+                'data_pagamento' => $dataPagamento,
+                'status' => 'paga_parcial',
+                'dias_atraso' => 0,
+            ]);
+
+            $ultima = Parcela::where('emprestimo_id', $emprestimo->id)
+                ->orderByDesc('numero')
+                ->lockForUpdate()
+                ->first();
+            if ($ultima) {
+                $ultima->update([
+                    'valor' => round((float) $ultima->valor + $faltante, 2),
+                ]);
+            }
+
+            $pagamento->update(['aguardando_aprovacao_diaria_parcial' => false]);
+
+            $solicitacao->update([
+                'status' => 'aprovado',
+                'aprovado_por_id' => $gestorId,
+                'aprovado_em' => now(),
+            ]);
+
+            self::auditar('aprovar_pagamento_diaria_parcial', $solicitacao, null, $solicitacao->fresh()->toArray());
+
+            $this->verificarFinalizacaoEmprestimo($emprestimo->fresh());
+        });
+    }
+
+    public function rejeitarSolicitacaoPagamentoDiariaParcial(SolicitacaoPagamentoDiariaParcial $solicitacao, int $gestorId): void
+    {
+        DB::transaction(function () use ($solicitacao, $gestorId) {
+            $solicitacao = SolicitacaoPagamentoDiariaParcial::lockForUpdate()->findOrFail($solicitacao->id);
+            if (! $solicitacao->isAguardando()) {
+                throw ValidationException::withMessages([
+                    'solicitacao' => 'Esta solicitação já foi processada.',
+                ]);
+            }
+
+            $pagamento = Pagamento::lockForUpdate()->findOrFail($solicitacao->pagamento_id);
+            $parcela = Parcela::lockForUpdate()->findOrFail($solicitacao->parcela_id);
+            $emprestimo = $parcela->emprestimo;
+
+            $this->cashService->registrarMovimentacao([
+                'operacao_id' => $emprestimo->operacao_id,
+                'consultor_id' => $pagamento->consultor_id,
+                'pagamento_id' => $pagamento->id,
+                'tipo' => 'saida',
+                'origem' => 'automatica',
+                'valor' => $pagamento->valor,
+                'descricao' => 'Estorno – pagamento diário parcial rejeitado (solicitação #'.$solicitacao->id.')',
+                'data_movimentacao' => Carbon::today(),
+                'referencia_tipo' => 'pagamento_parcela',
+                'referencia_id' => $parcela->id,
+            ]);
+
+            $solicitacao->update([
+                'status' => 'rejeitado',
+                'rejeitado_por_id' => $gestorId,
+                'rejeitado_em' => now(),
+            ]);
+
+            $pagamento->delete();
+
+            self::auditar('rejeitar_pagamento_diaria_parcial', $solicitacao, null, $solicitacao->fresh()->toArray());
+        });
+    }
+
+    /**
+     * Gestor/admin: registra parcial sem fila de aprovação (mesmo efeito da aprovação).
+     *
+     * @param  array<string, mixed>  $dados
+     */
+    public function registrarDiarioParcialGestorDireto(array $dados): Pagamento
+    {
+        return DB::transaction(function () use ($dados) {
+            $parcela = Parcela::lockForUpdate()->with(['emprestimo.parcelas', 'emprestimo.liberacao', 'emprestimo.operacao'])->findOrFail($dados['parcela_id']);
+            $emprestimo = $parcela->emprestimo;
+
+            if (! $emprestimo->isAtivo()) {
+                throw ValidationException::withMessages([
+                    'emprestimo' => 'Não é possível registrar pagamento. O empréstimo precisa estar ATIVO.',
+                ]);
+            }
+
+            if (! $emprestimo->isRenovacao()) {
+                $liberacao = $emprestimo->liberacao;
+                if (! $liberacao || $liberacao->status !== 'pago_ao_cliente') {
+                    throw ValidationException::withMessages([
+                        'liberacao' => 'Não é possível registrar pagamento. O dinheiro ainda não foi liberado pelo gestor.',
+                    ]);
+                }
+            }
+
+            $user = auth()->user();
+            if (! $user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor'])) {
+                throw ValidationException::withMessages([
+                    'permissao' => 'Apenas gestor ou administrador podem usar este fluxo.',
+                ]);
+            }
+
+            $valor = round((float) $dados['valor'], 2);
+            $esperado = round((float) $dados['valor_esperado'], 2);
+            $faltante = round($esperado - $valor, 2);
+            if ($faltante < 0) {
+                throw ValidationException::withMessages(['valor' => 'O valor recebido não pode ser maior que o devido.']);
+            }
+
+            $dataPagamento = Carbon::parse($dados['data_pagamento'] ?? Carbon::today());
+
+            $pagamento = Pagamento::create([
+                'parcela_id' => $parcela->id,
+                'consultor_id' => $dados['consultor_id'],
+                'valor' => $valor,
+                'metodo' => $dados['metodo'] ?? 'dinheiro',
+                'data_pagamento' => $dataPagamento,
+                'comprovante_path' => $dados['comprovante_path'] ?? null,
+                'observacoes' => $dados['observacoes'] ?? null,
+                'tipo_juros' => null,
+                'taxa_juros_aplicada' => null,
+                'valor_juros' => 0,
+                'aguardando_aprovacao_diaria_parcial' => false,
+            ]);
+
+            $this->criarMovimentacaoCaixa($pagamento);
+
+            $novoValorPago = round((float) $parcela->valor_pago + $valor, 2);
+            $parcela->update([
+                'valor_pago' => $novoValorPago,
+                'data_pagamento' => $dataPagamento,
+                'status' => 'paga_parcial',
+                'dias_atraso' => 0,
+            ]);
+
+            $ultima = Parcela::where('emprestimo_id', $emprestimo->id)
+                ->orderByDesc('numero')
+                ->lockForUpdate()
+                ->first();
+            if ($ultima) {
+                $ultima->update([
+                    'valor' => round((float) $ultima->valor + $faltante, 2),
+                ]);
+            }
+
+            self::auditar('registrar_pagamento_diaria_parcial_gestor', $pagamento, null, $pagamento->toArray());
+            $this->verificarFinalizacaoEmprestimo($emprestimo->fresh());
+
+            return $pagamento->fresh();
+        });
+    }
+}

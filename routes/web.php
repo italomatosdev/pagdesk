@@ -13,7 +13,6 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-
 Auth::routes(['register' => false]);
 
 // GET /logout: redireciona para login (logout real é via POST pelo botão Sair)
@@ -35,9 +34,10 @@ Route::get('/health/ready', [App\Http\Controllers\HealthController::class, 'read
 
 // Página de manutenção: se não estiver em manutenção, redireciona para o dashboard
 Route::get('/manutencao', function () {
-    if (!\Illuminate\Support\Facades\Cache::get(\App\Http\Middleware\CheckManutencaoSistema::CACHE_KEY, false)) {
+    if (! \Illuminate\Support\Facades\Cache::get(\App\Http\Middleware\CheckManutencaoSistema::CACHE_KEY, false)) {
         return redirect()->route('dashboard.index');
     }
+
     return view('pages-maintenance');
 })->name('manutencao');
 
@@ -50,7 +50,7 @@ Route::get('/conta-bloqueada', function () {
 
 // Rotas autenticadas (throttle.sensitive: 40 ações POST/PUT/PATCH/DELETE por minuto por usuário)
 Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
-    
+
     // Super Admin - Gestão de Empresas e Usuários
     Route::prefix('super-admin')->name('super-admin.')->group(function () {
         Route::get('/configuracoes', [App\Http\Controllers\SuperAdmin\ConfiguracoesSistemaController::class, 'index'])->name('configuracoes.index');
@@ -94,13 +94,13 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
             Route::get('/', [App\Http\Controllers\SuperAdmin\EmpresaController::class, 'index'])->name('index');
             Route::get('/create', [App\Http\Controllers\SuperAdmin\EmpresaController::class, 'create'])->name('create');
             Route::post('/', [App\Http\Controllers\SuperAdmin\EmpresaController::class, 'store'])->name('store');
-            
+
             // Rotas específicas de empresa (devem vir antes da rota genérica /{id})
             Route::get('/{id}/usuarios/create', [App\Http\Controllers\SuperAdmin\EmpresaController::class, 'createUsuario'])->name('usuarios.create');
             Route::post('/{id}/usuarios', [App\Http\Controllers\SuperAdmin\EmpresaController::class, 'storeUsuario'])->name('usuarios.store');
             Route::get('/{id}/operacoes/create', [App\Http\Controllers\SuperAdmin\EmpresaController::class, 'createOperacao'])->name('operacoes.create');
             Route::post('/{id}/operacoes', [App\Http\Controllers\SuperAdmin\EmpresaController::class, 'storeOperacao'])->name('operacoes.store');
-            
+
             Route::get('/{id}', [App\Http\Controllers\SuperAdmin\EmpresaController::class, 'show'])->name('show');
             Route::get('/{id}/edit', [App\Http\Controllers\SuperAdmin\EmpresaController::class, 'edit'])->name('edit');
             Route::put('/{id}', [App\Http\Controllers\SuperAdmin\EmpresaController::class, 'update'])->name('update');
@@ -109,7 +109,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
             Route::delete('/{id}', [App\Http\Controllers\SuperAdmin\EmpresaController::class, 'destroy'])->name('destroy');
         });
     });
-    
+
     // Dashboard
     Route::prefix('dashboard')->name('dashboard.')->group(function () {
         Route::get('/', [App\Modules\Core\Controllers\DashboardController::class, 'index'])->name('index');
@@ -119,7 +119,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
     Route::prefix('kanban')->name('kanban.')->group(function () {
         Route::get('/', [App\Modules\Core\Controllers\KanbanBoardController::class, 'index'])->name('index');
     });
-    
+
     // Busca Global
     Route::get('/api/search', [App\Modules\Core\Controllers\SearchController::class, 'buscar'])->name('search.global');
 
@@ -131,7 +131,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
 
     // Usuários (API para busca)
     Route::get('/api/usuarios/buscar', [App\Modules\Core\Controllers\UsuarioController::class, 'buscar'])->name('usuarios.api.buscar');
-    
+
     // Clientes
     Route::prefix('clientes')->name('clientes.')->group(function () {
         Route::get('/', [App\Modules\Core\Controllers\ClienteController::class, 'index'])->name('index');
@@ -180,7 +180,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::post('/{id}/cancelar-com-desfazimento', [App\Modules\Loans\Controllers\EmprestimoController::class, 'cancelarComDesfazimento'])->name('cancelar-com-desfazimento');
         Route::post('/{id}/garantias/{garantiaId}/executar', [App\Modules\Loans\Controllers\EmprestimoController::class, 'executarGarantia'])->name('garantias.executar');
         Route::post('/{id}/parcelas-retroativo', [App\Modules\Loans\Controllers\EmprestimoController::class, 'registrarParcelasPagasRetroativo'])->name('parcelas-retroativo');
-        
+
         // Garantias (empréstimo empenho)
         Route::post('/{id}/garantias', [App\Modules\Loans\Controllers\GarantiaController::class, 'store'])->name('garantias.store');
         Route::put('/garantias/{garantiaId}', [App\Modules\Loans\Controllers\GarantiaController::class, 'update'])->name('garantias.update');
@@ -296,6 +296,9 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::get('/solicitacoes-renovacao-abate', [App\Modules\Loans\Controllers\LiberacaoController::class, 'solicitacoesRenovacaoAbate'])->name('renovacao-abate');
         Route::post('/solicitacoes-renovacao-abate/{id}/aprovar', [App\Modules\Loans\Controllers\LiberacaoController::class, 'aprovarSolicitacaoRenovacaoAbate'])->name('renovacao-abate.aprovar');
         Route::post('/solicitacoes-renovacao-abate/{id}/rejeitar', [App\Modules\Loans\Controllers\LiberacaoController::class, 'rejeitarSolicitacaoRenovacaoAbate'])->name('renovacao-abate.rejeitar');
+        Route::get('/solicitacoes-diaria-parcial', [App\Modules\Loans\Controllers\LiberacaoController::class, 'solicitacoesDiariaParcial'])->name('diaria-parcial');
+        Route::post('/solicitacoes-diaria-parcial/{id}/aprovar', [App\Modules\Loans\Controllers\LiberacaoController::class, 'aprovarSolicitacaoDiariaParcial'])->name('diaria-parcial.aprovar');
+        Route::post('/solicitacoes-diaria-parcial/{id}/rejeitar', [App\Modules\Loans\Controllers\LiberacaoController::class, 'rejeitarSolicitacaoDiariaParcial'])->name('diaria-parcial.rejeitar');
         Route::get('/negociacoes', [App\Modules\Loans\Controllers\LiberacaoController::class, 'negociacoes'])->name('negociacoes');
         Route::post('/negociacoes/{id}/aprovar', [App\Modules\Loans\Controllers\LiberacaoController::class, 'aprovarNegociacao'])->name('negociacoes.aprovar');
         Route::post('/negociacoes/{id}/rejeitar', [App\Modules\Loans\Controllers\LiberacaoController::class, 'rejeitarNegociacao'])->name('negociacoes.rejeitar');
@@ -348,8 +351,8 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
     });
 
     // Prestações de Contas (rotas legadas - redirecionam para nova tela)
-    Route::get('/prestacoes', fn() => redirect()->route('fechamento-caixa.index'))->name('prestacoes.index');
-    Route::get('/prestacoes/{id}', fn($id) => redirect()->route('fechamento-caixa.show', $id))->name('prestacoes.show');
+    Route::get('/prestacoes', fn () => redirect()->route('fechamento-caixa.index'))->name('prestacoes.index');
+    Route::get('/prestacoes/{id}', fn ($id) => redirect()->route('fechamento-caixa.show', $id))->name('prestacoes.show');
     Route::post('/prestacoes/{id}/confirmar-recebimento', [App\Modules\Cash\Controllers\FechamentoCaixaController::class, 'confirmarRecebimento'])->name('prestacoes.confirmar-recebimento');
 
     // Operações (administradores e gestores)
