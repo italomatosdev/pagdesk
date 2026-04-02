@@ -258,7 +258,7 @@
                                                     </button>
                                                 @endif
                                                 
-                                                @if($f->status === 'enviado' && !empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])))
+                                                @if($f->status === 'enviado' && !empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])) && ($f->criado_por === null || (int) auth()->id() === (int) $f->criado_por))
                                                     <form action="{{ route('fechamento-caixa.confirmar', $f->id) }}" method="POST" class="d-inline"
                                                           onsubmit="return confirmarRecebimento(event)">
                                                         @csrf

@@ -9,9 +9,9 @@ use App\Modules\Cash\Services\SettlementService;
 use App\Modules\Core\Models\Operacao;
 use App\Support\FichaContatoLookup;
 use App\Support\OperacaoPreferida;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
-use Illuminate\Http\RedirectResponse;
 
 class SettlementController extends Controller
 {
@@ -29,16 +29,16 @@ class SettlementController extends Controller
     public function index(Request $request): View
     {
         $user = auth()->user();
-        
+
         // Super Admin não pode acessar Prestação de Contas
         if ($user->isSuperAdmin()) {
             abort(403, 'Super Admin não pode acessar Prestação de Contas.');
         }
-        
+
         $consultorId = $user->id;
-        
+
         // Se tiver gestor/admin em alguma op, pode ver de outros consultores ou todos
-        if (!empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
+        if (! empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
             $consultorIdInput = $request->input('consultor_id');
             $consultorId = $consultorIdInput ? (int) $consultorIdInput : null;
         }
@@ -72,10 +72,10 @@ class SettlementController extends Controller
         $settlement = Settlement::with(['operacao', 'consultor', 'criador', 'conferidor', 'recebedor'])->findOrFail($id);
         $user = auth()->user();
 
-        if (!$user->temAcessoOperacao($settlement->operacao_id)) {
+        if (! $user->temAcessoOperacao($settlement->operacao_id)) {
             abort(403, 'Acesso negado.');
         }
-        if ($settlement->consultor_id !== $user->id && !$user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
+        if ($settlement->consultor_id !== $user->id && ! $user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado.');
         }
 
@@ -113,7 +113,7 @@ class SettlementController extends Controller
             ->where('operacao_id', $settlement->operacao_id)
             ->whereBetween('data_movimentacao', [
                 $settlement->data_inicio->format('Y-m-d'),
-                $settlement->data_fim->format('Y-m-d')
+                $settlement->data_fim->format('Y-m-d'),
             ])
             ->with(['operacao', 'pagamento.parcela.emprestimo.cliente'])
             ->orderBy('data_movimentacao', 'asc')
@@ -142,14 +142,14 @@ class SettlementController extends Controller
     public function create(Request $request): View
     {
         $user = auth()->user();
-        
+
         // Super Admin não pode criar Prestação de Contas
         if ($user->isSuperAdmin()) {
             abort(403, 'Super Admin não pode criar Prestação de Contas.');
         }
-        
+
         $operacoesIds = $user->getOperacoesIds();
-        $operacoes = !empty($operacoesIds)
+        $operacoes = ! empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
             : collect([]);
         $operacaoIdDefault = OperacaoPreferida::resolverParaFormularioOuQuery($request, $operacoes->pluck('id')->all(), $user);
@@ -163,12 +163,12 @@ class SettlementController extends Controller
     public function preview(Request $request): View|RedirectResponse
     {
         $user = auth()->user();
-        
+
         // Super Admin não pode criar Prestação de Contas
         if ($user->isSuperAdmin()) {
             abort(403, 'Super Admin não pode criar Prestação de Contas.');
         }
-        
+
         $validated = $request->validate([
             'operacao_id' => 'required|exists:operacoes,id',
             'data_inicio' => 'required|date',
@@ -179,7 +179,7 @@ class SettlementController extends Controller
         $user = auth()->user();
         $consultorId = $user->id;
 
-        if (!$user->temAcessoOperacao($validated['operacao_id'])) {
+        if (! $user->temAcessoOperacao($validated['operacao_id'])) {
             return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
         }
 
@@ -219,7 +219,7 @@ class SettlementController extends Controller
             ->where('operacao_id', $validated['operacao_id'])
             ->whereBetween('data_movimentacao', [
                 $validated['data_inicio'],
-                $validated['data_fim']
+                $validated['data_fim'],
             ])
             ->with(['operacao', 'pagamento.parcela.emprestimo.cliente'])
             ->orderBy('data_movimentacao', 'asc')
@@ -249,12 +249,12 @@ class SettlementController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $user = auth()->user();
-        
+
         // Super Admin não pode criar Prestação de Contas
         if ($user->isSuperAdmin()) {
             abort(403, 'Super Admin não pode criar Prestação de Contas.');
         }
-        
+
         $validated = $request->validate([
             'operacao_id' => 'required|exists:operacoes,id',
             'data_inicio' => 'required|date',
@@ -264,16 +264,17 @@ class SettlementController extends Controller
 
         $validated['consultor_id'] = $user->id;
 
-        if (!$user->temAcessoOperacao($validated['operacao_id'])) {
+        if (! $user->temAcessoOperacao($validated['operacao_id'])) {
             return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
         }
 
         try {
             $settlement = $this->settlementService->criar($validated);
+
             return redirect()->route('prestacoes.index')
                 ->with('success', 'Prestação de contas criada com sucesso!');
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao criar prestação de contas: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Erro ao criar prestação de contas: '.$e->getMessage())->withInput();
         }
     }
 
@@ -283,9 +284,9 @@ class SettlementController extends Controller
     public function aprovar(Request $request, int $id): RedirectResponse
     {
         $user = auth()->user();
-        
+
         $settlement = Settlement::findOrFail($id);
-        if (!$user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem aprovar prestações de contas.');
         }
 
@@ -295,10 +296,11 @@ class SettlementController extends Controller
 
         try {
             $this->settlementService->aprovar($id, $user->id, $validated['observacoes'] ?? null);
+
             return redirect()->route('prestacoes.show', $id)
                 ->with('success', 'Prestação de contas aprovada com sucesso!');
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao aprovar: ' . $e->getMessage());
+            return back()->with('error', 'Erro ao aprovar: '.$e->getMessage());
         }
     }
 
@@ -308,9 +310,9 @@ class SettlementController extends Controller
     public function rejeitar(Request $request, int $id): RedirectResponse
     {
         $user = auth()->user();
-        
+
         $settlement = Settlement::findOrFail($id);
-        if (!$user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem rejeitar prestações de contas.');
         }
 
@@ -320,10 +322,11 @@ class SettlementController extends Controller
 
         try {
             $this->settlementService->rejeitar($id, $user->id, $validated['motivo_rejeicao']);
+
             return redirect()->route('prestacoes.show', $id)
                 ->with('success', 'Prestação de contas rejeitada.');
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao rejeitar: ' . $e->getMessage());
+            return back()->with('error', 'Erro ao rejeitar: '.$e->getMessage());
         }
     }
 
@@ -351,18 +354,18 @@ class SettlementController extends Controller
 
             // Anexar comprovante (não gera movimentações ainda)
             $this->settlementService->anexarComprovante($id, $comprovantePath);
-            
+
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => true,
-                    'message' => 'Comprovante anexado com sucesso! Aguardando confirmação de recebimento do gestor.'
+                    'message' => 'Comprovante anexado com sucesso! Aguardando confirmação de recebimento do gestor.',
                 ]);
             }
-            
+
             return redirect()->route('prestacoes.show', $id)
                 ->with('success', 'Comprovante anexado com sucesso! Aguardando confirmação de recebimento do gestor.');
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao anexar comprovante: ' . $e->getMessage());
+            return back()->with('error', 'Erro ao anexar comprovante: '.$e->getMessage());
         }
     }
 
@@ -373,10 +376,14 @@ class SettlementController extends Controller
     public function confirmarRecebimento(Request $request, int $id): RedirectResponse
     {
         $user = auth()->user();
-        
+
         $settlement = Settlement::findOrFail($id);
-        if (!$user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
+        if (! $user->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem confirmar recebimento.');
+        }
+
+        if ($settlement->criado_por !== null && (int) $user->id !== (int) $settlement->criado_por) {
+            abort(403, 'Apenas quem iniciou o fechamento pode confirmar o recebimento.');
         }
 
         $validated = $request->validate([
@@ -386,11 +393,11 @@ class SettlementController extends Controller
         try {
             // Confirmar recebimento (gera movimentações automaticamente)
             $this->settlementService->confirmarRecebimento($id, $user->id, $validated['observacoes'] ?? null);
-            
+
             return redirect()->route('prestacoes.show', $id)
                 ->with('success', 'Recebimento confirmado! Movimentações de caixa geradas automaticamente.');
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao confirmar recebimento: ' . $e->getMessage());
+            return back()->with('error', 'Erro ao confirmar recebimento: '.$e->getMessage());
         }
     }
 
@@ -401,7 +408,7 @@ class SettlementController extends Controller
     public function fechamentoCaixa(Request $request): View
     {
         $user = auth()->user();
-        
+
         if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem fechar caixa.');
         }
@@ -410,7 +417,7 @@ class SettlementController extends Controller
             $operacoes = Operacao::where('ativo', true)->orderBy('nome')->get();
         } else {
             $operacoesIds = $user->getOperacoesIds();
-            $operacoes = !empty($operacoesIds)
+            $operacoes = ! empty($operacoesIds)
                 ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
                 : collect([]);
         }
@@ -437,7 +444,7 @@ class SettlementController extends Controller
     public function fecharCaixa(Request $request): RedirectResponse
     {
         $user = auth()->user();
-        
+
         if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem fechar caixa.');
         }
@@ -448,7 +455,7 @@ class SettlementController extends Controller
             'observacoes' => 'nullable|string|max:500',
         ]);
 
-        if (!$user->temAcessoOperacao($validated['operacao_id'])) {
+        if (! $user->temAcessoOperacao($validated['operacao_id'])) {
             return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
         }
 
@@ -464,11 +471,11 @@ class SettlementController extends Controller
                 $user->id,
                 $validated['observacoes'] ?? null
             );
-            
+
             return redirect()->route('prestacoes.show', $settlement->id)
                 ->with('success', 'Caixa fechado com sucesso! O usuário foi notificado para enviar o comprovante.');
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao fechar caixa: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Erro ao fechar caixa: '.$e->getMessage())->withInput();
         }
     }
 }

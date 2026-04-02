@@ -390,6 +390,10 @@ class FechamentoCaixaController extends Controller
             abort(403, 'Apenas gestores e administradores podem confirmar recebimento.');
         }
 
+        if ($settlement->criado_por !== null && (int) $user->id !== (int) $settlement->criado_por) {
+            abort(403, 'Apenas quem iniciou o fechamento pode confirmar o recebimento.');
+        }
+
         $validated = $request->validate([
             'observacoes' => 'nullable|string|max:500',
         ]);

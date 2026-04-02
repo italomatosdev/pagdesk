@@ -50,6 +50,12 @@
                                 em {{ $settlement->created_at->format('d/m/Y H:i') }}
                             </div>
                         @endif
+                        @if($settlement->isEnviado() && !empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])) && $settlement->criado_por !== null && (int) auth()->id() !== (int) $settlement->criado_por)
+                            <div class="alert alert-secondary mb-3">
+                                <i class="bx bx-time-five me-1"></i>
+                                Aguardando confirmação de recebimento por <strong>{{ $settlement->criador?->name ?? 'quem iniciou o fechamento' }}</strong>.
+                            </div>
+                        @endif
                         <div class="row">
                             <div class="col-md-3 mb-3">
                                 <div class="border rounded p-3 h-100">
@@ -312,7 +318,7 @@
                                     </button>
                                 @endif
                                 
-                                @if($settlement->isEnviado() && !empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])))
+                                @if($settlement->isEnviado() && !empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])) && ($settlement->criado_por === null || (int) auth()->id() === (int) $settlement->criado_por))
                                     <form action="{{ route('fechamento-caixa.confirmar', $settlement->id) }}" method="POST" class="d-inline" id="formConfirmarRecebimento">
                                         @csrf
                                         <button type="submit" class="btn btn-success" id="btnConfirmarRecebimento">
