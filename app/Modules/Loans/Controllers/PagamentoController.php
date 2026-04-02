@@ -614,7 +614,10 @@ class PagamentoController extends Controller
                 ->with('error', 'Quitação em lote só está disponível para empréstimos de frequência diária.');
         }
 
-        $parcelasPendentes = $emprestimo->parcelas->reject(fn ($p) => $p->isQuitada())->values();
+        $parcelasPendentes = $emprestimo->parcelas
+            ->filter(fn ($p) => $p->faltaPagar() > 0)
+            ->sortBy('numero')
+            ->values();
         if ($parcelasPendentes->isEmpty()) {
             return redirect()->route('emprestimos.show', $emprestimo->id)
                 ->with('error', 'Não há parcelas pendentes para quitar.');
@@ -622,15 +625,15 @@ class PagamentoController extends Controller
 
         $operacao = $emprestimo->operacao;
         $dataRef = now();
-        $totalPrincipal = $parcelasPendentes->sum(fn ($p) => (float) $p->valor);
+        $totalPrincipal = round($parcelasPendentes->sum(fn ($p) => $p->faltaPagar()), 2);
         $jurosAutomaticoTotal = 0.0;
         if ($operacao->taxa_juros_atraso > 0) {
             $taxa = (float) $operacao->taxa_juros_atraso;
             $tipoCalculo = $operacao->tipo_calculo_juros ?? 'por_dia';
             foreach ($parcelasPendentes as $p) {
                 $dias = $p->calcularDiasAtraso($dataRef);
-                $v = (float) $p->valor;
-                $jurosAutomaticoTotal += $tipoCalculo === 'por_dia' ? $v * ($taxa / 100) * $dias : $v * ($taxa / 100) * ($dias / 30);
+                $falta = $p->faltaPagar();
+                $jurosAutomaticoTotal += $tipoCalculo === 'por_dia' ? $falta * ($taxa / 100) * $dias : $falta * ($taxa / 100) * ($dias / 30);
             }
             $jurosAutomaticoTotal = round($jurosAutomaticoTotal, 2);
         }

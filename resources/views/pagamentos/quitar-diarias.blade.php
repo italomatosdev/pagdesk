@@ -27,8 +27,8 @@
 
                     <div class="alert alert-info mb-3">
                         <strong>Empréstimo #{{ $emprestimo->id }}</strong> – {{ $nomeClienteExibicao ?? ($emprestimo->cliente->nome ?? 'Cliente') }}<br>
-                        <strong>Parcelas pendentes:</strong> {{ $parcelasPendentes->count() }}<br>
-                        Um único comprovante será associado a todos os pagamentos. Você pode quitar <strong>sem juros de atraso</strong> ou <strong>com juros</strong> (automático, manual ou valor fixo).
+                        <strong>Parcelas com saldo em aberto:</strong> {{ $parcelasPendentes->count() }}<br>
+                        O total usa o <strong>falta pagar</strong> de cada linha (após abatimentos/parciais). Um único comprovante será associado a todos os pagamentos. Você pode quitar <strong>sem juros de atraso</strong> ou <strong>com juros</strong> (automático, manual ou valor fixo).
                     </div>
 
                     <div class="table-responsive mb-4">
@@ -38,22 +38,30 @@
                                     <th>Parcela</th>
                                     <th>Vencimento</th>
                                     <th>Valor</th>
+                                    <th>Valor pago</th>
+                                    <th>Falta pagar</th>
                                     <th>Dias atraso</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach($parcelasPendentes as $p)
-                                    @php $dias = $p->calcularDiasAtraso(now()); @endphp
+                                    @php
+                                        $dias = $p->calcularDiasAtraso(now());
+                                        $falta = $p->faltaPagar();
+                                        $vp = (float) ($p->valor_pago ?? 0);
+                                    @endphp
                                     <tr>
                                         <td>#{{ $p->numero }}</td>
                                         <td>{{ $p->data_vencimento->format('d/m/Y') }}</td>
                                         <td>R$ {{ number_format($p->valor, 2, ',', '.') }}</td>
+                                        <td>R$ {{ number_format($vp, 2, ',', '.') }}</td>
+                                        <td><strong>R$ {{ number_format($falta, 2, ',', '.') }}</strong></td>
                                         <td>{{ $dias > 0 ? $dias . ' dias' : '-' }}</td>
                                     </tr>
                                 @endforeach
                             </tbody>
                         </table>
-                        <p class="mb-0"><strong>Total (principal):</strong> R$ {{ number_format($totalPrincipal, 2, ',', '.') }}</p>
+                        <p class="mb-0"><strong>Total a quitar (soma do falta pagar):</strong> R$ {{ number_format($totalPrincipal, 2, ',', '.') }}</p>
                     </div>
 
                     <form action="{{ route('pagamentos.quitar-diarias.store', $emprestimo->id) }}" method="POST" enctype="multipart/form-data" id="formQuitarDiarias">

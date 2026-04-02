@@ -186,6 +186,19 @@ class Parcela extends Model
     }
 
     /**
+     * Valor nominal ainda em aberto na parcela (valor − valor_pago).
+     * Usado em quitação em lote e pagamentos parciais.
+     */
+    public function faltaPagar(): float
+    {
+        if ($this->isQuitada()) {
+            return 0.0;
+        }
+
+        return max(0.0, round((float) $this->valor - (float) ($this->valor_pago ?? 0), 2));
+    }
+
+    /**
      * Obter nome do status formatado
      */
     public function getStatusNomeAttribute(): string

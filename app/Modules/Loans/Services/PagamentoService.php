@@ -194,14 +194,14 @@ class PagamentoService
     public function calcularTotalQuitacaoDiarias(int $emprestimoId, array $dados): float
     {
         $emprestimo = \App\Modules\Loans\Models\Emprestimo::with(['parcelas', 'operacao'])->findOrFail($emprestimoId);
-        $parcelasPendentes = $emprestimo->parcelas->reject(fn (Parcela $p) => $p->isQuitada());
+        $parcelasPendentes = $emprestimo->parcelas->filter(fn (Parcela $p) => $p->faltaPagar() > 0)->values();
         if ($parcelasPendentes->isEmpty()) {
             return 0.0;
         }
         $dataPagamento = Carbon::parse($dados['data_pagamento'] ?? Carbon::today());
         $tipoJuros = $dados['tipo_juros'] ?? 'nenhum';
         $operacao = $emprestimo->operacao;
-        $totalValorParcelas = $parcelasPendentes->sum(fn (Parcela $p) => (float) $p->valor);
+        $totalFalta = $parcelasPendentes->sum(fn (Parcela $p) => $p->faltaPagar());
         $valorJurosPorParcela = [];
         if ($tipoJuros === 'nenhum' || empty($tipoJuros)) {
             foreach ($parcelasPendentes as $p) {
@@ -210,9 +210,15 @@ class PagamentoService
         } elseif ($tipoJuros === 'fixo') {
             $valorJurosFixoTotal = (float) ($dados['valor_juros_fixo'] ?? 0);
             foreach ($parcelasPendentes as $p) {
-                $valorJurosPorParcela[$p->id] = $totalValorParcelas > 0
-                    ? round($valorJurosFixoTotal * ((float) $p->valor / $totalValorParcelas), 2)
+                $faltaP = $p->faltaPagar();
+                $valorJurosPorParcela[$p->id] = $totalFalta > 0
+                    ? round($valorJurosFixoTotal * ($faltaP / $totalFalta), 2)
                     : 0.0;
+            }
+            $somaJuros = array_sum($valorJurosPorParcela);
+            if (abs($somaJuros - $valorJurosFixoTotal) > 0.02 && $parcelasPendentes->isNotEmpty()) {
+                $ultimoId = $parcelasPendentes->last()->id;
+                $valorJurosPorParcela[$ultimoId] = round(($valorJurosPorParcela[$ultimoId] ?? 0) + ($valorJurosFixoTotal - $somaJuros), 2);
             }
         } else {
             $taxa = $tipoJuros === 'automatico'
@@ -221,15 +227,15 @@ class PagamentoService
             $tipoCalculo = $operacao->tipo_calculo_juros ?? 'por_dia';
             foreach ($parcelasPendentes as $p) {
                 $diasAtraso = $p->calcularDiasAtraso($dataPagamento);
-                $valorP = (float) $p->valor;
+                $faltaP = $p->faltaPagar();
                 $valorJurosPorParcela[$p->id] = $tipoCalculo === 'por_dia'
-                    ? round($valorP * ($taxa / 100) * $diasAtraso, 2)
-                    : round($valorP * ($taxa / 100) * ($diasAtraso / 30), 2);
+                    ? round($faltaP * ($taxa / 100) * $diasAtraso, 2)
+                    : round($faltaP * ($taxa / 100) * ($diasAtraso / 30), 2);
             }
         }
         $total = 0.0;
         foreach ($parcelasPendentes as $parcela) {
-            $total += (float) $parcela->valor + ($valorJurosPorParcela[$parcela->id] ?? 0);
+            $total += $parcela->faltaPagar() + ($valorJurosPorParcela[$parcela->id] ?? 0);
         }
 
         return round($total, 2);
@@ -266,7 +272,7 @@ class PagamentoService
                 ]);
             }
 
-            $parcelasPendentes = $emprestimo->parcelas->reject(fn (Parcela $p) => $p->isQuitada());
+            $parcelasPendentes = $emprestimo->parcelas->filter(fn (Parcela $p) => $p->faltaPagar() > 0)->sortBy('numero')->values();
             if ($parcelasPendentes->isEmpty()) {
                 throw ValidationException::withMessages([
                     'parcelas' => 'Não há parcelas pendentes para quitar.',
@@ -286,7 +292,7 @@ class PagamentoService
             $comprovantePath = $dados['comprovante_path'] ?? null;
             $consultorId = $dados['consultor_id'] ?? $user->id;
 
-            $totalValorParcelas = $parcelasPendentes->sum(fn (Parcela $p) => (float) $p->valor);
+            $totalFalta = $parcelasPendentes->sum(fn (Parcela $p) => $p->faltaPagar());
             $valorJurosPorParcela = [];
             if ($tipoJuros === 'nenhum' || empty($tipoJuros)) {
                 foreach ($parcelasPendentes as $p) {
@@ -295,9 +301,15 @@ class PagamentoService
             } elseif ($tipoJuros === 'fixo') {
                 $valorJurosFixoTotal = (float) ($dados['valor_juros_fixo'] ?? 0);
                 foreach ($parcelasPendentes as $p) {
-                    $valorJurosPorParcela[$p->id] = $totalValorParcelas > 0
-                        ? round($valorJurosFixoTotal * ((float) $p->valor / $totalValorParcelas), 2)
+                    $faltaP = $p->faltaPagar();
+                    $valorJurosPorParcela[$p->id] = $totalFalta > 0
+                        ? round($valorJurosFixoTotal * ($faltaP / $totalFalta), 2)
                         : 0.0;
+                }
+                $somaJuros = array_sum($valorJurosPorParcela);
+                if (abs($somaJuros - $valorJurosFixoTotal) > 0.02 && $parcelasPendentes->isNotEmpty()) {
+                    $ultimoId = $parcelasPendentes->last()->id;
+                    $valorJurosPorParcela[$ultimoId] = round(($valorJurosPorParcela[$ultimoId] ?? 0) + ($valorJurosFixoTotal - $somaJuros), 2);
                 }
             } else {
                 $taxa = $tipoJuros === 'automatico'
@@ -306,11 +318,11 @@ class PagamentoService
                 $tipoCalculo = $operacao->tipo_calculo_juros ?? 'por_dia';
                 foreach ($parcelasPendentes as $p) {
                     $diasAtraso = $p->calcularDiasAtraso($dataPagamento);
-                    $valorP = (float) $p->valor;
+                    $faltaP = $p->faltaPagar();
                     if ($tipoCalculo === 'por_dia') {
-                        $valorJurosPorParcela[$p->id] = round($valorP * ($taxa / 100) * $diasAtraso, 2);
+                        $valorJurosPorParcela[$p->id] = round($faltaP * ($taxa / 100) * $diasAtraso, 2);
                     } else {
-                        $valorJurosPorParcela[$p->id] = round($valorP * ($taxa / 100) * ($diasAtraso / 30), 2);
+                        $valorJurosPorParcela[$p->id] = round($faltaP * ($taxa / 100) * ($diasAtraso / 30), 2);
                     }
                 }
             }
@@ -319,9 +331,14 @@ class PagamentoService
             $taxaRegistro = $tipoJuros === 'automatico' ? ($operacao->taxa_juros_atraso ?? null) : ($tipoJuros === 'manual' ? ($dados['taxa_juros_manual'] ?? null) : null);
 
             $pagamentosCriados = [];
-            foreach ($parcelasPendentes as $parcela) {
+            foreach ($parcelasPendentes as $parcelaRef) {
+                $parcela = Parcela::lockForUpdate()->findOrFail($parcelaRef->id);
+                if ($parcela->faltaPagar() <= 0) {
+                    continue;
+                }
+                $falta = $parcela->faltaPagar();
                 $valorJuros = $valorJurosPorParcela[$parcela->id] ?? 0;
-                $valorTotal = (float) $parcela->valor + $valorJuros;
+                $valorTotal = round($falta + $valorJuros, 2);
                 $createData = [
                     'parcela_id' => $parcela->id,
                     'consultor_id' => $consultorId,
@@ -337,16 +354,22 @@ class PagamentoService
                 $pagamento = Pagamento::create($createData);
                 $pagamentosCriados[] = $pagamento;
 
-                $novoValorPago = $parcela->valor_pago + $valorTotal;
-                $estaTotalmentePaga = $novoValorPago >= $parcela->valor;
+                $novoValorPago = round((float) $parcela->valor_pago + $falta, 2);
+                $estaTotalmentePaga = $novoValorPago >= (float) $parcela->valor;
                 $parcela->update([
-                    'valor_pago' => $novoValorPago,
+                    'valor_pago' => $estaTotalmentePaga ? $parcela->valor : $novoValorPago,
                     'data_pagamento' => $dataPagamento,
                     'status' => $estaTotalmentePaga ? 'paga' : 'pendente',
                     'dias_atraso' => 0,
                 ]);
                 $this->criarMovimentacaoCaixa($pagamento);
                 self::auditar('registrar_pagamento_quitacao_diarias', $pagamento, null, $pagamento->toArray());
+            }
+
+            if ($pagamentosCriados === []) {
+                throw ValidationException::withMessages([
+                    'parcelas' => 'Nenhum pagamento foi registrado (parcelas podem ter sido atualizadas). Atualize a página e tente novamente.',
+                ]);
             }
 
             $this->verificarFinalizacaoEmprestimo($emprestimo);
