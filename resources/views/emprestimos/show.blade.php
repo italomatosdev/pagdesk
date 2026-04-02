@@ -1011,6 +1011,8 @@
                                             <th>Juros</th>
                                             <th>Amortização</th>
                                             <th>Saldo Devedor</th>
+                                            <th>Vencimento</th>
+                                            <th>Pagamento</th>
                                             <th>Status</th>
                                         </tr>
                                     </thead>
@@ -1024,6 +1026,8 @@
                                                 <td>
                                                     <strong>R$ {{ number_format($parcela->saldo_devedor ?? 0, 2, ',', '.') }}</strong>
                                                 </td>
+                                                <td class="text-nowrap">{{ $parcela->data_vencimento?->format('d/m/Y') ?? '—' }}</td>
+                                                <td class="text-nowrap">{{ $parcela->dataPagamentoParaExibicao()?->format('d/m/Y') ?? '—' }}</td>
                                                 <td>
                                                     <span class="badge bg-{{ $parcela->status_cor }}">
                                                         {{ $parcela->status_nome }}
@@ -1844,6 +1848,7 @@
                                         <th>Valor Pago</th>
                                         <th class="text-nowrap" title="Saldo nominal da parcela (não inclui juros de atraso calculados no pagamento)">Falta pagar (parcela)</th>
                                         <th>Vencimento</th>
+                                        <th>Pagamento</th>
                                         <th>Status</th>
                                         <th>Pagamentos</th>
                                         <th>Ações</th>
@@ -1873,7 +1878,8 @@
                                                     R$ {{ number_format($faltaParcelaShow, 2, ',', '.') }}
                                                 @endif
                                             </td>
-                                            <td>{{ $parcela->data_vencimento->format('d/m/Y') }}</td>
+                                            <td class="text-nowrap">{{ $parcela->data_vencimento?->format('d/m/Y') ?? '—' }}</td>
+                                            <td class="text-nowrap">{{ $parcela->dataPagamentoParaExibicao()?->format('d/m/Y') ?? '—' }}</td>
                                             <td>
                                                 <span class="badge bg-{{ $parcela->status_cor }}">
                                                     {{ $parcela->status_nome }}
@@ -1919,7 +1925,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="8" class="text-center">
+                                            <td colspan="9" class="text-center">
                                                 Nenhuma parcela gerada ainda.
                                                 @if($emprestimo->status === 'pendente')
                                                     <br><small class="text-muted">Aguarde a aprovação do empréstimo.</small>

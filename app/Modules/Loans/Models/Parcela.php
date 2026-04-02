@@ -199,6 +199,23 @@ class Parcela extends Model
     }
 
     /**
+     * Data do pagamento para exibição em detalhes do empréstimo: campo da parcela ou último registro em pagamentos.
+     */
+    public function dataPagamentoParaExibicao(): ?Carbon
+    {
+        if ($this->data_pagamento) {
+            return $this->data_pagamento;
+        }
+
+        $ultimo = $this->pagamentos
+            ->filter(fn (Pagamento $p) => $p->data_pagamento)
+            ->sortByDesc('data_pagamento')
+            ->first();
+
+        return $ultimo?->data_pagamento;
+    }
+
+    /**
      * Obter nome do status formatado
      */
     public function getStatusNomeAttribute(): string

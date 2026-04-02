@@ -112,8 +112,11 @@
                             @endif
                         </div>
                         @if($meuSaldoRounded > 0)
+                            @php
+                                $podeFecharProprioCaixa = auth()->user()->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador']);
+                            @endphp
                             <a href="{{ route('fechamento-caixa.conferir', ['usuario_id' => auth()->id(), 'operacao_id' => $operacaoId]) }}" class="btn btn-primary btn-lg">
-                                <i class="bx bx-search-alt"></i> Conferir e fechar meu caixa
+                                <i class="bx bx-search-alt"></i> {{ $podeFecharProprioCaixa ? 'Conferir e fechar meu caixa' : 'Conferir meu caixa' }}
                             </a>
                         @else
                             <a href="{{ route('fechamento-caixa.conferir', ['usuario_id' => auth()->id(), 'operacao_id' => $operacaoId]) }}" class="btn btn-outline-danger btn-lg">
@@ -255,7 +258,7 @@
                                                     </button>
                                                 @endif
                                                 
-                                                @if($f->status === 'enviado' && !empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])))
+                                                @if($f->status === 'enviado' && !empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])) && ($f->criado_por === null || (int) auth()->id() === (int) $f->criado_por))
                                                     <form action="{{ route('fechamento-caixa.confirmar', $f->id) }}" method="POST" class="d-inline"
                                                           onsubmit="return confirmarRecebimento(event)">
                                                         @csrf

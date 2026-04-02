@@ -12,6 +12,7 @@ use App\Modules\Loans\Models\Parcela;
 use App\Support\FichaContatoLookup;
 use App\Support\OperacaoPreferida;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -90,6 +91,51 @@ class RelatorioController extends Controller
                 $query->withCount('renovacoes');
             },
         ];
+    }
+
+    /**
+     * @return string vazio ou diaria|semanal|mensal
+     */
+    private static function normalizarFrequenciaComissoes(mixed $raw): string
+    {
+        $val = is_string($raw) ? $raw : '';
+
+        return in_array($val, ['diaria', 'semanal', 'mensal'], true) ? $val : '';
+    }
+
+    /**
+     * Relatório de comissões: restringe pagamentos pelo empréstimo da parcela (operação + frequência).
+     *
+     * @param  Builder<Pagamento>  $query
+     */
+    private function aplicarFiltroComissoesParcelaEmprestimo(
+        Builder $query,
+        $user,
+        ?int $operacaoId,
+        array $operacoesIds,
+        string $frequencia
+    ): void {
+        $temFiltroOperacao = ! $user->isSuperAdmin() || $operacaoId;
+        $temFiltroFrequencia = $frequencia !== '';
+
+        if (! $temFiltroOperacao && ! $temFiltroFrequencia) {
+            return;
+        }
+
+        $query->whereHas('parcela.emprestimo', function ($q) use ($operacaoId, $operacoesIds, $temFiltroOperacao, $temFiltroFrequencia, $frequencia) {
+            if ($temFiltroOperacao) {
+                if ($operacaoId) {
+                    $q->where('operacao_id', $operacaoId);
+                } elseif (! empty($operacoesIds)) {
+                    $q->whereIn('operacao_id', $operacoesIds);
+                } else {
+                    $q->whereRaw('1 = 0');
+                }
+            }
+            if ($temFiltroFrequencia) {
+                $q->where('frequencia', $frequencia);
+            }
+        });
     }
 
     /**
@@ -738,6 +784,7 @@ class RelatorioController extends Controller
             ? Operacao::where('ativo', true)->pluck('id')->toArray()
             : $user->getOperacoesIds();
         $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoesIds, $user);
+        $frequencia = self::normalizarFrequenciaComissoes($request->input('frequencia'));
 
         $operacoes = ! empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
@@ -757,17 +804,7 @@ class RelatorioController extends Controller
         $query = Pagamento::with(self::withPagamentoParaReparticaoRelatorio())
             ->whereBetween('data_pagamento', [$dateFrom, $dateTo]);
 
-        if (! $user->isSuperAdmin() || $operacaoId) {
-            $query->whereHas('parcela.emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
-                if ($operacaoId) {
-                    $q->where('operacao_id', $operacaoId);
-                } elseif (! empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
-                } else {
-                    $q->whereRaw('1 = 0');
-                }
-            });
-        }
+        $this->aplicarFiltroComissoesParcelaEmprestimo($query, $user, $operacaoId, $operacoesIds, $frequencia);
 
         $pagamentos = $query->get();
 
@@ -796,6 +833,7 @@ class RelatorioController extends Controller
             'dateTo',
             'operacoes',
             'operacaoId',
+            'frequencia',
             'consultoresComTotais'
         ));
     }
@@ -826,6 +864,7 @@ class RelatorioController extends Controller
             ? Operacao::where('ativo', true)->pluck('id')->toArray()
             : $user->getOperacoesIds();
         $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoesIds, $user);
+        $frequencia = self::normalizarFrequenciaComissoes($request->input('frequencia'));
 
         $operacoes = ! empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
@@ -843,17 +882,7 @@ class RelatorioController extends Controller
             ->whereBetween('data_pagamento', [$dateFrom, $dateTo])
             ->where('consultor_id', $consultorId);
 
-        if (! $user->isSuperAdmin() || $operacaoId) {
-            $query->whereHas('parcela.emprestimo', function ($q) use ($operacaoId, $operacoesIds) {
-                if ($operacaoId) {
-                    $q->where('operacao_id', $operacaoId);
-                } elseif (! empty($operacoesIds)) {
-                    $q->whereIn('operacao_id', $operacoesIds);
-                } else {
-                    $q->whereRaw('1 = 0');
-                }
-            });
-        }
+        $this->aplicarFiltroComissoesParcelaEmprestimo($query, $user, $operacaoId, $operacoesIds, $frequencia);
 
         $pagamentos = $query->get();
 
@@ -871,6 +900,7 @@ class RelatorioController extends Controller
             'date_from' => $dateFrom->format('Y-m-d'),
             'date_to' => $dateTo->format('Y-m-d'),
             'operacao_id' => $operacaoId,
+            'frequencia' => $frequencia !== '' ? $frequencia : null,
         ], fn ($v) => $v !== null && $v !== '');
 
         $urlVoltarComissoes = route('relatorios.comissoes', $filtrosVoltar);
@@ -880,6 +910,7 @@ class RelatorioController extends Controller
             'dateTo',
             'operacoes',
             'operacaoId',
+            'frequencia',
             'consultorId',
             'consultorNome',
             'linhas',

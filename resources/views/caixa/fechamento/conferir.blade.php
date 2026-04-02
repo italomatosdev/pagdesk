@@ -3,7 +3,13 @@
     Conferir fechamento de caixa
 @endsection
 @section('page-title')
-    {{ ($permiteFechar ?? true) ? 'Conferir antes de fechar o caixa' : 'Extrato e conferência de caixa' }}
+    @if($podeConfirmarFechamento ?? false)
+        Conferir antes de fechar o caixa
+    @elseif($permiteFechar ?? false)
+        Conferência do caixa
+    @else
+        Extrato e conferência de caixa
+    @endif
 @endsection
 @section('body')
     <body>
@@ -32,11 +38,17 @@
                     </ul>
                 </div>
             @endif
-            @if($permiteFechar ?? true)
+            @if($podeConfirmarFechamento ?? false)
                 <div class="alert alert-info mb-3">
                     <i class="bx bx-info-circle me-2"></i>
                     Revise o período, as movimentações e os totais. O valor registrado no fechamento será o
                     <strong>saldo atual</strong> do caixa no momento da confirmação.
+                </div>
+            @elseif($permiteFechar ?? false)
+                <div class="alert alert-warning mb-3">
+                    <i class="bx bx-info-circle me-2"></i>
+                    <strong>Conferência do seu caixa.</strong> Consultores não podem fechar o próprio caixa.
+                    Peça a um <strong>gestor</strong> ou <strong>administrador</strong> da operação para realizar o fechamento.
                 </div>
             @else
                 <div class="alert alert-warning mb-3">
@@ -118,8 +130,14 @@
                             </div>
                         </div>
                     </div>
-                    <div class="alert {{ ($permiteFechar ?? true) ? 'alert-warning' : 'alert-secondary' }} mb-0">
-                        <strong>{{ ($permiteFechar ?? true) ? 'Valor do fechamento (saldo atual):' : 'Saldo atual (referência):' }}</strong>
+                    <div class="alert {{ ($podeConfirmarFechamento ?? false) ? 'alert-warning' : (($permiteFechar ?? false) ? 'alert-info' : 'alert-secondary') }} mb-0">
+                        <strong>@if($podeConfirmarFechamento ?? false)
+                            Valor do fechamento (saldo atual):
+                        @elseif($permiteFechar ?? false)
+                            Saldo atual (fechamento pelo gestor/admin):
+                        @else
+                            Saldo atual (referência):
+                        @endif</strong>
                         <span class="fs-4 {{ $saldoAtual > 0 ? 'text-success' : ($saldoAtual < 0 ? 'text-danger' : 'text-muted') }}">R$ {{ number_format($saldoAtual, 2, ',', '.') }}</span>
                         @if(($permiteFechar ?? true) && abs($saldoAtual - $saldoFinal) > 0.009)
                             <p class="small mb-0 mt-2">
@@ -215,7 +233,7 @@
                 </div>
             </div>
 
-            @if($permiteFechar ?? true)
+            @if($podeConfirmarFechamento ?? false)
                 <div class="card">
                     <div class="card-header bg-light">
                         <h5 class="card-title mb-0"><i class="bx bx-lock-alt me-2"></i>Confirmar fechamento</h5>
@@ -241,6 +259,17 @@
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            @elseif($permiteFechar ?? false)
+                <div class="card border-secondary">
+                    <div class="card-body">
+                        <p class="text-muted mb-3">
+                            O fechamento do seu caixa deve ser feito por um gestor ou administrador. Use <strong>Voltar</strong> para retornar à lista.
+                        </p>
+                        <a href="{{ route('fechamento-caixa.index', ['operacao_id' => $operacao->id]) }}" class="btn btn-secondary">
+                            <i class="bx bx-arrow-back"></i> Voltar
+                        </a>
                     </div>
                 </div>
             @else

@@ -2,10 +2,9 @@
 
 namespace App\Modules\Cash\Services;
 
-use App\Modules\Cash\Models\Settlement;
 use App\Modules\Cash\Models\CashLedgerEntry;
+use App\Modules\Cash\Models\Settlement;
 use App\Modules\Core\Traits\Auditable;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -16,9 +15,6 @@ class SettlementService
     /**
      * Criar prestação de contas (solicitação pelo próprio usuário)
      * Calcula o saldo líquido do consultor (saldo inicial + entradas - saídas)
-     *
-     * @param array $dados
-     * @return Settlement
      */
     public function criar(array $dados): Settlement
     {
@@ -53,7 +49,7 @@ class SettlementService
 
             // Obter empresa_id da operação
             $operacao = \App\Modules\Core\Models\Operacao::find($dados['operacao_id']);
-            $empresaId = $operacao->empresa_id ?? (auth()->check() && !auth()->user()->isSuperAdmin() ? auth()->user()->empresa_id : null);
+            $empresaId = $operacao->empresa_id ?? (auth()->check() && ! auth()->user()->isSuperAdmin() ? auth()->user()->empresa_id : null);
 
             $settlement = Settlement::create([
                 'operacao_id' => $dados['operacao_id'],
@@ -77,11 +73,9 @@ class SettlementService
      * Fechar caixa de um usuário (iniciado por gestor/admin)
      * Calcula o saldo atual do usuário e cria um fechamento
      *
-     * @param int $usuarioId Usuário que terá o caixa fechado
-     * @param int $operacaoId Operação
-     * @param int $gestorId Gestor/Admin que está fechando
-     * @param string|null $observacoes
-     * @return Settlement
+     * @param  int  $usuarioId  Usuário que terá o caixa fechado
+     * @param  int  $operacaoId  Operação
+     * @param  int  $gestorId  Gestor/Admin que está fechando
      */
     public function fecharCaixa(int $usuarioId, int $operacaoId, int $criadoPorId, ?string $observacoes = null): Settlement
     {
@@ -116,13 +110,13 @@ class SettlementService
 
             if ($saldoAtual <= 0) {
                 throw ValidationException::withMessages([
-                    'usuario' => 'Não há saldo positivo para fechar. Saldo atual: R$ ' . number_format($saldoAtual, 2, ',', '.')
+                    'usuario' => 'Não há saldo positivo para fechar. Saldo atual: R$ '.number_format($saldoAtual, 2, ',', '.'),
                 ]);
             }
 
             // Obter empresa_id da operação
             $operacao = \App\Modules\Core\Models\Operacao::find($operacaoId);
-            $empresaId = $operacao->empresa_id ?? (auth()->check() && !auth()->user()->isSuperAdmin() ? auth()->user()->empresa_id : null);
+            $empresaId = $operacao->empresa_id ?? (auth()->check() && ! auth()->user()->isSuperAdmin() ? auth()->user()->empresa_id : null);
 
             $settlement = Settlement::create([
                 'operacao_id' => $operacaoId,
@@ -141,13 +135,13 @@ class SettlementService
             self::auditar('fechar_caixa', $settlement, null, $settlement->toArray());
 
             // Notificar apenas se não foi o próprio usuário que fechou
-            if (!$fechamentoProprio) {
+            if (! $fechamentoProprio) {
                 $notificacaoService = app(\App\Modules\Core\Services\NotificacaoService::class);
                 $notificacaoService->criar([
                     'user_id' => $usuarioId,
                     'tipo' => 'prestacao_pendente',
                     'titulo' => 'Seu caixa foi fechado',
-                    'mensagem' => "Seu caixa na operação {$operacao->nome} foi fechado. Valor a enviar: R$ " . number_format($saldoAtual, 2, ',', '.') . ". Anexe o comprovante de envio.",
+                    'mensagem' => "Seu caixa na operação {$operacao->nome} foi fechado. Valor a enviar: R$ ".number_format($saldoAtual, 2, ',', '.').'. Anexe o comprovante de envio.',
                     'url' => route('fechamento-caixa.show', $settlement->id),
                     'dados' => ['settlement_id' => $settlement->id],
                 ]);
@@ -212,9 +206,6 @@ class SettlementService
     /**
      * Listar usuários com saldo diferente de zero em uma operação (fechamento de caixa).
      * Positivos: fluxo de fechar; negativos: apenas conferência do extrato (sem fechamento padrão).
-     *
-     * @param int $operacaoId
-     * @return \Illuminate\Support\Collection
      */
     public function listarUsuariosComSaldo(int $operacaoId): \Illuminate\Support\Collection
     {
@@ -234,6 +225,7 @@ class SettlementService
         return $usuarios->map(function ($usuario) use ($operacaoId, $cashService) {
             $saldo = $cashService->calcularSaldo($usuario->id, $operacaoId);
             $usuario->saldo_operacao = $saldo;
+
             return $usuario;
         })->filter(function ($usuario) {
             return abs(round((float) $usuario->saldo_operacao, 2)) > 0;
@@ -242,11 +234,6 @@ class SettlementService
 
     /**
      * Aprovar prestação de contas (Gestor ou Administrador)
-     *
-     * @param int $settlementId
-     * @param int $userId
-     * @param string|null $observacoes
-     * @return Settlement
      */
     public function aprovar(int $settlementId, int $userId, ?string $observacoes = null): Settlement
     {
@@ -254,7 +241,7 @@ class SettlementService
 
         if ($settlement->status !== 'pendente') {
             throw ValidationException::withMessages([
-                'settlement' => 'Apenas prestações pendentes podem ser aprovadas. Status atual: ' . $settlement->status
+                'settlement' => 'Apenas prestações pendentes podem ser aprovadas. Status atual: '.$settlement->status,
             ]);
         }
 
@@ -281,10 +268,6 @@ class SettlementService
     /**
      * Consultor anexa comprovante de envio
      * NÃO gera movimentações ainda - apenas armazena o comprovante
-     *
-     * @param int $settlementId
-     * @param string $comprovantePath
-     * @return Settlement
      */
     public function anexarComprovante(int $settlementId, string $comprovantePath): Settlement
     {
@@ -292,7 +275,7 @@ class SettlementService
 
         if ($settlement->status !== 'aprovado') {
             throw ValidationException::withMessages([
-                'settlement' => 'Apenas prestações aprovadas podem ter comprovante anexado. Status atual: ' . $settlement->status
+                'settlement' => 'Apenas prestações aprovadas podem ter comprovante anexado. Status atual: '.$settlement->status,
             ]);
         }
 
@@ -316,7 +299,7 @@ class SettlementService
         $notificacaoService = app(\App\Modules\Core\Services\NotificacaoService::class);
         $consultorNome = $settlement->consultor?->name ?? 'Usuário';
         $operacaoNome = $settlement->operacao?->nome ?? 'Operação';
-        $valorFormatado = 'R$ ' . number_format($settlement->valor_total, 2, ',', '.');
+        $valorFormatado = 'R$ '.number_format($settlement->valor_total, 2, ',', '.');
 
         $mensagem = "{$consultorNome} enviou comprovante de fechamento de caixa ({$operacaoNome}) - {$valorFormatado}. Confirme o recebimento.";
 
@@ -340,11 +323,6 @@ class SettlementService
     /**
      * Gestor confirma recebimento do dinheiro
      * GERA as movimentações de caixa automaticamente
-     *
-     * @param int $settlementId
-     * @param int $gestorId
-     * @param string|null $observacoes
-     * @return Settlement
      */
     public function confirmarRecebimento(int $settlementId, int $gestorId, ?string $observacoes = null): Settlement
     {
@@ -353,13 +331,19 @@ class SettlementService
 
             if ($settlement->status !== 'enviado') {
                 throw ValidationException::withMessages([
-                    'settlement' => 'Apenas prestações com comprovante anexado podem ter recebimento confirmado. Status atual: ' . $settlement->status
+                    'settlement' => 'Apenas prestações com comprovante anexado podem ter recebimento confirmado. Status atual: '.$settlement->status,
                 ]);
             }
 
-            if (!$settlement->comprovante_path) {
+            if (! $settlement->comprovante_path) {
                 throw ValidationException::withMessages([
-                    'settlement' => 'Não é possível confirmar recebimento sem comprovante anexado.'
+                    'settlement' => 'Não é possível confirmar recebimento sem comprovante anexado.',
+                ]);
+            }
+
+            if ($settlement->criado_por !== null && (int) $gestorId !== (int) $settlement->criado_por) {
+                throw ValidationException::withMessages([
+                    'settlement' => 'Apenas quem iniciou o fechamento pode confirmar o recebimento.',
                 ]);
             }
 
@@ -419,11 +403,6 @@ class SettlementService
     /**
      * Marcar como pago quando o consultor está bloqueado (gestor/admin marca sem envio de comprovante pelo consultor).
      * Só disponível para fechamentos em status 'aprovado' cujo consultor está inativo (bloqueado).
-     *
-     * @param int $settlementId
-     * @param int $gestorId
-     * @param string|null $observacoes
-     * @return Settlement
      */
     public function marcarComoPagoConsultorBloqueado(int $settlementId, int $gestorId, ?string $observacoes = null): Settlement
     {
@@ -432,13 +411,13 @@ class SettlementService
 
             if ($settlement->status !== 'aprovado') {
                 throw ValidationException::withMessages([
-                    'settlement' => 'Apenas prestações aprovadas podem ser marcadas como pago (consultor bloqueado). Status atual: ' . $settlement->status
+                    'settlement' => 'Apenas prestações aprovadas podem ser marcadas como pago (consultor bloqueado). Status atual: '.$settlement->status,
                 ]);
             }
 
             if ($settlement->consultor && $settlement->consultor->isAtivo()) {
                 throw ValidationException::withMessages([
-                    'settlement' => 'Esta ação só é permitida quando o consultor está bloqueado. O consultor pode anexar o comprovante normalmente.'
+                    'settlement' => 'Esta ação só é permitida quando o consultor está bloqueado. O consultor pode anexar o comprovante normalmente.',
                 ]);
             }
 
@@ -495,20 +474,15 @@ class SettlementService
 
     /**
      * Rejeitar prestação de contas (Gestor ou Administrador)
-     *
-     * @param int $settlementId
-     * @param int $userId
-     * @param string $motivoRejeicao
-     * @return Settlement
      */
     public function rejeitar(int $settlementId, int $userId, string $motivoRejeicao): Settlement
     {
         $settlement = Settlement::findOrFail($settlementId);
 
         // Pode rejeitar se estiver pendente ou aprovado
-        if (!in_array($settlement->status, ['pendente', 'aprovado'])) {
+        if (! in_array($settlement->status, ['pendente', 'aprovado'])) {
             throw ValidationException::withMessages([
-                'settlement' => 'Apenas prestações pendentes ou aprovadas podem ser rejeitadas. Status atual: ' . $settlement->status
+                'settlement' => 'Apenas prestações pendentes ou aprovadas podem ser rejeitadas. Status atual: '.$settlement->status,
             ]);
         }
 
@@ -533,10 +507,7 @@ class SettlementService
     /**
      * Listar settlements com filtros flexíveis
      *
-     * @param int|null $consultorId null = todos os usuários
-     * @param int|null $operacaoId
-     * @param string|null $status
-     * @param \App\Models\User|null $user
+     * @param  int|null  $consultorId  null = todos os usuários
      * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
      */
     public function listar(
@@ -556,7 +527,7 @@ class SettlementService
 
         if ($user) {
             $operacoesIds = $user->getOperacoesIds();
-            if (!empty($operacoesIds)) {
+            if (! empty($operacoesIds)) {
                 $query->whereIn('operacao_id', $operacoesIds);
             } else {
                 $query->whereRaw('1 = 0');
@@ -586,16 +557,13 @@ class SettlementService
     /**
      * Contar settlements aguardando confirmação (status = enviado)
      * Para exibir badge no sidebar
-     *
-     * @param \App\Models\User $user
-     * @return int
      */
     public function contarAguardandoConfirmacao(\App\Models\User $user): int
     {
         $query = Settlement::where('status', 'enviado');
 
         $operacoesIds = $user->getOperacoesIds();
-        if (!empty($operacoesIds)) {
+        if (! empty($operacoesIds)) {
             $query->whereIn('operacao_id', $operacoesIds);
         } else {
             return 0;
@@ -607,8 +575,6 @@ class SettlementService
     /**
      * Listar settlements do consultor (método legado, mantido para compatibilidade)
      *
-     * @param int $consultorId
-     * @param int|null $operacaoId
      * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
      */
     public function listarPorConsultor(int $consultorId, ?int $operacaoId = null, ?\App\Models\User $user = null)
@@ -618,7 +584,7 @@ class SettlementService
 
         if ($user) {
             $operacoesIds = $user->getOperacoesIds();
-            if (!empty($operacoesIds)) {
+            if (! empty($operacoesIds)) {
                 $query->whereIn('operacao_id', $operacoesIds);
             } else {
                 $query->whereRaw('1 = 0');

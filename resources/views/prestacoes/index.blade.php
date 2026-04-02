@@ -153,7 +153,7 @@
                                                         </button>
                                                     @endif
                                                     
-                                                    @if($settlement->isEnviado() && !empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])))
+                                                    @if($settlement->isEnviado() && !empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])) && ($settlement->criado_por === null || (int) auth()->id() === (int) $settlement->criado_por))
                                                         <form action="{{ route('prestacoes.confirmar-recebimento', $settlement->id) }}" 
                                                               method="POST" class="d-inline" 
                                                               onsubmit="return confirmarRecebimento(this)">
