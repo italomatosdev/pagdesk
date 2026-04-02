@@ -372,7 +372,9 @@ class PagamentoService
                 ]);
             }
 
-            $this->verificarFinalizacaoEmprestimo($emprestimo);
+            // Relação parcelas foi eager load no início: após os updates no loop fica obsoleta;
+            // todasParcelasPagas() não recarrega se já estiver loaded — sem fresh(), não finaliza o empréstimo.
+            $this->verificarFinalizacaoEmprestimo($emprestimo->fresh(['parcelas']));
 
             return $pagamentosCriados;
         });
