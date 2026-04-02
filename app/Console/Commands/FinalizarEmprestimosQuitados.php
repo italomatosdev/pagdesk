@@ -2,154 +2,147 @@
 
 namespace App\Console\Commands;
 
-use App\Modules\Core\Traits\Auditable;
 use App\Modules\Loans\Models\Emprestimo;
+use App\Modules\Loans\Services\PagamentoService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
 class FinalizarEmprestimosQuitados extends Command
 {
-    use Auditable;
-
     /**
-     * The name and signature of the console command.
-     *
      * @var string
      */
-    protected $signature = 'emprestimos:finalizar-quitados 
+    protected $signature = 'emprestimos:finalizar-quitados
                             {--dry-run : Apenas simula, não faz alterações}
-                            {--empresa-id= : Filtrar por empresa específica}';
+                            {--empresa-id= : Filtrar por empresa específica}
+                            {--id=* : Apenas estes IDs de empréstimo (pode repetir a opção)}';
 
     /**
-     * The console command description.
-     *
      * @var string
      */
-    protected $description = 'Finaliza automaticamente empréstimos ativos que já tiveram todas as parcelas pagas';
+    protected $description = 'Finaliza empréstimos ativos cujas parcelas já estão todas pagas (usa PagamentoService: auditoria e empenho/garantias)';
 
-    /**
-     * Execute the console command.
-     */
-    public function handle()
+    public function handle(): int
     {
         $isDryRun = $this->option('dry-run');
         $empresaId = $this->option('empresa-id');
+        $idsFiltro = array_filter(array_map('intval', (array) $this->option('id')));
 
-        $this->info('');
+        $this->newLine();
         $this->info('===========================================');
         $this->info('  FINALIZAR EMPRÉSTIMOS QUITADOS');
         $this->info('===========================================');
-        $this->info('');
+        $this->newLine();
 
         if ($isDryRun) {
-            $this->warn('🔍 MODO SIMULAÇÃO - Nenhuma alteração será feita');
-            $this->info('');
+            $this->warn('MODO SIMULAÇÃO (--dry-run) — nenhuma alteração será feita.');
+            $this->newLine();
         }
 
-        // Buscar empréstimos ativos (sem global scope para pegar de todas as empresas)
         $query = Emprestimo::withoutGlobalScopes()
             ->where('status', 'ativo')
             ->with(['parcelas', 'cliente', 'operacao']);
 
-        if ($empresaId) {
-            $query->where('empresa_id', $empresaId);
-            $this->info("📌 Filtrando por empresa_id: {$empresaId}");
+        if ($idsFiltro !== []) {
+            $query->whereIn('id', $idsFiltro);
+            $this->info('Filtrando IDs: '.implode(', ', $idsFiltro));
+            $this->newLine();
         }
 
-        $emprestimosAtivos = $query->get();
+        if ($empresaId) {
+            $query->where('empresa_id', (int) $empresaId);
+            $this->info("Filtrando empresa_id: {$empresaId}");
+            $this->newLine();
+        }
 
-        $this->info("📊 Total de empréstimos ativos encontrados: {$emprestimosAtivos->count()}");
-        $this->info('');
+        $emprestimosAtivos = $query->orderBy('id')->get();
 
-        $finalizados = 0;
-        $jaFinalizados = [];
+        $this->info('Empréstimos ativos na seleção: '.$emprestimosAtivos->count());
+        $this->newLine();
+
+        $candidatos = 0;
+        $linhasTabela = [];
+        /** @var PagamentoService $pagamentoService */
+        $pagamentoService = app(PagamentoService::class);
 
         foreach ($emprestimosAtivos as $emprestimo) {
+            if (! $emprestimo->todasParcelasPagas()) {
+                continue;
+            }
+
+            $candidatos++;
             $totalParcelas = $emprestimo->parcelas->count();
-            // Considerar parcelas pagas OU quitadas por garantia
-            $parcelasQuitadas = $emprestimo->parcelas->filter(function ($parcela) {
-                return $parcela->status === 'paga' || $parcela->status === 'quitada_garantia';
-            })->count();
+            $clienteNome = $emprestimo->cliente->nome ?? 'N/A';
+            $operacaoNome = $emprestimo->operacao->nome ?? 'N/A';
+            $valorTotal = number_format((float) $emprestimo->valor_total, 2, ',', '.');
 
-            // Verificar se todas as parcelas estão quitadas (pagas ou quitadas por garantia)
-            if ($totalParcelas > 0 && $parcelasQuitadas === $totalParcelas) {
-                $clienteNome = $emprestimo->cliente->nome ?? 'N/A';
-                $operacaoNome = $emprestimo->operacao->nome ?? 'N/A';
-                $valorTotal = number_format($emprestimo->valor_total, 2, ',', '.');
+            $this->info("Empréstimo #{$emprestimo->id}");
+            $this->line("   Cliente: {$clienteNome}");
+            $this->line("   Operação: {$operacaoNome}");
+            $this->line("   Valor: R$ {$valorTotal}");
+            $this->line("   Parcelas quitadas: {$totalParcelas}/{$totalParcelas}");
 
-                $this->info("✅ Empréstimo #{$emprestimo->id}");
-                $this->info("   Cliente: {$clienteNome}");
-                $this->info("   Operação: {$operacaoNome}");
-                $this->info("   Valor: R$ {$valorTotal}");
-                $this->info("   Parcelas: {$parcelasQuitadas}/{$totalParcelas} quitadas");
-
-                if (!$isDryRun) {
-                    DB::transaction(function () use ($emprestimo) {
-                        $statusAnterior = $emprestimo->status;
-                        
-                        $emprestimo->update([
-                            'status' => 'finalizado',
-                        ]);
-
-                        // Auditoria
-                        self::auditar(
-                            'finalizar_emprestimo',
-                            $emprestimo,
-                            ['status' => $statusAnterior],
-                            ['status' => 'finalizado'],
-                            'Empréstimo finalizado via comando artisan - Todas as parcelas já estavam pagas'
+            if (! $isDryRun) {
+                try {
+                    DB::transaction(function () use ($pagamentoService, $emprestimo) {
+                        $pagamentoService->verificarEFinalizarEmprestimo(
+                            $emprestimo->fresh(['parcelas'])
                         );
                     });
+                    $this->line('   Status: finalizado (via PagamentoService).');
+                } catch (\Throwable $e) {
+                    $this->error('   Erro: '.$e->getMessage());
 
-                    $this->info("   ➡️  Status alterado para: FINALIZADO");
-                } else {
-                    $this->info("   ➡️  [SIMULAÇÃO] Seria finalizado");
+                    return Command::FAILURE;
                 }
-
-                $this->info('');
-                $finalizados++;
-                
-                $jaFinalizados[] = [
-                    'id' => $emprestimo->id,
-                    'cliente' => $clienteNome,
-                    'valor' => "R$ {$valorTotal}",
-                    'parcelas' => "{$parcelasPagas}/{$totalParcelas}",
-                ];
+            } else {
+                $this->line('   [dry-run] Seria finalizado.');
             }
+
+            $this->newLine();
+
+            $linhasTabela[] = [
+                'id' => $emprestimo->id,
+                'cliente' => $clienteNome,
+                'valor' => "R$ {$valorTotal}",
+                'parcelas' => "{$totalParcelas}/{$totalParcelas}",
+            ];
         }
 
-        // Resumo final
         $this->info('===========================================');
         $this->info('  RESUMO');
         $this->info('===========================================');
-        $this->info('');
-        $this->info("📊 Empréstimos ativos analisados: {$emprestimosAtivos->count()}");
-        
+        $this->newLine();
+
         if ($isDryRun) {
-            $this->warn("🔍 Empréstimos que SERIAM finalizados: {$finalizados}");
+            $this->warn("Seriam finalizados: {$candidatos}");
         } else {
-            $this->info("✅ Empréstimos finalizados: {$finalizados}");
+            $this->info("Finalizados (ou já elegíveis processados): {$candidatos}");
         }
 
-        $this->info("⏳ Empréstimos ainda pendentes: " . ($emprestimosAtivos->count() - $finalizados));
-        $this->info('');
+        $this->info('Analisados na seleção: '.$emprestimosAtivos->count());
+        $this->newLine();
 
-        if ($finalizados > 0) {
+        if ($linhasTabela !== []) {
             $this->table(
                 ['ID', 'Cliente', 'Valor', 'Parcelas'],
-                $jaFinalizados
+                $linhasTabela
             );
         }
 
-        if ($isDryRun && $finalizados > 0) {
-            $this->info('');
-            $this->warn('💡 Para executar de verdade, rode sem --dry-run:');
-            $this->warn('   php artisan emprestimos:finalizar-quitados');
+        if ($isDryRun && $candidatos > 0) {
+            $this->newLine();
+            $this->warn('Para executar de verdade, rode sem --dry-run:');
+            $this->line('   php artisan emprestimos:finalizar-quitados');
+            if ($idsFiltro !== []) {
+                $idsStr = implode(' ', array_map(fn (int $i) => '--id='.$i, $idsFiltro));
+                $this->line("   php artisan emprestimos:finalizar-quitados {$idsStr}");
+            }
         }
 
-        $this->info('');
-        $this->info('Concluído!');
-        
+        $this->newLine();
+        $this->info('Concluído.');
+
         return Command::SUCCESS;
     }
 }
