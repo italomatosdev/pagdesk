@@ -138,6 +138,10 @@ class FechamentoCaixaController extends Controller
         $dados = $this->settlementService->prepararConferenciaFechamento($usuarioId, $operacaoId);
 
         $permiteFechar = round((float) $dados['saldoAtual'], 2) > 0;
+        $podeConfirmarFechamento = $permiteFechar && (
+            $usuarioId !== $user->id
+            || $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])
+        );
 
         $usuarioAlvo = \App\Models\User::findOrFail($usuarioId);
         $operacao = Operacao::findOrFail($operacaoId);
@@ -166,7 +170,8 @@ class FechamentoCaixaController extends Controller
             'dataInicioConf',
             'dataFimConf',
             'fichasContatoPorClienteOperacao',
-            'permiteFechar'
+            'permiteFechar',
+            'podeConfirmarFechamento'
         ));
     }
 
@@ -259,6 +264,8 @@ class FechamentoCaixaController extends Controller
             if (! $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
                 return back()->with('error', 'Você não tem permissão para fechar o caixa de outro usuário.');
             }
+        } elseif (! $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])) {
+            return back()->with('error', 'Consultores não podem fechar o próprio caixa. Solicite um gestor ou administrador da operação.');
         }
         if (! $user->temAcessoOperacao($operacaoId)) {
             return back()->with('error', 'Você não tem acesso a esta operação.');
