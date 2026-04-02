@@ -383,6 +383,25 @@ class Emprestimo extends Model
     }
 
     /**
+     * Contrato ligado a cadeia de renovação: é renovação ou já originou outro empréstimo.
+     * Usado em relatórios — pagamentos só de juros costumam estar na parcela do contrato antigo (sem origem_id).
+     */
+    public function participaCadeiaRenovacaoRelatorio(): bool
+    {
+        if ($this->isRenovacao()) {
+            return true;
+        }
+        if (array_key_exists('renovacoes_count', $this->attributes)) {
+            return (int) $this->renovacoes_count > 0;
+        }
+        if (! $this->exists) {
+            return false;
+        }
+
+        return $this->renovacoes()->exists();
+    }
+
+    /**
      * Calcular valor total com juros aplicados
      * Para Price: parcela × número de parcelas (juros compostos embutidos)
      * Para outros: principal × (1 + taxa) (juros simples)

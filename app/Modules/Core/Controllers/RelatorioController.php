@@ -78,6 +78,21 @@ class RelatorioController extends Controller
     }
 
     /**
+     * Eager load da repartição juros/investido (withCount evita N+1 em participaCadeiaRenovacaoRelatorio).
+     *
+     * @return array<string, mixed>
+     */
+    private static function withPagamentoParaReparticaoRelatorio(): array
+    {
+        return [
+            'consultor',
+            'parcela.emprestimo' => static function ($query) {
+                $query->withCount('renovacoes');
+            },
+        ];
+    }
+
+    /**
      * Separa o valor do pagamento em investido (amortização) e juros (contrato + atraso) para relatórios.
      *
      * Regra anterior (incorreta para comissão): escalava juros de contrato por (valor/valorParcela),
@@ -90,6 +105,8 @@ class RelatorioController extends Controller
      *   juros contrato = valorParaRateio * (parcela.valor_juros / parcela.valor),
      *   investido = valorParaRateio * (parcela.valor_amortizacao / parcela.valor).
      * - Garantia: recebido = investido + juros.
+     * - Cadeia de renovação (é renovação OU contrato que já gerou renovação) + pagamento só juros do contrato
+     *   (nominal ≤ juros da parcela, com tolerância): não usar a proporção da linha; nominal vira juros de contrato.
      *
      * @return array{juros: float, investido: float}
      */
@@ -111,7 +128,17 @@ class RelatorioController extends Controller
                 $valorAmortPar = max(0, $valorParcela - $valorJurosPar);
             }
 
-            if ($valorJurosPar > 0 && $valorParcela > 0) {
+            $emp = $p->parcela->emprestimo;
+            $epsilon = 0.02;
+            $renovacaoSoJurosContrato = $emp
+                && $emp->participaCadeiaRenovacaoRelatorio()
+                && $valorJurosPar > 0
+                && $valorParcela > 0
+                && $valorSemAtraso <= $valorJurosPar + $epsilon;
+
+            if ($renovacaoSoJurosContrato) {
+                $jurosContrato = $valorSemAtraso;
+            } elseif ($valorJurosPar > 0 && $valorParcela > 0) {
                 $jurosContrato = $valorParaRateio * ($valorJurosPar / $valorParcela);
             } elseif ($valorParcela > 0 && ($emp = $p->parcela->emprestimo)) {
                 $principalTotal = (float) ($emp->valor_total ?? 0);
@@ -300,7 +327,7 @@ class RelatorioController extends Controller
         }
 
         if (count($consultoresIds) > 0) {
-            $query = Pagamento::with(['consultor', 'parcela.emprestimo'])
+            $query = Pagamento::with(self::withPagamentoParaReparticaoRelatorio())
                 ->whereBetween('data_pagamento', [$dateFrom, $dateTo])
                 ->whereIn('consultor_id', $consultoresIds);
 
@@ -727,7 +754,7 @@ class RelatorioController extends Controller
             ];
         }
 
-        $query = Pagamento::with(['consultor', 'parcela.emprestimo'])
+        $query = Pagamento::with(self::withPagamentoParaReparticaoRelatorio())
             ->whereBetween('data_pagamento', [$dateFrom, $dateTo]);
 
         if (! $user->isSuperAdmin() || $operacaoId) {
@@ -812,7 +839,7 @@ class RelatorioController extends Controller
             abort(404);
         }
 
-        $query = Pagamento::with(['consultor', 'parcela.emprestimo'])
+        $query = Pagamento::with(self::withPagamentoParaReparticaoRelatorio())
             ->whereBetween('data_pagamento', [$dateFrom, $dateTo])
             ->where('consultor_id', $consultorId);
 
