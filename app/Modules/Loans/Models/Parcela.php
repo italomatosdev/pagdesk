@@ -2,10 +2,10 @@
 
 namespace App\Modules\Loans\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Carbon\Carbon;
 
 class Parcela extends Model
 {
@@ -129,8 +129,19 @@ class Parcela extends Model
      */
     public function isAtrasada(): bool
     {
-        return $this->status === 'atrasada' || 
+        if ($this->status === 'paga_parcial') {
+            return false;
+        }
+
+        return $this->status === 'atrasada' ||
                ($this->status === 'pendente' && $this->data_vencimento < Carbon::today());
+    }
+
+    public function hasSolicitacaoDiariaParcialPendente(): bool
+    {
+        return SolicitacaoPagamentoDiariaParcial::where('parcela_id', $this->id)
+            ->where('status', 'aguardando')
+            ->exists();
     }
 
     /**
@@ -144,7 +155,7 @@ class Parcela extends Model
     /**
      * Calcular dias de atraso (opcional: data de referência, ex. data do pagamento).
      *
-     * @param \Carbon\Carbon|null $dataReferencia Se null, usa hoje.
+     * @param  \Carbon\Carbon|null  $dataReferencia  Se null, usa hoje.
      */
     public function calcularDiasAtraso(?\Carbon\Carbon $dataReferencia = null): int
     {
@@ -170,8 +181,21 @@ class Parcela extends Model
         if ($this->isQuitadaGarantia()) {
             return true;
         }
-        
+
         return $this->valor_pago >= $this->valor;
+    }
+
+    /**
+     * Valor nominal ainda em aberto na parcela (valor − valor_pago).
+     * Usado em quitação em lote e pagamentos parciais.
+     */
+    public function faltaPagar(): float
+    {
+        if ($this->isQuitada()) {
+            return 0.0;
+        }
+
+        return max(0.0, round((float) $this->valor - (float) ($this->valor_pago ?? 0), 2));
     }
 
     /**
@@ -179,9 +203,10 @@ class Parcela extends Model
      */
     public function getStatusNomeAttribute(): string
     {
-        return match($this->status) {
+        return match ($this->status) {
             'pendente' => 'Pendente',
             'paga' => 'Paga',
+            'paga_parcial' => 'Paga (parcial)',
             'atrasada' => 'Atrasada',
             'cancelada' => 'Cancelada',
             'quitada_garantia' => 'Quitada (Garantia)',
@@ -194,9 +219,10 @@ class Parcela extends Model
      */
     public function getStatusCorAttribute(): string
     {
-        return match($this->status) {
+        return match ($this->status) {
             'pendente' => 'warning',
             'paga' => 'success',
+            'paga_parcial' => 'info',
             'atrasada' => 'danger',
             'cancelada' => 'secondary',
             'quitada_garantia' => 'info',
@@ -228,4 +254,3 @@ class Parcela extends Model
         return $this->valor_amortizacao ?? 0;
     }
 }
-

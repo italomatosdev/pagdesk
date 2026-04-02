@@ -32,6 +32,7 @@
                                 $valorPrincipalParcela = $parcela->valor_amortizacao !== null && (float) $parcela->valor_amortizacao > 0 ? (float) $parcela->valor_amortizacao : $valorParcelaTotal;
                                 $valorJurosContratoParcela = $parcela->valor_juros !== null && (float) $parcela->valor_juros > 0 ? (float) $parcela->valor_juros : 0;
                                 $mostrarDetalheJuros = $valorJurosContratoParcela > 0;
+                                $faltaPagarParcela = max(0, round($valorParcelaTotal - (float) ($parcela->valor_pago ?? 0), 2));
                             @endphp
                             <div class="alert alert-{{ $estaAtrasada ? 'warning' : 'info' }} mb-0">
                                 <strong>Parcela:</strong> #{{ $parcela->numero }} de {{ $parcela->emprestimo->numero_parcelas }}<br>
@@ -48,9 +49,15 @@
                                 @if($mostrarDetalheJuros)
                                     <strong>Valor principal:</strong> R$ {{ number_format($valorPrincipalParcela, 2, ',', '.') }}<br>
                                     <strong>Juros do contrato:</strong> R$ {{ number_format($valorJurosContratoParcela, 2, ',', '.') }}<br>
-                                    <strong>Valor da parcela:</strong> R$ {{ number_format($valorParcelaTotal, 2, ',', '.') }}
+                                    <strong>Valor da parcela:</strong> R$ {{ number_format($valorParcelaTotal, 2, ',', '.') }}<br>
                                 @else
-                                    <strong>Valor da parcela:</strong> R$ {{ number_format($valorParcelaTotal, 2, ',', '.') }}
+                                    <strong>Valor da parcela:</strong> R$ {{ number_format($valorParcelaTotal, 2, ',', '.') }}<br>
+                                @endif
+                                <strong class="text-nowrap" title="Saldo nominal em aberto; juros de atraso entram no valor do pagamento conforme opções abaixo">Falta pagar (parcela):</strong>
+                                @if($parcela->isQuitada() || $faltaPagarParcela <= 0)
+                                    <span class="text-muted">—</span>
+                                @else
+                                    R$ {{ number_format($faltaPagarParcela, 2, ',', '.') }}
                                 @endif
                             </div>
                         @endif
@@ -387,9 +394,18 @@
                                 <label class="form-label">Valor do Pagamento <span class="text-danger">*</span></label>
                                 <input type="text" name="valor" id="valor_pagamento" class="form-control" inputmode="decimal" data-mask-money="brl"
                                        placeholder="0,00"
-                                       value="{{ $parcela ? number_format($parcela->valor, 2, ',', '.') : '' }}" 
-                                       required readonly>
-                                <small class="text-muted">Este valor é calculado automaticamente conforme a opção de juros de atraso selecionada.</small>
+                                       value="{{ $parcela ? number_format($parcela->valor, 2, ',', '.') : '' }}"
+                                       @if(empty($diariaMultiplasParcelas)) required readonly @else required @endif
+                                       @if(!empty($diariaMaxAntecipacao)) data-diaria-max="{{ number_format($diariaMaxAntecipacao, 2, '.', '') }}" @endif>
+                                @if(!empty($diariaMultiplasParcelas) && isset($diariaValorDevido, $diariaMaxAntecipacao))
+                                    <small class="text-muted d-block mt-1">
+                                        <strong>Diária (várias parcelas):</strong> valor devido (referência) até R$ {{ number_format($diariaValorDevido, 2, ',', '.') }};
+                                        máximo permitido (sem sobra) até R$ {{ number_format($diariaMaxAntecipacao, 2, ',', '.') }} — conforme juros de atraso selecionados abaixo, o sistema valida no envio.
+                                        Abaixo do devido, o pagamento parcial vai para aprovação em Liberações e a parcela permanece em atraso até aprovar.
+                                    </small>
+                                @else
+                                    <small class="text-muted">Este valor é calculado automaticamente conforme a opção de juros de atraso selecionada.</small>
+                                @endif
                             </div>
 
                             <div class="mb-3 campos-pagamento">

@@ -33,6 +33,8 @@ class Pagamento extends Model
         'produto_imagens',
         'rejeitado_por_id',
         'rejeitado_em',
+        'lote_id',
+        'aguardando_aprovacao_diaria_parcial',
     ];
 
     protected $casts = [
@@ -44,6 +46,7 @@ class Pagamento extends Model
         'produto_valor' => 'decimal:2',
         'produto_imagens' => 'array',
         'rejeitado_em' => 'datetime',
+        'aguardando_aprovacao_diaria_parcial' => 'boolean',
     ];
 
     /**
@@ -67,7 +70,7 @@ class Pagamento extends Model
      */
     public function isRejeitado(): bool
     {
-        return !empty($this->rejeitado_por_id);
+        return ! empty($this->rejeitado_por_id);
     }
 
     /**
@@ -108,7 +111,8 @@ class Pagamento extends Model
     public function getProdutoImagensUrlsAttribute(): array
     {
         $paths = $this->produto_imagens ?? [];
-        return array_map(fn ($path) => asset('storage/' . $path), $paths);
+
+        return array_map(fn ($path) => asset('storage/'.$path), $paths);
     }
 
     /**
@@ -140,8 +144,8 @@ class Pagamento extends Model
      */
     public function getComprovanteUrlAttribute(): ?string
     {
-        return $this->comprovante_path 
-            ? asset('storage/' . $this->comprovante_path) 
+        return $this->comprovante_path
+            ? asset('storage/'.$this->comprovante_path)
             : null;
     }
 
@@ -150,11 +154,12 @@ class Pagamento extends Model
      */
     public function isComprovanteImagem(): bool
     {
-        if (!$this->comprovante_path) {
+        if (! $this->comprovante_path) {
             return false;
         }
 
         $extension = strtolower(pathinfo($this->comprovante_path, PATHINFO_EXTENSION));
+
         return in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']);
     }
 
@@ -163,7 +168,7 @@ class Pagamento extends Model
      */
     public function hasComprovante(): bool
     {
-        return !empty($this->comprovante_path);
+        return ! empty($this->comprovante_path);
     }
 
     /**
@@ -171,7 +176,7 @@ class Pagamento extends Model
      */
     public function hasJuros(): bool
     {
-        return !empty($this->tipo_juros) && $this->tipo_juros !== 'nenhum' && $this->valor_juros > 0;
+        return ! empty($this->tipo_juros) && $this->tipo_juros !== 'nenhum' && $this->valor_juros > 0;
     }
 
     /**
@@ -179,7 +184,7 @@ class Pagamento extends Model
      */
     public function getDescricaoTipoJurosAttribute(): string
     {
-        return match($this->tipo_juros) {
+        return match ($this->tipo_juros) {
             'automatico' => 'Juros Automático',
             'manual' => 'Juros Manual',
             'fixo' => 'Valor Fixo Manual',
@@ -187,4 +192,3 @@ class Pagamento extends Model
         };
     }
 }
-
