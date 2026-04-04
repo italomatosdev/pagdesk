@@ -60,6 +60,16 @@
                                     </div>
                                 </div>
                             @endif
+                            @if(!empty($alertaRenovacaoCredito))
+                                <div class="col-12 mb-3">
+                                    <div class="alert alert-info mb-0">
+                                        <i class="bx bx-refresh"></i>
+                                        <strong>Possível renovação:</strong>
+                                        este cliente já teve empréstimo <strong>finalizado (quitado)</strong> nesta operação.
+                                        Trate como continuidade: não é necessário revalidar todos os dados cadastrais como se fosse cliente novo para aprovar ou liberar este crédito.
+                                    </div>
+                                </div>
+                            @endif
                             <div class="col-md-6 mb-3">
                                 <strong>Operação:</strong> {{ $liberacao->emprestimo->operacao->nome }}
                             </div>

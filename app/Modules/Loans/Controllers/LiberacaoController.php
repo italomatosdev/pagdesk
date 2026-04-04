@@ -16,6 +16,7 @@ use App\Modules\Loans\Services\EmprestimoService;
 use App\Modules\Loans\Services\LiberacaoService;
 use App\Modules\Loans\Services\PagamentoService;
 use App\Support\ClienteNomeExibicao;
+use App\Support\ClienteRenovacaoCreditoLookup;
 use App\Support\ClienteVinculosOperacoesLookup;
 use App\Support\FichaContatoLookup;
 use App\Support\OperacaoPreferida;
@@ -95,12 +96,17 @@ class LiberacaoController extends Controller
             $outrosVinculosPorLiberacaoId[$l->id] = count($outros);
         }
 
+        $ehRenovacaoPorEmprestimoId = ClienteRenovacaoCreditoLookup::mapEhRenovacaoPorEmprestimoId(
+            $liberacoes->map(fn ($l) => $l->emprestimo)->filter()
+        );
+
         return view('liberacoes.index', compact(
             'liberacoes',
             'operacoes',
             'operacaoId',
             'fichasContatoPorClienteOperacao',
-            'outrosVinculosPorLiberacaoId'
+            'outrosVinculosPorLiberacaoId',
+            'ehRenovacaoPorEmprestimoId'
         ));
     }
 
@@ -232,7 +238,18 @@ class LiberacaoController extends Controller
             $liberacoes->map(fn ($l) => $l->emprestimo)->filter()
         );
 
-        return view('liberacoes.consultor', compact('liberacoes', 'status', 'operacoes', 'operacaoId', 'fichasContatoPorClienteOperacao'));
+        $ehRenovacaoPorEmprestimoId = ClienteRenovacaoCreditoLookup::mapEhRenovacaoPorEmprestimoId(
+            $liberacoes->map(fn ($l) => $l->emprestimo)->filter()
+        );
+
+        return view('liberacoes.consultor', compact(
+            'liberacoes',
+            'status',
+            'operacoes',
+            'operacaoId',
+            'fichasContatoPorClienteOperacao',
+            'ehRenovacaoPorEmprestimoId'
+        ));
     }
 
     /**
@@ -281,6 +298,8 @@ class LiberacaoController extends Controller
             $vinculosOutrasOperacoesCount = count($outros);
         }
 
+        $alertaRenovacaoCredito = ClienteRenovacaoCreditoLookup::emprestimoEhRenovacao($liberacao->emprestimo);
+
         return view('liberacoes.show', compact(
             'liberacao',
             'podeAprovarLiberacao',
@@ -288,7 +307,8 @@ class LiberacaoController extends Controller
             'ehGestorAdminConfirmando',
             'fichaContatoLiberacao',
             'nomeClienteExibicao',
-            'vinculosOutrasOperacoesCount'
+            'vinculosOutrasOperacoesCount',
+            'alertaRenovacaoCredito'
         ));
     }
 
