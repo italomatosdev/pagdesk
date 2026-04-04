@@ -8,6 +8,7 @@ use App\Modules\Cash\Models\Settlement;
 use App\Modules\Cash\Services\CashService;
 use App\Modules\Cash\Services\SettlementService;
 use App\Modules\Core\Models\Operacao;
+use App\Support\CashLedgerEmprestimoLink;
 use App\Support\FichaContatoLookup;
 use App\Support\OperacaoPreferida;
 use Illuminate\Http\RedirectResponse;
@@ -17,6 +18,19 @@ use Illuminate\View\View;
 
 class FechamentoCaixaController extends Controller
 {
+    /**
+     * Tipos de referência no razão que representam recebimento ligado ao empréstimo
+     * (parcela, quitação ou fluxo de cheque do contrato).
+     *
+     * @var list<string>
+     */
+    private const REFERENCIA_TIPOS_RECEBIMENTO_CREDITO = [
+        'pagamento_parcela',
+        'quitacao_emprestimo',
+        'compensacao_cheque',
+        'pagamento_cheque_devolvido',
+    ];
+
     public function __construct(
         protected SettlementService $settlementService,
         protected CashService $cashService
@@ -145,7 +159,18 @@ class FechamentoCaixaController extends Controller
 
         $usuarioAlvo = \App\Models\User::findOrFail($usuarioId);
         $operacao = Operacao::findOrFail($operacaoId);
-        $movimentacoes = $dados['movimentacoes'];
+        $movimentacoesTodas = $dados['movimentacoes'];
+        CashLedgerEmprestimoLink::warmForCollection($movimentacoesTodas);
+        $somenteParcelas = $request->boolean('somente_parcelas');
+        $movimentacoes = $somenteParcelas
+            ? $movimentacoesTodas->filter(fn ($m) => in_array($m->referencia_tipo, self::REFERENCIA_TIPOS_RECEBIMENTO_CREDITO, true))->values()
+            : $movimentacoesTodas;
+        $quantidadeMovimentacoesTotal = $movimentacoesTodas->count();
+        $quantidadeMovimentacoes = $movimentacoes->count();
+        $subtotalParcelasFiltrado = $somenteParcelas
+            ? (float) $movimentacoes->filter(fn ($m) => $m->isEntrada())->sum('valor')
+            : 0.0;
+
         $saldoInicial = $dados['saldoInicial'];
         $totalEntradas = $dados['totalEntradas'];
         $totalSaidas = $dados['totalSaidas'];
@@ -153,7 +178,6 @@ class FechamentoCaixaController extends Controller
         $saldoAtual = $dados['saldoAtual'];
         $dataInicioConf = $dados['dataInicio'];
         $dataFimConf = $dados['dataFim'];
-        $quantidadeMovimentacoes = $movimentacoes->count();
 
         $fichasContatoPorClienteOperacao = FichaContatoLookup::mapFromCashLedgerEntries($movimentacoes);
 
@@ -167,6 +191,9 @@ class FechamentoCaixaController extends Controller
             'saldoFinal',
             'saldoAtual',
             'quantidadeMovimentacoes',
+            'quantidadeMovimentacoesTotal',
+            'somenteParcelas',
+            'subtotalParcelasFiltrado',
             'dataInicioConf',
             'dataFimConf',
             'fichasContatoPorClienteOperacao',

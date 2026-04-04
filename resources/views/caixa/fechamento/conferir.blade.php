@@ -90,7 +90,14 @@
                         <div class="col-md-3 mb-3">
                             <div class="border rounded p-3 h-100">
                                 <p class="text-muted mb-1 small">Movimentações no período</p>
-                                <h5 class="mb-0">{{ $quantidadeMovimentacoes }}</h5>
+                                <h5 class="mb-0">
+                                    @if($somenteParcelas ?? false)
+                                        {{ $quantidadeMovimentacoes }} exibidas
+                                        <span class="text-muted fs-6 fw-normal">({{ $quantidadeMovimentacoesTotal }} no período)</span>
+                                    @else
+                                        {{ $quantidadeMovimentacoes }}
+                                    @endif
+                                </h5>
                             </div>
                         </div>
                     </div>
@@ -150,10 +157,31 @@
             </div>
 
             <div class="card mb-3">
-                <div class="card-header">
+                <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
                     <h5 class="card-title mb-0"><i class="bx bx-list-ul me-2"></i>Movimentações no período</h5>
+                    @php
+                        $qConferir = ['usuario_id' => $usuarioAlvo->id, 'operacao_id' => $operacao->id];
+                    @endphp
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Filtro: todas ou só recebimentos do crédito">
+                        <a href="{{ route('fechamento-caixa.conferir', $qConferir) }}"
+                           class="btn {{ !($somenteParcelas ?? false) ? 'btn-primary' : 'btn-outline-primary' }}">
+                            Todas
+                        </a>
+                        <a href="{{ route('fechamento-caixa.conferir', array_merge($qConferir, ['somente_parcelas' => 1])) }}"
+                           class="btn {{ ($somenteParcelas ?? false) ? 'btn-primary' : 'btn-outline-primary' }}">
+                            Só recebimentos do crédito
+                        </a>
+                    </div>
                 </div>
                 <div class="card-body">
+                    @if($somenteParcelas ?? false)
+                        <p class="text-muted small mb-3 mb-md-2">
+                            Os totais nos cartões acima e o saldo atual referem-se ao <strong>período completo</strong>.
+                            A tabela abaixo mostra apenas recebimentos do empréstimo:
+                            <strong>parcela</strong>, <strong>quitação</strong>, <strong>compensação de cheque</strong> e
+                            <strong>pagamento de cheque devolvido</strong>.
+                        </p>
+                    @endif
                     @if($movimentacoes->count() > 0)
                         <div class="table-responsive">
                             <table class="table table-bordered table-striped table-hover mb-0">
@@ -176,7 +204,17 @@
                                                 </span>
                                             </td>
                                             <td>
-                                                {{ $movimentacao->descricao }}
+                                                @php
+                                                    $empIdConferir = \App\Support\CashLedgerEmprestimoLink::emprestimoId($movimentacao);
+                                                @endphp
+                                                <span>{{ $movimentacao->descricao }}</span>
+                                                @if($empIdConferir)
+                                                    <a href="{{ route('emprestimos.show', $empIdConferir) }}" target="_blank" rel="noopener noreferrer"
+                                                       class="text-primary text-decoration-none ms-1 align-middle d-inline-flex opacity-90" title="Abrir empréstimo #{{ $empIdConferir }} em nova aba">
+                                                        <span class="visually-hidden">Abrir empréstimo #{{ $empIdConferir }} em nova aba</span>
+                                                        <i class="bx bx-show fs-5" aria-hidden="true"></i>
+                                                    </a>
+                                                @endif
                                                 @if($movimentacao->pagamento && $movimentacao->pagamento->parcela && $movimentacao->pagamento->parcela->emprestimo)
                                                     <br>
                                                     <small class="text-muted">
@@ -200,30 +238,40 @@
                                     @endforeach
                                 </tbody>
                                 <tfoot>
-                                    <tr class="table-light">
-                                        <th colspan="4" class="text-end">Saldo inicial:</th>
-                                        <th class="text-end {{ $saldoInicial >= 0 ? 'text-success' : 'text-danger' }}">
-                                            R$ {{ number_format($saldoInicial, 2, ',', '.') }}
-                                        </th>
-                                    </tr>
-                                    <tr class="table-success">
-                                        <th colspan="4" class="text-end">Total entradas:</th>
-                                        <th class="text-end text-success">+ R$ {{ number_format($totalEntradas, 2, ',', '.') }}</th>
-                                    </tr>
-                                    <tr class="table-danger">
-                                        <th colspan="4" class="text-end">Total saídas:</th>
-                                        <th class="text-end text-danger">- R$ {{ number_format($totalSaidas, 2, ',', '.') }}</th>
-                                    </tr>
-                                    <tr class="table-{{ $saldoFinal >= 0 ? 'primary' : 'danger' }}">
-                                        <th colspan="4" class="text-end">Saldo final (extrato):</th>
-                                        <th class="text-end {{ $saldoFinal < 0 ? 'text-danger' : '' }}">R$ {{ number_format($saldoFinal, 2, ',', '.') }}</th>
-                                    </tr>
+                                    @if($somenteParcelas ?? false)
+                                        <tr class="table-success">
+                                            <th colspan="4" class="text-end">Total — recebimentos do crédito listados ({{ $quantidadeMovimentacoes }}):</th>
+                                            <th class="text-end text-success">+ R$ {{ number_format($subtotalParcelasFiltrado, 2, ',', '.') }}</th>
+                                        </tr>
+                                    @else
+                                        <tr class="table-light">
+                                            <th colspan="4" class="text-end">Saldo inicial:</th>
+                                            <th class="text-end {{ $saldoInicial >= 0 ? 'text-success' : 'text-danger' }}">
+                                                R$ {{ number_format($saldoInicial, 2, ',', '.') }}
+                                            </th>
+                                        </tr>
+                                        <tr class="table-success">
+                                            <th colspan="4" class="text-end">Total entradas:</th>
+                                            <th class="text-end text-success">+ R$ {{ number_format($totalEntradas, 2, ',', '.') }}</th>
+                                        </tr>
+                                        <tr class="table-danger">
+                                            <th colspan="4" class="text-end">Total saídas:</th>
+                                            <th class="text-end text-danger">- R$ {{ number_format($totalSaidas, 2, ',', '.') }}</th>
+                                        </tr>
+                                        <tr class="table-{{ $saldoFinal >= 0 ? 'primary' : 'danger' }}">
+                                            <th colspan="4" class="text-end">Saldo final (extrato):</th>
+                                            <th class="text-end {{ $saldoFinal < 0 ? 'text-danger' : '' }}">R$ {{ number_format($saldoFinal, 2, ',', '.') }}</th>
+                                        </tr>
+                                    @endif
                                 </tfoot>
                             </table>
                         </div>
                     @else
                         <div class="alert alert-warning mb-0">
-                            @if($saldoAtual > 0)
+                            @if($somenteParcelas ?? false)
+                                Nenhum recebimento do crédito (parcela, quitação ou cheque) no período com os filtros atuais.
+                                <a href="{{ route('fechamento-caixa.conferir', ['usuario_id' => $usuarioAlvo->id, 'operacao_id' => $operacao->id]) }}" class="alert-link">Ver todas as movimentações</a>.
+                            @elseif($saldoAtual > 0)
                                 Nenhuma movimentação no período; o saldo atual ainda pode ser positivo por saldo anterior.
                             @else
                                 Nenhuma movimentação no período exibida; o saldo atual reflete o histórico do caixa.
