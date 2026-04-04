@@ -48,7 +48,6 @@
                                         <th>ID</th>
                                         <th>Cliente</th>
                                         <th>Outras ops</th>
-                                        <th>Renovação</th>
                                         <th>Operação</th>
                                         <th>Tipo</th>
                                         <th>Valor</th>
@@ -65,6 +64,9 @@
                                             <td>#{{ $emprestimo->id }}</td>
                                             <td>
                                                 <a href="{{ \App\Support\ClienteUrl::show($emprestimo->cliente_id, $emprestimo->operacao_id) }}">{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}</a>
+                                                @if($ehRenovacaoPorEmprestimoId[$emprestimo->id] ?? false)
+                                                    @include('partials.badge-renovacao-credito', ['ehRenovacao' => true])
+                                                @endif
                                             </td>
                                             <td class="text-center">
                                                 @php
@@ -74,13 +76,6 @@
                                                     <a href="{{ \App\Support\ClienteUrl::show($emprestimo->cliente_id, $emprestimo->operacao_id) }}" class="text-decoration-none" title="Ver cliente para detalhes">
                                                         <span class="badge bg-warning text-dark">Possui ({{ $qtdOutrasOps }})</span>
                                                     </a>
-                                                @else
-                                                    <span class="text-muted">—</span>
-                                                @endif
-                                            </td>
-                                            <td class="text-center text-nowrap">
-                                                @if($ehRenovacaoPorEmprestimoId[$emprestimo->id] ?? false)
-                                                    @include('partials.badge-renovacao-credito', ['ehRenovacao' => true])
                                                 @else
                                                     <span class="text-muted">—</span>
                                                 @endif
