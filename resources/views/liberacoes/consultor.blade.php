@@ -76,6 +76,9 @@
                                             </td>
                                             <td>
                                                 <a href="{{ \App\Support\ClienteUrl::show($liberacao->emprestimo->cliente_id, $liberacao->emprestimo->operacao_id) }}">{{ \App\Support\ClienteNomeExibicao::fromEmprestimoMap($liberacao->emprestimo, $fichasContatoPorClienteOperacao ?? collect()) }}</a>
+                                                @if($ehRenovacaoPorEmprestimoId[$liberacao->emprestimo_id] ?? false)
+                                                    @include('partials.badge-renovacao-credito', ['ehRenovacao' => true])
+                                                @endif
                                             </td>
                                             <td>{{ $liberacao->emprestimo->operacao->nome }}</td>
                                             <td class="h6 text-primary">

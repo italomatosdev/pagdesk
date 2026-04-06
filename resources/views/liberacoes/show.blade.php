@@ -60,6 +60,16 @@
                                     </div>
                                 </div>
                             @endif
+                            @if(!empty($alertaRenovacaoCredito))
+                                <div class="col-12 mb-3">
+                                    <div class="alert alert-info mb-0">
+                                        <i class="bx bx-refresh"></i>
+                                        <strong>Possível renovação:</strong>
+                                        este cliente já teve empréstimo <strong>finalizado (quitado)</strong> nesta operação.
+                                        Trate como continuidade: não é necessário revalidar todos os dados cadastrais como se fosse cliente novo para aprovar ou liberar este crédito.
+                                    </div>
+                                </div>
+                            @endif
                             <div class="col-md-6 mb-3">
                                 <strong>Operação:</strong> {{ $liberacao->emprestimo->operacao->nome }}
                             </div>
@@ -143,6 +153,14 @@
                                             </a>
                                         @endif
                                     </div>
+                                    @include('partials.comprovante-extras', [
+                                        'tipo' => 'liberacao',
+                                        'parentId' => $liberacao->id,
+                                        'context' => 'liberacao',
+                                        'anexos' => $liberacao->comprovanteAnexos->where('context', 'liberacao'),
+                                        'canUpload' => $podeAprovarLiberacao ?? false,
+                                        'modalSuffix' => 'LibL'.$liberacao->id,
+                                    ])
                                 </div>
                             @else
                                 <div class="col-md-6 mb-3">
@@ -154,6 +172,14 @@
                                     @else
                                         <span class="text-muted">Não disponível</span>
                                     @endif
+                                    @include('partials.comprovante-extras', [
+                                        'tipo' => 'liberacao',
+                                        'parentId' => $liberacao->id,
+                                        'context' => 'liberacao',
+                                        'anexos' => $liberacao->comprovanteAnexos->where('context', 'liberacao'),
+                                        'canUpload' => $podeAprovarLiberacao ?? false,
+                                        'modalSuffix' => 'LibLelse'.$liberacao->id,
+                                    ])
                                 </div>
                             @endif
 
@@ -182,6 +208,14 @@
                                             </a>
                                         @endif
                                     </div>
+                                    @include('partials.comprovante-extras', [
+                                        'tipo' => 'liberacao',
+                                        'parentId' => $liberacao->id,
+                                        'context' => 'pagamento_cliente',
+                                        'anexos' => $liberacao->comprovanteAnexos->where('context', 'pagamento_cliente'),
+                                        'canUpload' => $liberacao->consultor_id === auth()->id(),
+                                        'modalSuffix' => 'LibPag'.$liberacao->id,
+                                    ])
                                 </div>
                             @else
                                 <div class="col-md-6 mb-3">
@@ -193,6 +227,14 @@
                                     @else
                                         <span class="text-muted">Não disponível</span>
                                     @endif
+                                    @include('partials.comprovante-extras', [
+                                        'tipo' => 'liberacao',
+                                        'parentId' => $liberacao->id,
+                                        'context' => 'pagamento_cliente',
+                                        'anexos' => $liberacao->comprovanteAnexos->where('context', 'pagamento_cliente'),
+                                        'canUpload' => $liberacao->consultor_id === auth()->id(),
+                                        'modalSuffix' => 'LibPagelse'.$liberacao->id,
+                                    ])
                                 </div>
                             @endif
                         </div>

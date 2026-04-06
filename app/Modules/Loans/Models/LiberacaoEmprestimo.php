@@ -111,8 +111,8 @@ class LiberacaoEmprestimo extends Model
      */
     public function getComprovanteLiberacaoUrlAttribute(): ?string
     {
-        return $this->comprovante_liberacao 
-            ? asset('storage/' . $this->comprovante_liberacao) 
+        return $this->comprovante_liberacao
+            ? asset('storage/'.$this->comprovante_liberacao)
             : null;
     }
 
@@ -121,8 +121,8 @@ class LiberacaoEmprestimo extends Model
      */
     public function getComprovantePagamentoClienteUrlAttribute(): ?string
     {
-        return $this->comprovante_pagamento_cliente 
-            ? asset('storage/' . $this->comprovante_pagamento_cliente) 
+        return $this->comprovante_pagamento_cliente
+            ? asset('storage/'.$this->comprovante_pagamento_cliente)
             : null;
     }
 
@@ -131,7 +131,7 @@ class LiberacaoEmprestimo extends Model
      */
     public function hasComprovanteLiberacao(): bool
     {
-        return !empty($this->comprovante_liberacao);
+        return ! empty($this->comprovante_liberacao);
     }
 
     /**
@@ -139,7 +139,7 @@ class LiberacaoEmprestimo extends Model
      */
     public function hasComprovantePagamentoCliente(): bool
     {
-        return !empty($this->comprovante_pagamento_cliente);
+        return ! empty($this->comprovante_pagamento_cliente);
     }
 
     /**
@@ -147,11 +147,12 @@ class LiberacaoEmprestimo extends Model
      */
     public function isComprovanteLiberacaoImagem(): bool
     {
-        if (!$this->comprovante_liberacao) {
+        if (! $this->comprovante_liberacao) {
             return false;
         }
 
         $extension = strtolower(pathinfo($this->comprovante_liberacao, PATHINFO_EXTENSION));
+
         return in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']);
     }
 
@@ -160,11 +161,17 @@ class LiberacaoEmprestimo extends Model
      */
     public function isComprovantePagamentoClienteImagem(): bool
     {
-        if (!$this->comprovante_pagamento_cliente) {
+        if (! $this->comprovante_pagamento_cliente) {
             return false;
         }
 
         $extension = strtolower(pathinfo($this->comprovante_pagamento_cliente, PATHINFO_EXTENSION));
+
         return in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']);
+    }
+
+    public function comprovanteAnexos()
+    {
+        return $this->morphMany(\App\Models\ComprovanteAnexo::class, 'anexavel')->orderBy('id');
     }
 }

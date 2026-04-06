@@ -120,6 +120,9 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::get('/', [App\Modules\Core\Controllers\KanbanBoardController::class, 'index'])->name('index');
     });
 
+    // Comprovantes adicionais (múltiplos por entidade)
+    Route::post('/comprovante-anexos', [App\Http\Controllers\ComprovanteAnexoController::class, 'store'])->name('comprovante-anexos.store');
+
     // Busca Global
     Route::get('/api/search', [App\Modules\Core\Controllers\SearchController::class, 'buscar'])->name('search.global');
 

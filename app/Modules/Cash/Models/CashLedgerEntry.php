@@ -105,5 +105,9 @@ class CashLedgerEntry extends Model
     {
         return $this->origem === 'automatica';
     }
-}
 
+    public function comprovanteAnexos()
+    {
+        return $this->morphMany(\App\Models\ComprovanteAnexo::class, 'anexavel')->orderBy('id');
+    }
+}

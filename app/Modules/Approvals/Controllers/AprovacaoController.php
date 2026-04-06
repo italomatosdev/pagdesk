@@ -4,13 +4,14 @@ namespace App\Modules\Approvals\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Approvals\Services\AprovacaoService;
-use App\Support\FichaContatoLookup;
-use App\Support\ClienteVinculosOperacoesLookup;
-use App\Support\OperacaoPreferida;
 use App\Modules\Core\Models\Operacao;
+use App\Support\ClienteRenovacaoCreditoLookup;
+use App\Support\ClienteVinculosOperacoesLookup;
+use App\Support\FichaContatoLookup;
+use App\Support\OperacaoPreferida;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
-use Illuminate\Http\RedirectResponse;
 
 class AprovacaoController extends Controller
 {
@@ -24,6 +25,7 @@ class AprovacaoController extends Controller
             if (empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador']))) {
                 abort(403, 'Acesso negado. Apenas administradores podem aprovar empréstimos.');
             }
+
             return $next($request);
         });
         $this->aprovacaoService = $aprovacaoService;
@@ -70,8 +72,9 @@ class AprovacaoController extends Controller
         $outrosVinculosPorEmprestimoId = [];
         foreach ($pendentes as $e) {
             $cpf = ClienteVinculosOperacoesLookup::cpfFromDocumento($e->cliente?->documento);
-            if (!$cpf) {
+            if (! $cpf) {
                 $outrosVinculosPorEmprestimoId[$e->id] = 0;
+
                 continue;
             }
             $ops = $operacoesIdsPorCpf[$cpf] ?? [];
@@ -79,12 +82,15 @@ class AprovacaoController extends Controller
             $outrosVinculosPorEmprestimoId[$e->id] = count($outros);
         }
 
+        $ehRenovacaoPorEmprestimoId = ClienteRenovacaoCreditoLookup::mapEhRenovacaoPorEmprestimoId($pendentes);
+
         return view('aprovacoes.index', compact(
             'pendentes',
             'operacoes',
             'operacaoId',
             'fichasContatoPorClienteOperacao',
-            'outrosVinculosPorEmprestimoId'
+            'outrosVinculosPorEmprestimoId',
+            'ehRenovacaoPorEmprestimoId'
         ));
     }
 
@@ -109,9 +115,10 @@ class AprovacaoController extends Controller
                 ->with('success', 'Empréstimo aprovado com sucesso!');
         } catch (\Illuminate\Validation\ValidationException $e) {
             $mensagem = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
             return back()->with('error', $mensagem)->withInput();
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao aprovar empréstimo: ' . $e->getMessage());
+            return back()->with('error', 'Erro ao aprovar empréstimo: '.$e->getMessage());
         }
     }
 
@@ -136,9 +143,10 @@ class AprovacaoController extends Controller
                 ->with('success', 'Empréstimo rejeitado.');
         } catch (\Illuminate\Validation\ValidationException $e) {
             $mensagem = collect($e->errors())->flatten()->first() ?? $e->getMessage();
+
             return back()->with('error', $mensagem)->withInput();
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao rejeitar empréstimo: ' . $e->getMessage());
+            return back()->with('error', 'Erro ao rejeitar empréstimo: '.$e->getMessage());
         }
     }
 }

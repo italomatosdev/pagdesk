@@ -139,6 +139,11 @@ class Pagamento extends Model
         return $this->hasOne(\App\Modules\Cash\Models\CashLedgerEntry::class, 'pagamento_id');
     }
 
+    public function comprovanteAnexos()
+    {
+        return $this->morphMany(\App\Models\ComprovanteAnexo::class, 'anexavel')->orderBy('id');
+    }
+
     /**
      * Obter URL do comprovante
      */
