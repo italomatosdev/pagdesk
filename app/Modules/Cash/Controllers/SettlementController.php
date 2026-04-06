@@ -69,7 +69,7 @@ class SettlementController extends Controller
      */
     public function show(int $id): View
     {
-        $settlement = Settlement::with(['operacao', 'consultor', 'criador', 'conferidor', 'recebedor'])->findOrFail($id);
+        $settlement = Settlement::with(['operacao', 'consultor', 'criador', 'conferidor', 'recebedor', 'comprovanteAnexos'])->findOrFail($id);
         $user = auth()->user();
 
         if (! $user->temAcessoOperacao($settlement->operacao_id)) {

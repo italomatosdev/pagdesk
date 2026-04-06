@@ -264,6 +264,7 @@ class LiberacaoController extends Controller
             'consultor',
             'gestor',
             'confirmadoPagamentoPor',
+            'comprovanteAnexos',
         ])->findOrFail($id);
 
         $user = auth()->user();

@@ -728,6 +728,14 @@
                                                 </a>
                                             @endif
                                         </div>
+                                        @include('partials.comprovante-extras', [
+                                            'tipo' => 'liberacao',
+                                            'parentId' => $emprestimo->liberacao->id,
+                                            'context' => 'liberacao',
+                                            'anexos' => $emprestimo->liberacao->comprovanteAnexos->where('context', 'liberacao'),
+                                            'canUpload' => $podeAprovarLiberacao ?? false,
+                                            'modalSuffix' => 'EmpLibL'.$emprestimo->liberacao->id,
+                                        ])
                                     </div>
                                 @else
                                     <div class="col-md-6 mb-3">
@@ -739,6 +747,14 @@
                                         @else
                                             <span class="text-muted">Não disponível</span>
                                         @endif
+                                        @include('partials.comprovante-extras', [
+                                            'tipo' => 'liberacao',
+                                            'parentId' => $emprestimo->liberacao->id,
+                                            'context' => 'liberacao',
+                                            'anexos' => $emprestimo->liberacao->comprovanteAnexos->where('context', 'liberacao'),
+                                            'canUpload' => $podeAprovarLiberacao ?? false,
+                                            'modalSuffix' => 'EmpLibLelse'.$emprestimo->liberacao->id,
+                                        ])
                                     </div>
                                 @endif
 
@@ -767,6 +783,14 @@
                                                 </a>
                                             @endif
                                         </div>
+                                        @include('partials.comprovante-extras', [
+                                            'tipo' => 'liberacao',
+                                            'parentId' => $emprestimo->liberacao->id,
+                                            'context' => 'pagamento_cliente',
+                                            'anexos' => $emprestimo->liberacao->comprovanteAnexos->where('context', 'pagamento_cliente'),
+                                            'canUpload' => $emprestimo->liberacao->consultor_id === auth()->id(),
+                                            'modalSuffix' => 'EmpLibPag'.$emprestimo->liberacao->id,
+                                        ])
                                     </div>
                                 @else
                                     <div class="col-md-6 mb-3">
@@ -778,6 +802,14 @@
                                         @else
                                             <span class="text-muted">Não disponível</span>
                                         @endif
+                                        @include('partials.comprovante-extras', [
+                                            'tipo' => 'liberacao',
+                                            'parentId' => $emprestimo->liberacao->id,
+                                            'context' => 'pagamento_cliente',
+                                            'anexos' => $emprestimo->liberacao->comprovanteAnexos->where('context', 'pagamento_cliente'),
+                                            'canUpload' => $emprestimo->liberacao->consultor_id === auth()->id(),
+                                            'modalSuffix' => 'EmpLibPagelse'.$emprestimo->liberacao->id,
+                                        ])
                                     </div>
                                 @endif
                             </div>
@@ -2122,6 +2154,13 @@
                                         </div>
                                     </div>
                                 @endif
+                                @include('partials.comprovante-extras', [
+                                    'tipo' => 'pagamento',
+                                    'parentId' => $pagamento->id,
+                                    'anexos' => $pagamento->comprovanteAnexos,
+                                    'canUpload' => ($podeVerAcoesGestorAdmin ?? false) || ($emprestimo->consultor_id === auth()->id()),
+                                    'modalSuffix' => 'Pag'.$pagamento->id,
+                                ])
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>

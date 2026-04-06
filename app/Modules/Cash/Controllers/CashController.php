@@ -3,17 +3,17 @@
 namespace App\Modules\Cash\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Modules\Cash\Models\CashLedgerEntry;
 use App\Modules\Cash\Models\CategoriaMovimentacao;
 use App\Modules\Cash\Services\CashService;
 use App\Modules\Core\Models\Operacao;
 use App\Modules\Loans\Models\LiberacaoEmprestimo;
-use App\Models\User;
 use App\Support\OperacaoPreferida;
-use Illuminate\Http\Request;
-use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
 
 class CashController extends Controller
 {
@@ -31,16 +31,16 @@ class CashController extends Controller
     public function index(Request $request): View
     {
         $user = auth()->user();
-        
+
         // Super Admin não pode acessar o Caixa
         if ($user->isSuperAdmin()) {
             abort(403, 'Super Admin não pode acessar o Caixa.');
         }
-        
+
         $consultorId = $user->id;
         $apenasCaixaOperacao = false;
 
-        if (!empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
+        if (! empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
             $consultorIdInput = $request->input('consultor_id');
             if ($consultorIdInput === 'operacao') {
                 $apenasCaixaOperacao = true;
@@ -63,7 +63,7 @@ class CashController extends Controller
         $referenciaTipo = $request->input('referencia_tipo');
 
         $query = \App\Modules\Cash\Models\CashLedgerEntry::with(['operacao', 'consultor', 'pagamento.parcela.emprestimo']);
-        if (!empty($operacoesIds)) {
+        if (! empty($operacoesIds)) {
             $query->whereIn('operacao_id', $operacoesIds);
         } else {
             $query->whereRaw('1 = 0');
@@ -106,7 +106,7 @@ class CashController extends Controller
 
         if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             $saldo = $this->cashService->calcularSaldo($user->id, $operacaoId ?? 0);
-        } elseif (!empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
+        } elseif (! empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
             if ($apenasCaixaOperacao) {
                 if ($operacaoId) {
                     $saldo = $this->cashService->calcularSaldoOperacao($operacaoId);
@@ -119,7 +119,7 @@ class CashController extends Controller
             } elseif ($consultorId !== null) {
                 $saldo = $this->cashService->calcularSaldo($consultorId, $operacaoId ?? 0);
             } else {
-                if (!$operacaoId && !empty($operacoesIds)) {
+                if (! $operacaoId && ! empty($operacoesIds)) {
                     $saldo = 0;
                     foreach ($operacoesIds as $opId) {
                         $saldo += $this->cashService->calcularSaldoTotal($opId);
@@ -132,12 +132,12 @@ class CashController extends Controller
             $saldo = 0;
         }
 
-        $operacoes = !empty($operacoesIds)
+        $operacoes = ! empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
             : collect([]);
 
-        if (!empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])) && $consultorId === null && !$apenasCaixaOperacao) {
-            if (!$operacaoId && !empty($operacoesIds)) {
+        if (! empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])) && $consultorId === null && ! $apenasCaixaOperacao) {
+            if (! $operacaoId && ! empty($operacoesIds)) {
                 $totalEntradas = 0;
                 $totalSaidas = 0;
                 $saldoInicial = 0;
@@ -152,7 +152,7 @@ class CashController extends Controller
                 $saldoInicial = $this->cashService->calcularSaldoInicial(null, $operacaoId, $dataInicio, false);
             }
         } elseif ($apenasCaixaOperacao) {
-            if (!$operacaoId && !empty($operacoesIds)) {
+            if (! $operacaoId && ! empty($operacoesIds)) {
                 $totalEntradas = 0;
                 $totalSaidas = 0;
                 $saldoInicial = 0;
@@ -180,7 +180,7 @@ class CashController extends Controller
 
         // Usuários por operação (consultor, gestor, administrador) para o select
         $usuariosPorOperacao = [];
-        if (!empty($operacoesIds)) {
+        if (! empty($operacoesIds)) {
             $usuarios = User::with('operacoes')
                 ->whereHas('operacoes', function ($q) use ($operacoesIds) {
                     $q->whereIn('operacoes.id', $operacoesIds)
@@ -238,25 +238,25 @@ class CashController extends Controller
     public function create(Request $request): View
     {
         $user = auth()->user();
-        
+
         // Super Admin não pode criar movimentações
         if ($user->isSuperAdmin()) {
             abort(403, 'Super Admin não pode criar movimentações de caixa.');
         }
-        
+
         if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem criar movimentações manuais.');
         }
 
         $operacoesIds = $user->getOperacoesIds();
-        $operacoes = !empty($operacoesIds)
+        $operacoes = ! empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
             : collect([]);
 
         $operacaoIdDefault = OperacaoPreferida::resolverParaFormularioOuQuery($request, $operacoes->pluck('id')->all(), $user);
 
         $usuarios = collect();
-        if (!empty($operacoesIds)) {
+        if (! empty($operacoesIds)) {
             $usuarios = User::with(['operacoes'])
                 ->whereHas('operacoes', function ($q) use ($operacoesIds) {
                     $q->whereIn('operacoes.id', $operacoesIds)
@@ -275,6 +275,7 @@ class CashController extends Controller
             })->map(function ($u) use ($op) {
                 $pivot = $u->operacoes->where('id', $op->id)->first();
                 $role = $pivot && $pivot->pivot ? ($pivot->pivot->role ?? '') : '';
+
                 return [
                     'id' => $u->id,
                     'name' => $u->name,
@@ -295,6 +296,7 @@ class CashController extends Controller
                 'despesa' => $categorias->where('tipo', 'despesa')->values()->toArray(),
             ];
         }
+
         return view('caixa.movimentacao.create', compact(
             'operacoes',
             'usuarios',
@@ -531,12 +533,12 @@ class CashController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $user = auth()->user();
-        
+
         // Super Admin não pode criar movimentações
         if ($user->isSuperAdmin()) {
             abort(403, 'Super Admin não pode criar movimentações de caixa.');
         }
-        
+
         if (empty($user->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']))) {
             abort(403, 'Acesso negado. Apenas gestores e administradores podem criar movimentações manuais.');
         }
@@ -570,13 +572,13 @@ class CashController extends Controller
         ]);
 
         $opsIds = $user->getOperacoesIds();
-        if (empty($opsIds) || !in_array((int) $validated['operacao_id'], $opsIds, true)) {
+        if (empty($opsIds) || ! in_array((int) $validated['operacao_id'], $opsIds, true)) {
             return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
         }
 
-        if (!empty($validated['consultor_id'])) {
+        if (! empty($validated['consultor_id'])) {
             $consultor = User::findOrFail($validated['consultor_id']);
-            if (!$consultor->temAlgumPapelNaOperacao((int) $validated['operacao_id'], ['consultor', 'gestor', 'administrador'])) {
+            if (! $consultor->temAlgumPapelNaOperacao((int) $validated['operacao_id'], ['consultor', 'gestor', 'administrador'])) {
                 return back()->with('error', 'O usuário selecionado deve ser consultor, gestor ou administrador nesta operação.')->withInput();
             }
             $consultorOperacoes = $consultor->getOperacoesIds();
@@ -602,9 +604,9 @@ class CashController extends Controller
             // Criar movimentação manual
             $dadosMovimentacao = [
                 'operacao_id' => $validated['operacao_id'],
-                'consultor_id' => !empty($validated['consultor_id']) ? $validated['consultor_id'] : null, // Pode ser NULL (caixa da operação)
+                'consultor_id' => ! empty($validated['consultor_id']) ? $validated['consultor_id'] : null, // Pode ser NULL (caixa da operação)
                 'tipo' => $validated['tipo'],
-                'categoria_id' => !empty($validated['categoria_id']) ? $validated['categoria_id'] : null,
+                'categoria_id' => ! empty($validated['categoria_id']) ? $validated['categoria_id'] : null,
                 'origem' => 'manual',
                 'valor' => $validated['valor'],
                 'descricao' => $validated['descricao'],
@@ -621,8 +623,9 @@ class CashController extends Controller
             return redirect()->route('caixa.index')
                 ->with('success', 'Movimentação criada com sucesso!');
         } catch (\Exception $e) {
-            \Log::error('Erro ao criar movimentação manual: ' . $e->getMessage());
-            return back()->with('error', 'Erro ao criar movimentação: ' . $e->getMessage())->withInput();
+            \Log::error('Erro ao criar movimentação manual: '.$e->getMessage());
+
+            return back()->with('error', 'Erro ao criar movimentação: '.$e->getMessage())->withInput();
         }
     }
 
@@ -637,24 +640,24 @@ class CashController extends Controller
             abort(403, 'Super Admin não pode acessar o Caixa.');
         }
 
-        $movimentacao = CashLedgerEntry::with(['operacao', 'consultor', 'categoria', 'pagamento.parcela.emprestimo.cliente'])
+        $movimentacao = CashLedgerEntry::with(['operacao', 'consultor', 'categoria', 'pagamento.parcela.emprestimo.cliente', 'comprovanteAnexos'])
             ->findOrFail($id);
 
-        if (!$user->temAcessoOperacao($movimentacao->operacao_id)) {
+        if (! $user->temAcessoOperacao($movimentacao->operacao_id)) {
             abort(403, 'Acesso negado a esta movimentação.');
         }
-        if ($movimentacao->consultor_id !== $user->id && !$user->temAlgumPapelNaOperacao($movimentacao->operacao_id, ['gestor', 'administrador'])) {
+        if ($movimentacao->consultor_id !== $user->id && ! $user->temAlgumPapelNaOperacao($movimentacao->operacao_id, ['gestor', 'administrador'])) {
             abort(403, 'Acesso negado a esta movimentação.');
         }
 
         // Comprovante da referência (liberação) quando a movimentação não tem comprovante próprio
         $comprovanteReferenciaUrl = null;
         $comprovanteReferenciaLabel = null;
-        if (!$movimentacao->comprovante_path && $movimentacao->referencia_tipo && $movimentacao->referencia_id) {
+        if (! $movimentacao->comprovante_path && $movimentacao->referencia_tipo && $movimentacao->referencia_id) {
             if ($movimentacao->referencia_tipo === 'liberacao_emprestimo') {
                 $lib = LiberacaoEmprestimo::find($movimentacao->referencia_id);
                 if ($lib && $lib->comprovante_liberacao) {
-                    $comprovanteReferenciaUrl = asset('storage/' . $lib->comprovante_liberacao);
+                    $comprovanteReferenciaUrl = asset('storage/'.$lib->comprovante_liberacao);
                     $comprovanteReferenciaLabel = 'Comprovante da liberação';
                 }
             } elseif ($movimentacao->referencia_tipo === 'pagamento_cliente') {
@@ -662,7 +665,7 @@ class CashController extends Controller
                     ->where('status', 'pago_ao_cliente')
                     ->first();
                 if ($lib && $lib->comprovante_pagamento_cliente) {
-                    $comprovanteReferenciaUrl = asset('storage/' . $lib->comprovante_pagamento_cliente);
+                    $comprovanteReferenciaUrl = asset('storage/'.$lib->comprovante_pagamento_cliente);
                     $comprovanteReferenciaLabel = 'Comprovante pagamento ao cliente';
                 }
             }

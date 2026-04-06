@@ -153,6 +153,14 @@
                                             </a>
                                         @endif
                                     </div>
+                                    @include('partials.comprovante-extras', [
+                                        'tipo' => 'liberacao',
+                                        'parentId' => $liberacao->id,
+                                        'context' => 'liberacao',
+                                        'anexos' => $liberacao->comprovanteAnexos->where('context', 'liberacao'),
+                                        'canUpload' => $podeAprovarLiberacao ?? false,
+                                        'modalSuffix' => 'LibL'.$liberacao->id,
+                                    ])
                                 </div>
                             @else
                                 <div class="col-md-6 mb-3">
@@ -164,6 +172,14 @@
                                     @else
                                         <span class="text-muted">Não disponível</span>
                                     @endif
+                                    @include('partials.comprovante-extras', [
+                                        'tipo' => 'liberacao',
+                                        'parentId' => $liberacao->id,
+                                        'context' => 'liberacao',
+                                        'anexos' => $liberacao->comprovanteAnexos->where('context', 'liberacao'),
+                                        'canUpload' => $podeAprovarLiberacao ?? false,
+                                        'modalSuffix' => 'LibLelse'.$liberacao->id,
+                                    ])
                                 </div>
                             @endif
 
@@ -192,6 +208,14 @@
                                             </a>
                                         @endif
                                     </div>
+                                    @include('partials.comprovante-extras', [
+                                        'tipo' => 'liberacao',
+                                        'parentId' => $liberacao->id,
+                                        'context' => 'pagamento_cliente',
+                                        'anexos' => $liberacao->comprovanteAnexos->where('context', 'pagamento_cliente'),
+                                        'canUpload' => $liberacao->consultor_id === auth()->id(),
+                                        'modalSuffix' => 'LibPag'.$liberacao->id,
+                                    ])
                                 </div>
                             @else
                                 <div class="col-md-6 mb-3">
@@ -203,6 +227,14 @@
                                     @else
                                         <span class="text-muted">Não disponível</span>
                                     @endif
+                                    @include('partials.comprovante-extras', [
+                                        'tipo' => 'liberacao',
+                                        'parentId' => $liberacao->id,
+                                        'context' => 'pagamento_cliente',
+                                        'anexos' => $liberacao->comprovanteAnexos->where('context', 'pagamento_cliente'),
+                                        'canUpload' => $liberacao->consultor_id === auth()->id(),
+                                        'modalSuffix' => 'LibPagelse'.$liberacao->id,
+                                    ])
                                 </div>
                             @endif
                         </div>

@@ -170,5 +170,9 @@ class Settlement extends Model
     {
         return $this->status === 'validado' || $this->status === 'concluido';
     }
-}
 
+    public function comprovanteAnexos()
+    {
+        return $this->morphMany(\App\Models\ComprovanteAnexo::class, 'anexavel')->orderBy('id');
+    }
+}

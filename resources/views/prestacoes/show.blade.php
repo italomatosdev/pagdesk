@@ -174,6 +174,13 @@
                                         <i class="bx bx-file-blank"></i> Ver Comprovante
                                     </a>
                                 @endif
+                                @include('partials.comprovante-extras', [
+                                    'tipo' => 'settlement',
+                                    'parentId' => $settlement->id,
+                                    'anexos' => $settlement->comprovanteAnexos,
+                                    'canUpload' => $settlement->consultor_id === auth()->id(),
+                                    'modalSuffix' => 'Prest'.$settlement->id,
+                                ])
                             </div>
                         </div>
                     </div>

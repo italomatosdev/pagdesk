@@ -683,10 +683,12 @@ class EmprestimoController extends Controller
             'parcelas.pagamentos.consultor',
             'parcelas.pagamentos.produtoObjetoItens',
             'parcelas.pagamentos.rejeitadoPor',
+            'parcelas.pagamentos.comprovanteAnexos',
             'aprovacao.aprovador',
             'liberacao.consultor',
             'liberacao.gestor',
             'liberacao.confirmadoPagamentoPor',
+            'liberacao.comprovanteAnexos',
             'emprestimoOrigem',
             'renovacoes',
             'garantias.anexos', // Garantias para empréstimo tipo empenho

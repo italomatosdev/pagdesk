@@ -114,6 +114,13 @@
                             @else
                                 <span class="text-muted">Não anexado</span>
                             @endif
+                            @include('partials.comprovante-extras', [
+                                'tipo' => 'movimentacao_caixa',
+                                'parentId' => $movimentacao->id,
+                                'anexos' => $movimentacao->comprovanteAnexos,
+                                'canUpload' => ($movimentacao->consultor_id === auth()->id()) || auth()->user()->temAlgumPapelNaOperacao($movimentacao->operacao_id, ['gestor', 'administrador']),
+                                'modalSuffix' => 'Mov'.$movimentacao->id,
+                            ])
                         </div>
                     </div>
 
