@@ -8,6 +8,7 @@ use App\Modules\Cash\Models\Settlement;
 use App\Modules\Cash\Services\CashService;
 use App\Modules\Cash\Services\SettlementService;
 use App\Modules\Core\Models\Operacao;
+use App\Modules\Loans\Models\LiberacaoEmprestimo;
 use App\Support\CashLedgerEmprestimoLink;
 use App\Support\FichaContatoLookup;
 use App\Support\OperacaoPreferida;
@@ -151,6 +152,18 @@ class FechamentoCaixaController extends Controller
 
         $dados = $this->settlementService->prepararConferenciaFechamento($usuarioId, $operacaoId);
 
+        $liberacoesSemPagamentoClienteQuery = LiberacaoEmprestimo::query()
+            ->where('consultor_id', $usuarioId)
+            ->where('status', 'liberado')
+            ->whereHas('emprestimo', static fn ($q) => $q->where('operacao_id', $operacaoId));
+
+        $liberacoesSemPagamentoClienteCount = (clone $liberacoesSemPagamentoClienteQuery)->count();
+        $liberacoesSemPagamentoCliente = (clone $liberacoesSemPagamentoClienteQuery)
+            ->with(['emprestimo.cliente'])
+            ->orderByDesc('id')
+            ->limit(15)
+            ->get();
+
         $permiteFechar = round((float) $dados['saldoAtual'], 2) > 0;
         $podeConfirmarFechamento = $permiteFechar && (
             $usuarioId !== $user->id
@@ -198,7 +211,9 @@ class FechamentoCaixaController extends Controller
             'dataFimConf',
             'fichasContatoPorClienteOperacao',
             'permiteFechar',
-            'podeConfirmarFechamento'
+            'podeConfirmarFechamento',
+            'liberacoesSemPagamentoCliente',
+            'liberacoesSemPagamentoClienteCount',
         ));
     }
 

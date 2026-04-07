@@ -298,6 +298,7 @@
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
+                            @include('partials.fechamento-conferir-alerta-liberacoes-cliente', ['alertClass' => 'mb-3'])
                             <div class="d-flex flex-wrap gap-2 justify-content-between">
                                 <a href="{{ route('fechamento-caixa.index', ['operacao_id' => $operacao->id]) }}" class="btn btn-secondary">
                                     <i class="bx bx-arrow-back"></i> Voltar
@@ -312,6 +313,7 @@
             @elseif($permiteFechar ?? false)
                 <div class="card border-secondary">
                     <div class="card-body">
+                        @include('partials.fechamento-conferir-alerta-liberacoes-cliente', ['alertClass' => 'mb-3'])
                         <p class="text-muted mb-3">
                             O fechamento do seu caixa deve ser feito por um gestor ou administrador. Use <strong>Voltar</strong> para retornar à lista.
                         </p>
@@ -323,6 +325,7 @@
             @else
                 <div class="card border-secondary">
                     <div class="card-body">
+                        @include('partials.fechamento-conferir-alerta-liberacoes-cliente', ['alertClass' => 'mb-3'])
                         <p class="text-muted mb-3">
                             Com saldo zero ou negativo não há confirmação de fechamento nesta tela. Use <strong>Voltar</strong> para retornar à lista.
                         </p>
