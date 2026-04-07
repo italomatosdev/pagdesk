@@ -11,6 +11,7 @@ use App\Support\FichaContatoLookup;
 use App\Support\OperacaoPreferida;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class SettlementController extends Controller
@@ -273,6 +274,8 @@ class SettlementController extends Controller
 
             return redirect()->route('prestacoes.index')
                 ->with('success', 'Prestação de contas criada com sucesso!');
+        } catch (ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao criar prestação de contas: '.$e->getMessage())->withInput();
         }
@@ -324,7 +327,7 @@ class SettlementController extends Controller
             $this->settlementService->rejeitar($id, $user->id, $validated['motivo_rejeicao']);
 
             return redirect()->route('prestacoes.show', $id)
-                ->with('success', 'Prestação de contas rejeitada.');
+                ->with('success', 'Prestação de contas cancelada.');
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao rejeitar: '.$e->getMessage());
         }
@@ -474,6 +477,8 @@ class SettlementController extends Controller
 
             return redirect()->route('prestacoes.show', $settlement->id)
                 ->with('success', 'Caixa fechado com sucesso! O usuário foi notificado para enviar o comprovante.');
+        } catch (ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao fechar caixa: '.$e->getMessage())->withInput();
         }

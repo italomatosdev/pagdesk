@@ -8,6 +8,7 @@ use App\Modules\Cash\Models\Settlement;
 use App\Modules\Cash\Services\CashService;
 use App\Modules\Cash\Services\SettlementService;
 use App\Modules\Core\Models\Operacao;
+use App\Modules\Loans\Models\LiberacaoEmprestimo;
 use App\Support\CashLedgerEmprestimoLink;
 use App\Support\FichaContatoLookup;
 use App\Support\OperacaoPreferida;
@@ -151,11 +152,25 @@ class FechamentoCaixaController extends Controller
 
         $dados = $this->settlementService->prepararConferenciaFechamento($usuarioId, $operacaoId);
 
+        $liberacoesSemPagamentoClienteQuery = LiberacaoEmprestimo::query()
+            ->where('consultor_id', $usuarioId)
+            ->where('status', 'liberado')
+            ->whereHas('emprestimo', static fn ($q) => $q->where('operacao_id', $operacaoId));
+
+        $liberacoesSemPagamentoClienteCount = (clone $liberacoesSemPagamentoClienteQuery)->count();
+        $liberacoesSemPagamentoCliente = (clone $liberacoesSemPagamentoClienteQuery)
+            ->with(['emprestimo.cliente'])
+            ->orderByDesc('id')
+            ->limit(15)
+            ->get();
+
         $permiteFechar = round((float) $dados['saldoAtual'], 2) > 0;
+        $settlementAberto = $this->settlementService->buscarFechamentoAberto($usuarioId, $operacaoId);
+        $fechamentoAberto = $settlementAberto !== null;
         $podeConfirmarFechamento = $permiteFechar && (
             $usuarioId !== $user->id
             || $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])
-        );
+        ) && ! $fechamentoAberto;
 
         $usuarioAlvo = \App\Models\User::findOrFail($usuarioId);
         $operacao = Operacao::findOrFail($operacaoId);
@@ -176,8 +191,14 @@ class FechamentoCaixaController extends Controller
         $totalSaidas = $dados['totalSaidas'];
         $saldoFinal = $dados['saldoFinal'];
         $saldoAtual = $dados['saldoAtual'];
-        $dataInicioConf = $dados['dataInicio'];
+        $dataInicioConf = $dados['dataInicioExtrato'];
         $dataFimConf = $dados['dataFim'];
+        $dataInicioLogicoConf = $dados['dataInicio'];
+        $extratoIncluiPosFechamentoAnterior = $dados['extratoIncluiPosFechamentoAnterior'];
+        $totaisReferenciaInicioLogico = $dados['totaisReferenciaInicioLogico'];
+        $totalEntradasComplementoAnterior = $dados['totalEntradasComplementoAnterior'];
+        $totalSaidasComplementoAnterior = $dados['totalSaidasComplementoAnterior'];
+        $idsMovimentacoesPosFechamentoAnterior = $dados['idsMovimentacoesPosFechamentoAnterior'];
 
         $fichasContatoPorClienteOperacao = FichaContatoLookup::mapFromCashLedgerEntries($movimentacoes);
 
@@ -196,9 +217,19 @@ class FechamentoCaixaController extends Controller
             'subtotalParcelasFiltrado',
             'dataInicioConf',
             'dataFimConf',
+            'dataInicioLogicoConf',
+            'extratoIncluiPosFechamentoAnterior',
+            'totaisReferenciaInicioLogico',
+            'totalEntradasComplementoAnterior',
+            'totalSaidasComplementoAnterior',
+            'idsMovimentacoesPosFechamentoAnterior',
             'fichasContatoPorClienteOperacao',
             'permiteFechar',
-            'podeConfirmarFechamento'
+            'podeConfirmarFechamento',
+            'fechamentoAberto',
+            'settlementAberto',
+            'liberacoesSemPagamentoCliente',
+            'liberacoesSemPagamentoClienteCount',
         ));
     }
 
@@ -219,42 +250,99 @@ class FechamentoCaixaController extends Controller
             abort(403, 'Acesso negado.');
         }
 
-        // Calcular valores do período
-        $saldoInicial = $this->cashService->calcularSaldoInicial(
-            $settlement->consultor_id,
-            $settlement->operacao_id,
-            $settlement->data_inicio->format('Y-m-d')
-        );
+        $recebidoEm = $settlement->recebido_em;
+        $extratoComRecorteConfirmacao = $settlement->status === 'concluido' && $recebidoEm !== null;
 
-        $totalEntradas = $this->cashService->calcularTotalEntradas(
-            $settlement->consultor_id,
-            $settlement->operacao_id,
-            $settlement->data_inicio->format('Y-m-d'),
-            $settlement->data_fim->format('Y-m-d')
-        );
+        $extratoAlinhadoConferencia = in_array($settlement->status, ['pendente', 'aprovado', 'enviado'], true);
+        $totaisReferenciaInicioLogico = false;
+        $extratoIncluiPosFechamentoAnterior = false;
+        $idsMovimentacoesPosFechamentoAnterior = [];
+        $totalEntradasComplementoAnterior = 0.0;
+        $totalSaidasComplementoAnterior = 0.0;
+        $dataInicioExtratoShow = null;
+        $dataFimExtratoShow = null;
+        $dataInicioLogicoShow = null;
 
-        $totalSaidas = $this->cashService->calcularTotalSaidas(
-            $settlement->consultor_id,
-            $settlement->operacao_id,
-            $settlement->data_inicio->format('Y-m-d'),
-            $settlement->data_fim->format('Y-m-d')
-        );
+        if ($extratoAlinhadoConferencia) {
+            $dadosExtrato = $this->settlementService->prepararConferenciaFechamento(
+                (int) $settlement->consultor_id,
+                (int) $settlement->operacao_id
+            );
+            $movimentacoes = $dadosExtrato['movimentacoes'];
+            CashLedgerEmprestimoLink::warmForCollection($movimentacoes);
+            $saldoInicial = $dadosExtrato['saldoInicial'];
+            $totalEntradas = $dadosExtrato['totalEntradas'];
+            $totalSaidas = $dadosExtrato['totalSaidas'];
+            $saldoFinal = $dadosExtrato['saldoFinal'];
+            $totaisReferenciaInicioLogico = $dadosExtrato['totaisReferenciaInicioLogico'];
+            $extratoIncluiPosFechamentoAnterior = $dadosExtrato['extratoIncluiPosFechamentoAnterior'];
+            $idsMovimentacoesPosFechamentoAnterior = $dadosExtrato['idsMovimentacoesPosFechamentoAnterior'];
+            $totalEntradasComplementoAnterior = $dadosExtrato['totalEntradasComplementoAnterior'];
+            $totalSaidasComplementoAnterior = $dadosExtrato['totalSaidasComplementoAnterior'];
+            $dataInicioExtratoShow = $dadosExtrato['dataInicioExtrato'];
+            $dataFimExtratoShow = $dadosExtrato['dataFim'];
+            $dataInicioLogicoShow = $dadosExtrato['dataInicio'];
+            $totalEntradasAposConfirmacao = null;
+            $totalSaidasAposConfirmacao = null;
+            $saldoLiquidoAposConfirmacao = null;
+            $quantidadeMovimentacoesAposConfirmacao = 0;
+        } else {
+            $movimentacoes = \App\Modules\Cash\Models\CashLedgerEntry::where('consultor_id', $settlement->consultor_id)
+                ->where('operacao_id', $settlement->operacao_id)
+                ->whereBetween('data_movimentacao', [
+                    $settlement->data_inicio->format('Y-m-d'),
+                    $settlement->data_fim->format('Y-m-d'),
+                ])
+                ->with(['operacao', 'pagamento.parcela.emprestimo.cliente'])
+                ->orderBy('data_movimentacao', 'asc')
+                ->orderBy('created_at', 'asc')
+                ->get();
 
-        $saldoFinal = $saldoInicial + $totalEntradas - $totalSaidas;
+            $saldoInicialBase = $this->cashService->calcularSaldoInicial(
+                $settlement->consultor_id,
+                $settlement->operacao_id,
+                $settlement->data_inicio->format('Y-m-d')
+            );
 
-        // Movimentações do período
-        $movimentacoes = \App\Modules\Cash\Models\CashLedgerEntry::where('consultor_id', $settlement->consultor_id)
-            ->where('operacao_id', $settlement->operacao_id)
-            ->whereBetween('data_movimentacao', [
-                $settlement->data_inicio->format('Y-m-d'),
-                $settlement->data_fim->format('Y-m-d'),
-            ])
-            ->with(['operacao', 'pagamento.parcela.emprestimo.cliente'])
-            ->orderBy('data_movimentacao', 'asc')
-            ->orderBy('created_at', 'asc')
-            ->get();
+            if ($extratoComRecorteConfirmacao) {
+                $saldoInicial = $saldoInicialBase;
+                $ateConfirmacao = static fn (\App\Modules\Cash\Models\CashLedgerEntry $m) => $m->created_at->lte($recebidoEm);
+                $aposConfirmacao = static fn (\App\Modules\Cash\Models\CashLedgerEntry $m) => $m->created_at->gt($recebidoEm);
+
+                $totalEntradas = (float) $movimentacoes->filter($ateConfirmacao)->filter(fn ($m) => $m->isEntrada())->sum('valor');
+                $totalSaidas = (float) $movimentacoes->filter($ateConfirmacao)->filter(fn ($m) => $m->isSaida())->sum('valor');
+                $saldoFinal = $saldoInicial + $totalEntradas - $totalSaidas;
+
+                $totalEntradasAposConfirmacao = (float) $movimentacoes->filter($aposConfirmacao)->filter(fn ($m) => $m->isEntrada())->sum('valor');
+                $totalSaidasAposConfirmacao = (float) $movimentacoes->filter($aposConfirmacao)->filter(fn ($m) => $m->isSaida())->sum('valor');
+                $saldoLiquidoAposConfirmacao = $totalEntradasAposConfirmacao - $totalSaidasAposConfirmacao;
+                $quantidadeMovimentacoesAposConfirmacao = $movimentacoes->filter($aposConfirmacao)->count();
+            } else {
+                $saldoInicial = $saldoInicialBase;
+                $totalEntradas = $this->cashService->calcularTotalEntradas(
+                    $settlement->consultor_id,
+                    $settlement->operacao_id,
+                    $settlement->data_inicio->format('Y-m-d'),
+                    $settlement->data_fim->format('Y-m-d')
+                );
+                $totalSaidas = $this->cashService->calcularTotalSaidas(
+                    $settlement->consultor_id,
+                    $settlement->operacao_id,
+                    $settlement->data_inicio->format('Y-m-d'),
+                    $settlement->data_fim->format('Y-m-d')
+                );
+                $saldoFinal = $saldoInicial + $totalEntradas - $totalSaidas;
+                $totalEntradasAposConfirmacao = null;
+                $totalSaidasAposConfirmacao = null;
+                $saldoLiquidoAposConfirmacao = null;
+                $quantidadeMovimentacoesAposConfirmacao = 0;
+            }
+        }
 
         $quantidadeMovimentacoes = $movimentacoes->count();
+
+        $mostrarColunaBadgeExtrato = $extratoComRecorteConfirmacao
+            || (! empty($idsMovimentacoesPosFechamentoAnterior));
 
         $fichasContatoPorClienteOperacao = FichaContatoLookup::mapFromCashLedgerEntries($movimentacoes);
 
@@ -266,6 +354,21 @@ class FechamentoCaixaController extends Controller
             'totalSaidas',
             'saldoFinal',
             'quantidadeMovimentacoes',
+            'extratoComRecorteConfirmacao',
+            'extratoAlinhadoConferencia',
+            'extratoIncluiPosFechamentoAnterior',
+            'totaisReferenciaInicioLogico',
+            'idsMovimentacoesPosFechamentoAnterior',
+            'totalEntradasComplementoAnterior',
+            'totalSaidasComplementoAnterior',
+            'dataInicioExtratoShow',
+            'dataFimExtratoShow',
+            'dataInicioLogicoShow',
+            'mostrarColunaBadgeExtrato',
+            'totalEntradasAposConfirmacao',
+            'totalSaidasAposConfirmacao',
+            'saldoLiquidoAposConfirmacao',
+            'quantidadeMovimentacoesAposConfirmacao',
             'fichasContatoPorClienteOperacao'
         ));
     }
@@ -317,7 +420,7 @@ class FechamentoCaixaController extends Controller
 
             return redirect()->route('fechamento-caixa.show', $settlement->id)->with('success', $msg);
         } catch (ValidationException $e) {
-            throw $e;
+            return back()->withErrors($e->errors())->withInput();
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao fechar caixa: '.$e->getMessage())->withInput();
         }
@@ -400,7 +503,7 @@ class FechamentoCaixaController extends Controller
         try {
             $this->settlementService->rejeitar($id, $user->id, $validated['motivo_rejeicao']);
 
-            return redirect()->route('fechamento-caixa.show', $id)->with('success', 'Fechamento rejeitado.');
+            return redirect()->route('fechamento-caixa.show', $id)->with('success', 'Fechamento cancelado.');
         } catch (\Exception $e) {
             return back()->with('error', 'Erro: '.$e->getMessage());
         }

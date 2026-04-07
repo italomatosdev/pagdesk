@@ -38,6 +38,32 @@
                     </ul>
                 </div>
             @endif
+            @if(!empty($fechamentoAberto ?? false) && ($settlementAberto ?? null))
+                <div class="alert alert-danger mb-3">
+                    <i class="bx bx-error-circle me-2"></i>
+                    Já existe um <strong>fechamento em aberto</strong> para este usuário nesta operação
+                    (status: <strong>{{ $settlementAberto->status }}</strong>).
+                    <a href="{{ route('fechamento-caixa.show', $settlementAberto->id) }}" class="alert-link">Abrir o fechamento #{{ $settlementAberto->id }}</a>
+                    e cancele-o (gestor/admin) antes de iniciar outro.
+                </div>
+            @endif
+            @if(!empty($extratoIncluiPosFechamentoAnterior))
+                <div class="alert alert-info mb-3">
+                    <i class="bx bx-layer me-2"></i>
+                    O extrato inclui movimentações do <strong>mesmo dia</strong> do último fechamento concluído que foram
+                    registradas <strong>depois</strong> da confirmação de recebimento daquele fechamento. Elas entram no ciclo atual e alinham o extrato ao próximo fechamento.
+                    @if(!empty($dataInicioLogicoConf) && $dataInicioLogicoConf !== $dataInicioConf)
+                        <span class="d-block mt-2 small">Data inicial lógica do período: {{ \Carbon\Carbon::parse($dataInicioLogicoConf)->format('d/m/Y') }}; data mínima nas linhas: {{ \Carbon\Carbon::parse($dataInicioConf)->format('d/m/Y') }}.</span>
+                    @endif
+                    @if(!empty($totaisReferenciaInicioLogico))
+                        <span class="d-block mt-2 small">
+                            O <strong>saldo inicial</strong> e os <strong>totais</strong> usam a abertura em
+                            {{ \Carbon\Carbon::parse($dataInicioLogicoConf)->format('d/m/Y') }}; as linhas do dia anterior estão listadas para conferência e
+                            <strong>já entram no saldo inicial</strong> (não somam de novo nas entradas/saídas do período).
+                        </span>
+                    @endif
+                </div>
+            @endif
             @if($podeConfirmarFechamento ?? false)
                 <div class="alert alert-info mb-3">
                     <i class="bx bx-info-circle me-2"></i>
@@ -85,6 +111,9 @@
                                     {{ \Carbon\Carbon::parse($dataInicioConf)->format('d/m/Y') }} até
                                     {{ \Carbon\Carbon::parse($dataFimConf)->format('d/m/Y') }}
                                 </h5>
+                                @if(!empty($dataInicioLogicoConf) && $dataInicioLogicoConf !== $dataInicioConf)
+                                    <p class="small text-muted mb-0 mt-1">Início lógico: {{ \Carbon\Carbon::parse($dataInicioLogicoConf)->format('d/m/Y') }}</p>
+                                @endif
                             </div>
                         </div>
                         <div class="col-md-3 mb-3">
@@ -105,7 +134,12 @@
                         <div class="col-md-3 mb-3 d-flex">
                             <div class="card border-{{ $saldoInicial >= 0 ? 'success' : 'danger' }} w-100">
                                 <div class="card-body">
-                                    <p class="text-muted mb-1 small">Saldo inicial</p>
+                                    <p class="text-muted mb-1 small">
+                                        Saldo inicial
+                                        @if(!empty($totaisReferenciaInicioLogico) && !empty($dataInicioLogicoConf))
+                                            <span class="d-block fw-normal">(abertura {{ \Carbon\Carbon::parse($dataInicioLogicoConf)->format('d/m/Y') }})</span>
+                                        @endif
+                                    </p>
                                     <h4 class="mb-0 text-{{ $saldoInicial >= 0 ? 'success' : 'danger' }}">
                                         R$ {{ number_format($saldoInicial, 2, ',', '.') }}
                                     </h4>
@@ -115,7 +149,12 @@
                         <div class="col-md-3 mb-3 d-flex">
                             <div class="card border-success w-100">
                                 <div class="card-body">
-                                    <p class="text-muted mb-1 small">Total entradas</p>
+                                    <p class="text-muted mb-1 small">
+                                        Total entradas
+                                        @if(!empty($totaisReferenciaInicioLogico))
+                                            <span class="d-block fw-normal">(a partir de {{ \Carbon\Carbon::parse($dataInicioLogicoConf)->format('d/m/Y') }})</span>
+                                        @endif
+                                    </p>
                                     <h4 class="mb-0 text-success">R$ {{ number_format($totalEntradas, 2, ',', '.') }}</h4>
                                 </div>
                             </div>
@@ -123,7 +162,12 @@
                         <div class="col-md-3 mb-3 d-flex">
                             <div class="card border-danger w-100">
                                 <div class="card-body">
-                                    <p class="text-muted mb-1 small">Total saídas</p>
+                                    <p class="text-muted mb-1 small">
+                                        Total saídas
+                                        @if(!empty($totaisReferenciaInicioLogico))
+                                            <span class="d-block fw-normal">(a partir de {{ \Carbon\Carbon::parse($dataInicioLogicoConf)->format('d/m/Y') }})</span>
+                                        @endif
+                                    </p>
                                     <h4 class="mb-0 text-danger">R$ {{ number_format($totalSaidas, 2, ',', '.') }}</h4>
                                 </div>
                             </div>
@@ -188,6 +232,9 @@
                                 <thead>
                                     <tr>
                                         <th>Data</th>
+                                        @if(!empty($idsMovimentacoesPosFechamentoAnterior))
+                                            <th class="text-nowrap"></th>
+                                        @endif
                                         <th>Tipo</th>
                                         <th>Descrição</th>
                                         <th>Origem</th>
@@ -196,8 +243,18 @@
                                 </thead>
                                 <tbody>
                                     @foreach($movimentacoes as $movimentacao)
-                                        <tr>
+                                        @php
+                                            $linhaPosFechamentoAnterior = in_array((int) $movimentacao->id, $idsMovimentacoesPosFechamentoAnterior ?? [], true);
+                                        @endphp
+                                        <tr class="{{ $linhaPosFechamentoAnterior ? 'table-info' : '' }}">
                                             <td>{{ $movimentacao->data_movimentacao->format('d/m/Y') }}</td>
+                                            @if(!empty($idsMovimentacoesPosFechamentoAnterior))
+                                                <td class="align-middle">
+                                                    @if($linhaPosFechamentoAnterior)
+                                                        <span class="badge bg-info text-dark">Pós-prestação anterior</span>
+                                                    @endif
+                                                </td>
+                                            @endif
                                             <td>
                                                 <span class="badge bg-{{ $movimentacao->isEntrada() ? 'success' : 'danger' }}">
                                                     {{ $movimentacao->isEntrada() ? 'Entrada' : 'Saída' }}
@@ -240,26 +297,57 @@
                                 <tfoot>
                                     @if($somenteParcelas ?? false)
                                         <tr class="table-success">
-                                            <th colspan="4" class="text-end">Total — recebimentos do crédito listados ({{ $quantidadeMovimentacoes }}):</th>
+                                            <th colspan="{{ !empty($idsMovimentacoesPosFechamentoAnterior) ? 5 : 4 }}" class="text-end">Total — recebimentos do crédito listados ({{ $quantidadeMovimentacoes }}):</th>
                                             <th class="text-end text-success">+ R$ {{ number_format($subtotalParcelasFiltrado, 2, ',', '.') }}</th>
                                         </tr>
                                     @else
                                         <tr class="table-light">
-                                            <th colspan="4" class="text-end">Saldo inicial:</th>
+                                            <th colspan="{{ !empty($idsMovimentacoesPosFechamentoAnterior) ? 5 : 4 }}" class="text-end">
+                                                Saldo inicial
+                                                @if(!empty($totaisReferenciaInicioLogico) && !empty($dataInicioLogicoConf))
+                                                    (abertura {{ \Carbon\Carbon::parse($dataInicioLogicoConf)->format('d/m/Y') }})
+                                                @endif
+                                                :
+                                            </th>
                                             <th class="text-end {{ $saldoInicial >= 0 ? 'text-success' : 'text-danger' }}">
                                                 R$ {{ number_format($saldoInicial, 2, ',', '.') }}
                                             </th>
                                         </tr>
+                                        @if(!empty($totaisReferenciaInicioLogico) && (abs($totalEntradasComplementoAnterior ?? 0) > 0.009 || abs($totalSaidasComplementoAnterior ?? 0) > 0.009))
+                                            <tr class="table-secondary">
+                                                <th colspan="{{ !empty($idsMovimentacoesPosFechamentoAnterior) ? 5 : 4 }}" class="text-end small text-muted">
+                                                    Complemento do dia {{ \Carbon\Carbon::parse($dataInicioConf)->format('d/m/Y') }} (já no saldo inicial; informativo)
+                                                </th>
+                                                <th class="text-end small">
+                                                    + R$ {{ number_format($totalEntradasComplementoAnterior, 2, ',', '.') }}
+                                                    @if(abs($totalSaidasComplementoAnterior ?? 0) > 0.009)
+                                                        &nbsp; / − R$ {{ number_format($totalSaidasComplementoAnterior, 2, ',', '.') }}
+                                                    @endif
+                                                </th>
+                                            </tr>
+                                        @endif
                                         <tr class="table-success">
-                                            <th colspan="4" class="text-end">Total entradas:</th>
+                                            <th colspan="{{ !empty($idsMovimentacoesPosFechamentoAnterior) ? 5 : 4 }}" class="text-end">
+                                                Total entradas
+                                                @if(!empty($totaisReferenciaInicioLogico) && !empty($dataInicioLogicoConf))
+                                                    <span class="fw-normal">(a partir de {{ \Carbon\Carbon::parse($dataInicioLogicoConf)->format('d/m/Y') }})</span>
+                                                @endif
+                                                :
+                                            </th>
                                             <th class="text-end text-success">+ R$ {{ number_format($totalEntradas, 2, ',', '.') }}</th>
                                         </tr>
                                         <tr class="table-danger">
-                                            <th colspan="4" class="text-end">Total saídas:</th>
+                                            <th colspan="{{ !empty($idsMovimentacoesPosFechamentoAnterior) ? 5 : 4 }}" class="text-end">
+                                                Total saídas
+                                                @if(!empty($totaisReferenciaInicioLogico) && !empty($dataInicioLogicoConf))
+                                                    <span class="fw-normal">(a partir de {{ \Carbon\Carbon::parse($dataInicioLogicoConf)->format('d/m/Y') }})</span>
+                                                @endif
+                                                :
+                                            </th>
                                             <th class="text-end text-danger">- R$ {{ number_format($totalSaidas, 2, ',', '.') }}</th>
                                         </tr>
                                         <tr class="table-{{ $saldoFinal >= 0 ? 'primary' : 'danger' }}">
-                                            <th colspan="4" class="text-end">Saldo final (extrato):</th>
+                                            <th colspan="{{ !empty($idsMovimentacoesPosFechamentoAnterior) ? 5 : 4 }}" class="text-end">Saldo final (extrato):</th>
                                             <th class="text-end {{ $saldoFinal < 0 ? 'text-danger' : '' }}">R$ {{ number_format($saldoFinal, 2, ',', '.') }}</th>
                                         </tr>
                                     @endif
@@ -287,7 +375,7 @@
                         <h5 class="card-title mb-0"><i class="bx bx-lock-alt me-2"></i>Confirmar fechamento</h5>
                     </div>
                     <div class="card-body">
-                        <form method="POST" action="{{ route('fechamento-caixa.fechar') }}">
+                        <form method="POST" action="{{ route('fechamento-caixa.fechar') }}" id="formConfirmarFechamentoCaixa">
                             @csrf
                             <input type="hidden" name="usuario_id" value="{{ $usuarioAlvo->id }}">
                             <input type="hidden" name="operacao_id" value="{{ $operacao->id }}">
@@ -298,11 +386,12 @@
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
+                            @include('partials.fechamento-conferir-alerta-liberacoes-cliente', ['alertClass' => 'mb-3'])
                             <div class="d-flex flex-wrap gap-2 justify-content-between">
                                 <a href="{{ route('fechamento-caixa.index', ['operacao_id' => $operacao->id]) }}" class="btn btn-secondary">
                                     <i class="bx bx-arrow-back"></i> Voltar
                                 </a>
-                                <button type="submit" class="btn btn-danger">
+                                <button type="submit" class="btn btn-danger" id="btnConfirmarFechamentoCaixa">
                                     <i class="bx bx-lock-alt"></i> Confirmar fechamento
                                 </button>
                             </div>
@@ -312,6 +401,7 @@
             @elseif($permiteFechar ?? false)
                 <div class="card border-secondary">
                     <div class="card-body">
+                        @include('partials.fechamento-conferir-alerta-liberacoes-cliente', ['alertClass' => 'mb-3'])
                         <p class="text-muted mb-3">
                             O fechamento do seu caixa deve ser feito por um gestor ou administrador. Use <strong>Voltar</strong> para retornar à lista.
                         </p>
@@ -323,6 +413,7 @@
             @else
                 <div class="card border-secondary">
                     <div class="card-body">
+                        @include('partials.fechamento-conferir-alerta-liberacoes-cliente', ['alertClass' => 'mb-3'])
                         <p class="text-muted mb-3">
                             Com saldo zero ou negativo não há confirmação de fechamento nesta tela. Use <strong>Voltar</strong> para retornar à lista.
                         </p>
@@ -334,4 +425,43 @@
             @endif
         </div>
     </div>
+@endsection
+@section('scripts')
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const formConfirmarFechamentoCaixa = document.getElementById('formConfirmarFechamentoCaixa');
+            if (formConfirmarFechamentoCaixa) {
+                formConfirmarFechamentoCaixa.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Confirmar fechamento de caixa?',
+                        html: `
+                            <div class="text-start">
+                                <p><strong>Consultor:</strong> {{ $usuarioAlvo->name }}</p>
+                                <p><strong>Operação:</strong> {{ $operacao->nome }}</p>
+                                <p><strong>Saldo atual (valor da prestação):</strong> R$ {{ number_format($saldoAtual, 2, ',', '.') }}</p>
+                            </div>
+                            <p class="text-muted mt-3 mb-0">Esta ação registrará o fechamento para o consultor anexar o comprovante (conforme o fluxo).</p>
+                        `,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#dc3545',
+                        cancelButtonColor: '#6c757d',
+                        confirmButtonText: '<i class="bx bx-lock-alt"></i> Sim, confirmar fechamento',
+                        cancelButtonText: 'Cancelar',
+                        reverseButtons: true
+                    }).then(function(result) {
+                        if (result.isConfirmed) {
+                            const btn = document.getElementById('btnConfirmarFechamentoCaixa');
+                            if (btn) {
+                                btn.disabled = true;
+                                btn.innerHTML = '<i class="bx bx-loader bx-spin"></i> Processando...';
+                            }
+                            formConfirmarFechamentoCaixa.submit();
+                        }
+                    });
+                });
+            }
+        });
+    </script>
 @endsection

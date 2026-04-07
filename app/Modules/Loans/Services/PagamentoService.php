@@ -381,11 +381,12 @@ class PagamentoService
     }
 
     /**
-     * Registrar pagamento de múltiplas parcelas em um único ato (um comprovante).
+     * Registrar pagamento de múltiplas parcelas em um único ato.
+     * Comprovante: um único para todas (`comprovante_path`) ou um por parcela (`comprovantes_por_parcela` [parcela_id => path]).
      * Parcelas devem estar em aberto; usa a mesma lógica de juros de atraso da quitação diária.
      *
      * @param  array  $parcelaIds  IDs das parcelas a pagar (mínimo 2), mesma ordem de vencimento/número
-     * @param  array  $dados  metodo, data_pagamento, comprovante_path, observacoes, tipo_juros, taxa_juros_manual?, valor_juros_fixo?, consultor_id
+     * @param  array  $dados  metodo, data_pagamento, comprovante_path?, comprovantes_por_parcela?, observacoes, tipo_juros, taxa_juros_manual?, valor_juros_fixo?, consultor_id
      * @return array Lista de Pagamento criados
      */
     public function registrarPagamentoMultiplasParcelas(int $emprestimoId, array $parcelaIds, array $dados): array
@@ -448,6 +449,10 @@ class PagamentoService
             $tipoJuros = $dados['tipo_juros'] ?? 'nenhum';
             $operacao = $emprestimo->operacao;
             $comprovantePath = $dados['comprovante_path'] ?? null;
+            $comprovantesPorParcela = $dados['comprovantes_por_parcela'] ?? [];
+            if (! is_array($comprovantesPorParcela)) {
+                $comprovantesPorParcela = [];
+            }
             $consultorId = $dados['consultor_id'] ?? $user->id;
 
             $totalFalta = $parcelasSelecionadas->sum(fn (Parcela $p) => (float) $p->valor - (float) ($p->valor_pago ?? 0));
@@ -504,13 +509,18 @@ class PagamentoService
                 $valorJuros = $valorJurosPorParcela[$parcela->id] ?? 0;
                 $valorTotal = round($falta + $valorJuros, 2);
 
+                $pathParcela = $comprovantesPorParcela[$parcela->id] ?? $comprovantesPorParcela[(string) $parcela->id] ?? null;
+                if ($pathParcela === null || $pathParcela === '') {
+                    $pathParcela = $comprovantePath;
+                }
+
                 $createData = [
                     'parcela_id' => $parcela->id,
                     'consultor_id' => $consultorId,
                     'valor' => $valorTotal,
                     'metodo' => $dados['metodo'] ?? 'dinheiro',
                     'data_pagamento' => $dataPagamento,
-                    'comprovante_path' => $comprovantePath,
+                    'comprovante_path' => $pathParcela,
                     'observacoes' => isset($dados['observacoes']) ? ('Pagamento em lote. '.$dados['observacoes']) : 'Pagamento em lote (múltiplas parcelas).',
                     'tipo_juros' => $tipoJuros === 'nenhum' ? null : $tipoJurosRegistro,
                     'taxa_juros_aplicada' => $taxaRegistro,

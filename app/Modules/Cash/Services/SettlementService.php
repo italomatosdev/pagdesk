@@ -12,6 +12,31 @@ class SettlementService
 {
     use Auditable;
 
+    /** Status que impedem novo fechamento/prestação em aberto para o mesmo consultor + operação. */
+    public const STATUSES_FECHAMENTO_EM_ABERTO = ['pendente', 'aprovado', 'enviado'];
+
+    /**
+     * Há prestação/fechamento ainda não concluído (nem rejeitado) para o consultor nesta operação.
+     */
+    public function existeFechamentoAberto(int $consultorId, int $operacaoId): bool
+    {
+        return Settlement::query()
+            ->where('consultor_id', $consultorId)
+            ->where('operacao_id', $operacaoId)
+            ->whereIn('status', self::STATUSES_FECHAMENTO_EM_ABERTO)
+            ->exists();
+    }
+
+    public function buscarFechamentoAberto(int $consultorId, int $operacaoId): ?Settlement
+    {
+        return Settlement::query()
+            ->where('consultor_id', $consultorId)
+            ->where('operacao_id', $operacaoId)
+            ->whereIn('status', self::STATUSES_FECHAMENTO_EM_ABERTO)
+            ->orderByDesc('id')
+            ->first();
+    }
+
     /**
      * Criar prestação de contas (solicitação pelo próprio usuário)
      * Calcula o saldo líquido do consultor (saldo inicial + entradas - saídas)
@@ -19,6 +44,12 @@ class SettlementService
     public function criar(array $dados): Settlement
     {
         return DB::transaction(function () use ($dados) {
+            if ($this->existeFechamentoAberto((int) $dados['consultor_id'], (int) $dados['operacao_id'])) {
+                throw ValidationException::withMessages([
+                    'operacao' => 'Já existe uma prestação de contas em aberto para este consultor nesta operação. Conclua, cancele (rejeite) ou aguarde antes de abrir outra.',
+                ]);
+            }
+
             $cashService = app(\App\Modules\Cash\Services\CashService::class);
 
             // Calcular saldo inicial (antes do período)
@@ -80,6 +111,12 @@ class SettlementService
     public function fecharCaixa(int $usuarioId, int $operacaoId, int $criadoPorId, ?string $observacoes = null): Settlement
     {
         return DB::transaction(function () use ($usuarioId, $operacaoId, $criadoPorId, $observacoes) {
+            if ($this->existeFechamentoAberto($usuarioId, $operacaoId)) {
+                throw ValidationException::withMessages([
+                    'usuario' => 'Já existe um fechamento em aberto para este usuário nesta operação. Cancele-o (rejeite) na tela do fechamento antes de iniciar outro.',
+                ]);
+            }
+
             $cashService = app(\App\Modules\Cash\Services\CashService::class);
 
             // Verificar se é o próprio usuário fechando o caixa
@@ -153,8 +190,9 @@ class SettlementService
 
     /**
      * Dados para tela de conferência antes do fechamento (mesmo período e saldo que fecharCaixa usará).
+     * Inclui movimentações do dia do último fechamento concluído posteriores a recebido_em (próximo ciclo no extrato).
      *
-     * @return array{dataInicio: string, dataFim: string, saldoAtual: float, saldoInicial: float, totalEntradas: float, totalSaidas: float, saldoFinal: float, movimentacoes: \Illuminate\Support\Collection}
+     * @return array{dataInicio: string, dataFim: string, dataInicioExtrato: string, extratoIncluiPosFechamentoAnterior: bool, totaisReferenciaInicioLogico: bool, totalEntradasComplementoAnterior: float, totalSaidasComplementoAnterior: float, idsMovimentacoesPosFechamentoAnterior: list<int>, saldoAtual: float, saldoInicial: float, totalEntradas: float, totalSaidas: float, saldoFinal: float, movimentacoes: \Illuminate\Support\Collection}
      */
     public function prepararConferenciaFechamento(int $usuarioId, int $operacaoId): array
     {
@@ -178,22 +216,84 @@ class SettlementService
 
         $dataFim = now()->format('Y-m-d');
         $saldoAtual = $cashService->calcularSaldo($usuarioId, $operacaoId);
-        $saldoInicial = $cashService->calcularSaldoInicial($usuarioId, $operacaoId, $dataInicio);
-        $totalEntradas = $cashService->calcularTotalEntradas($usuarioId, $operacaoId, $dataInicio, $dataFim);
-        $totalSaidas = $cashService->calcularTotalSaidas($usuarioId, $operacaoId, $dataInicio, $dataFim);
-        $saldoFinal = $saldoInicial + $totalEntradas - $totalSaidas;
 
-        $movimentacoes = CashLedgerEntry::where('consultor_id', $usuarioId)
-            ->where('operacao_id', $operacaoId)
-            ->whereBetween('data_movimentacao', [$dataInicio, $dataFim])
-            ->with(['operacao', 'pagamento.parcela.emprestimo.cliente'])
-            ->orderBy('data_movimentacao', 'asc')
-            ->orderBy('created_at', 'asc')
-            ->get();
+        $with = ['operacao', 'pagamento.parcela.emprestimo.cliente'];
+
+        $base = collect();
+        if ($dataInicio <= $dataFim) {
+            $base = CashLedgerEntry::where('consultor_id', $usuarioId)
+                ->where('operacao_id', $operacaoId)
+                ->whereBetween('data_movimentacao', [$dataInicio, $dataFim])
+                ->with($with)
+                ->orderBy('data_movimentacao', 'asc')
+                ->orderBy('created_at', 'asc')
+                ->get();
+        }
+
+        $extras = collect();
+        if ($ultimoFechamento && $ultimoFechamento->recebido_em) {
+            $extras = CashLedgerEntry::where('consultor_id', $usuarioId)
+                ->where('operacao_id', $operacaoId)
+                ->whereDate('data_movimentacao', $ultimoFechamento->data_fim->format('Y-m-d'))
+                ->where('created_at', '>', $ultimoFechamento->recebido_em)
+                ->with($with)
+                ->orderBy('created_at', 'asc')
+                ->get();
+        }
+
+        /** @var \Illuminate\Support\Collection<int, CashLedgerEntry> $movimentacoes */
+        $movimentacoes = $base->merge($extras)->unique('id')->sortBy(function (CashLedgerEntry $m) {
+            return [$m->data_movimentacao->format('Y-m-d'), $m->created_at->getTimestamp()];
+        })->values();
+
+        $extratoIncluiPosFechamentoAnterior = $extras->isNotEmpty();
+
+        $totaisReferenciaInicioLogico = false;
+        $totalEntradasComplementoAnterior = 0.0;
+        $totalSaidasComplementoAnterior = 0.0;
+
+        if ($movimentacoes->isEmpty()) {
+            $saldoInicial = $cashService->calcularSaldoInicial($usuarioId, $operacaoId, $dataInicio);
+            $totalEntradas = $cashService->calcularTotalEntradas($usuarioId, $operacaoId, $dataInicio, $dataFim);
+            $totalSaidas = $cashService->calcularTotalSaidas($usuarioId, $operacaoId, $dataInicio, $dataFim);
+            $saldoFinal = $saldoInicial + $totalEntradas - $totalSaidas;
+            $dataInicioExtrato = $dataInicio;
+        } else {
+            /** @var \Carbon\Carbon $minData */
+            $minData = $movimentacoes->min('data_movimentacao');
+            $dataInicioExtrato = $minData->format('Y-m-d');
+
+            $totaisReferenciaInicioLogico = $extratoIncluiPosFechamentoAnterior && $dataInicioExtrato < $dataInicio;
+
+            if ($totaisReferenciaInicioLogico) {
+                $saldoInicial = $cashService->calcularSaldoInicial($usuarioId, $operacaoId, $dataInicio);
+                $movsParaTotais = $movimentacoes->filter(function (CashLedgerEntry $m) use ($dataInicio) {
+                    return $m->data_movimentacao->format('Y-m-d') >= $dataInicio;
+                });
+                $totalEntradas = (float) $movsParaTotais->filter(fn (CashLedgerEntry $m) => $m->isEntrada())->sum('valor');
+                $totalSaidas = (float) $movsParaTotais->filter(fn (CashLedgerEntry $m) => $m->isSaida())->sum('valor');
+
+                $idsExtras = $extras->pluck('id')->map(fn ($id) => (int) $id)->all();
+                $movsComplemento = $movimentacoes->filter(fn (CashLedgerEntry $m) => in_array((int) $m->id, $idsExtras, true));
+                $totalEntradasComplementoAnterior = (float) $movsComplemento->filter(fn (CashLedgerEntry $m) => $m->isEntrada())->sum('valor');
+                $totalSaidasComplementoAnterior = (float) $movsComplemento->filter(fn (CashLedgerEntry $m) => $m->isSaida())->sum('valor');
+            } else {
+                $saldoInicial = $cashService->calcularSaldoInicial($usuarioId, $operacaoId, $dataInicioExtrato);
+                $totalEntradas = (float) $movimentacoes->filter(fn (CashLedgerEntry $m) => $m->isEntrada())->sum('valor');
+                $totalSaidas = (float) $movimentacoes->filter(fn (CashLedgerEntry $m) => $m->isSaida())->sum('valor');
+            }
+            $saldoFinal = $saldoInicial + $totalEntradas - $totalSaidas;
+        }
 
         return [
             'dataInicio' => $dataInicio,
             'dataFim' => $dataFim,
+            'dataInicioExtrato' => $dataInicioExtrato,
+            'extratoIncluiPosFechamentoAnterior' => $extratoIncluiPosFechamentoAnterior,
+            'totaisReferenciaInicioLogico' => $totaisReferenciaInicioLogico,
+            'totalEntradasComplementoAnterior' => $totalEntradasComplementoAnterior,
+            'totalSaidasComplementoAnterior' => $totalSaidasComplementoAnterior,
+            'idsMovimentacoesPosFechamentoAnterior' => $extras->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
             'saldoAtual' => (float) $saldoAtual,
             'saldoInicial' => (float) $saldoInicial,
             'totalEntradas' => (float) $totalEntradas,
@@ -479,10 +579,10 @@ class SettlementService
     {
         $settlement = Settlement::findOrFail($settlementId);
 
-        // Pode rejeitar se estiver pendente ou aprovado
-        if (! in_array($settlement->status, ['pendente', 'aprovado'])) {
+        // Pendente, aprovado ou enviado (cancelamento pelo gestor antes de concluir)
+        if (! in_array($settlement->status, ['pendente', 'aprovado', 'enviado'], true)) {
             throw ValidationException::withMessages([
-                'settlement' => 'Apenas prestações pendentes ou aprovadas podem ser rejeitadas. Status atual: '.$settlement->status,
+                'settlement' => 'Apenas prestações pendentes, aprovadas ou com comprovante enviado podem ser canceladas (rejeitadas). Status atual: '.$settlement->status,
             ]);
         }
 
