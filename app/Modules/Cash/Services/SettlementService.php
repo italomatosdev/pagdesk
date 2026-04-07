@@ -190,8 +190,9 @@ class SettlementService
 
     /**
      * Dados para tela de conferência antes do fechamento (mesmo período e saldo que fecharCaixa usará).
+     * Inclui movimentações do dia do último fechamento concluído posteriores a recebido_em (próximo ciclo no extrato).
      *
-     * @return array{dataInicio: string, dataFim: string, saldoAtual: float, saldoInicial: float, totalEntradas: float, totalSaidas: float, saldoFinal: float, movimentacoes: \Illuminate\Support\Collection}
+     * @return array{dataInicio: string, dataFim: string, dataInicioExtrato: string, extratoIncluiPosFechamentoAnterior: bool, totaisReferenciaInicioLogico: bool, totalEntradasComplementoAnterior: float, totalSaidasComplementoAnterior: float, idsMovimentacoesPosFechamentoAnterior: list<int>, saldoAtual: float, saldoInicial: float, totalEntradas: float, totalSaidas: float, saldoFinal: float, movimentacoes: \Illuminate\Support\Collection}
      */
     public function prepararConferenciaFechamento(int $usuarioId, int $operacaoId): array
     {
@@ -215,22 +216,84 @@ class SettlementService
 
         $dataFim = now()->format('Y-m-d');
         $saldoAtual = $cashService->calcularSaldo($usuarioId, $operacaoId);
-        $saldoInicial = $cashService->calcularSaldoInicial($usuarioId, $operacaoId, $dataInicio);
-        $totalEntradas = $cashService->calcularTotalEntradas($usuarioId, $operacaoId, $dataInicio, $dataFim);
-        $totalSaidas = $cashService->calcularTotalSaidas($usuarioId, $operacaoId, $dataInicio, $dataFim);
-        $saldoFinal = $saldoInicial + $totalEntradas - $totalSaidas;
 
-        $movimentacoes = CashLedgerEntry::where('consultor_id', $usuarioId)
-            ->where('operacao_id', $operacaoId)
-            ->whereBetween('data_movimentacao', [$dataInicio, $dataFim])
-            ->with(['operacao', 'pagamento.parcela.emprestimo.cliente'])
-            ->orderBy('data_movimentacao', 'asc')
-            ->orderBy('created_at', 'asc')
-            ->get();
+        $with = ['operacao', 'pagamento.parcela.emprestimo.cliente'];
+
+        $base = collect();
+        if ($dataInicio <= $dataFim) {
+            $base = CashLedgerEntry::where('consultor_id', $usuarioId)
+                ->where('operacao_id', $operacaoId)
+                ->whereBetween('data_movimentacao', [$dataInicio, $dataFim])
+                ->with($with)
+                ->orderBy('data_movimentacao', 'asc')
+                ->orderBy('created_at', 'asc')
+                ->get();
+        }
+
+        $extras = collect();
+        if ($ultimoFechamento && $ultimoFechamento->recebido_em) {
+            $extras = CashLedgerEntry::where('consultor_id', $usuarioId)
+                ->where('operacao_id', $operacaoId)
+                ->whereDate('data_movimentacao', $ultimoFechamento->data_fim->format('Y-m-d'))
+                ->where('created_at', '>', $ultimoFechamento->recebido_em)
+                ->with($with)
+                ->orderBy('created_at', 'asc')
+                ->get();
+        }
+
+        /** @var \Illuminate\Support\Collection<int, CashLedgerEntry> $movimentacoes */
+        $movimentacoes = $base->merge($extras)->unique('id')->sortBy(function (CashLedgerEntry $m) {
+            return [$m->data_movimentacao->format('Y-m-d'), $m->created_at->getTimestamp()];
+        })->values();
+
+        $extratoIncluiPosFechamentoAnterior = $extras->isNotEmpty();
+
+        $totaisReferenciaInicioLogico = false;
+        $totalEntradasComplementoAnterior = 0.0;
+        $totalSaidasComplementoAnterior = 0.0;
+
+        if ($movimentacoes->isEmpty()) {
+            $saldoInicial = $cashService->calcularSaldoInicial($usuarioId, $operacaoId, $dataInicio);
+            $totalEntradas = $cashService->calcularTotalEntradas($usuarioId, $operacaoId, $dataInicio, $dataFim);
+            $totalSaidas = $cashService->calcularTotalSaidas($usuarioId, $operacaoId, $dataInicio, $dataFim);
+            $saldoFinal = $saldoInicial + $totalEntradas - $totalSaidas;
+            $dataInicioExtrato = $dataInicio;
+        } else {
+            /** @var \Carbon\Carbon $minData */
+            $minData = $movimentacoes->min('data_movimentacao');
+            $dataInicioExtrato = $minData->format('Y-m-d');
+
+            $totaisReferenciaInicioLogico = $extratoIncluiPosFechamentoAnterior && $dataInicioExtrato < $dataInicio;
+
+            if ($totaisReferenciaInicioLogico) {
+                $saldoInicial = $cashService->calcularSaldoInicial($usuarioId, $operacaoId, $dataInicio);
+                $movsParaTotais = $movimentacoes->filter(function (CashLedgerEntry $m) use ($dataInicio) {
+                    return $m->data_movimentacao->format('Y-m-d') >= $dataInicio;
+                });
+                $totalEntradas = (float) $movsParaTotais->filter(fn (CashLedgerEntry $m) => $m->isEntrada())->sum('valor');
+                $totalSaidas = (float) $movsParaTotais->filter(fn (CashLedgerEntry $m) => $m->isSaida())->sum('valor');
+
+                $idsExtras = $extras->pluck('id')->map(fn ($id) => (int) $id)->all();
+                $movsComplemento = $movimentacoes->filter(fn (CashLedgerEntry $m) => in_array((int) $m->id, $idsExtras, true));
+                $totalEntradasComplementoAnterior = (float) $movsComplemento->filter(fn (CashLedgerEntry $m) => $m->isEntrada())->sum('valor');
+                $totalSaidasComplementoAnterior = (float) $movsComplemento->filter(fn (CashLedgerEntry $m) => $m->isSaida())->sum('valor');
+            } else {
+                $saldoInicial = $cashService->calcularSaldoInicial($usuarioId, $operacaoId, $dataInicioExtrato);
+                $totalEntradas = (float) $movimentacoes->filter(fn (CashLedgerEntry $m) => $m->isEntrada())->sum('valor');
+                $totalSaidas = (float) $movimentacoes->filter(fn (CashLedgerEntry $m) => $m->isSaida())->sum('valor');
+            }
+            $saldoFinal = $saldoInicial + $totalEntradas - $totalSaidas;
+        }
 
         return [
             'dataInicio' => $dataInicio,
             'dataFim' => $dataFim,
+            'dataInicioExtrato' => $dataInicioExtrato,
+            'extratoIncluiPosFechamentoAnterior' => $extratoIncluiPosFechamentoAnterior,
+            'totaisReferenciaInicioLogico' => $totaisReferenciaInicioLogico,
+            'totalEntradasComplementoAnterior' => $totalEntradasComplementoAnterior,
+            'totalSaidasComplementoAnterior' => $totalSaidasComplementoAnterior,
+            'idsMovimentacoesPosFechamentoAnterior' => $extras->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
             'saldoAtual' => (float) $saldoAtual,
             'saldoInicial' => (float) $saldoInicial,
             'totalEntradas' => (float) $totalEntradas,

@@ -56,6 +56,30 @@
                                 Aguardando confirmação de recebimento por <strong>{{ $settlement->criador?->name ?? 'quem iniciou o fechamento' }}</strong>.
                             </div>
                         @endif
+                        @if(!empty($extratoComRecorteConfirmacao) && ($quantidadeMovimentacoesAposConfirmacao ?? 0) > 0)
+                            <div class="alert alert-info mb-3">
+                                <i class="bx bx-info-circle me-1"></i>
+                                Esta lista mostra <strong>todas</strong> as movimentações com data no período. Linhas com registro
+                                <strong>após</strong> {{ $settlement->recebido_em->format('d/m/Y H:i') }} ocorreram depois da confirmação de recebimento e entram no <strong>próximo</strong> ciclo operacional.
+                                Os totais de <strong>Saldo final / prestação</strong> abaixo consideram apenas movimentações até essa confirmação.
+                            </div>
+                        @endif
+                        @if(!empty($extratoAlinhadoConferencia) && !empty($extratoIncluiPosFechamentoAnterior))
+                            <div class="alert alert-info mb-3">
+                                <i class="bx bx-layer me-2"></i>
+                                O extrato abaixo é o <strong>mesmo da tela de conferir</strong> antes de fechar: inclui movimentações do dia do último fechamento concluído
+                                registradas <strong>depois</strong> da confirmação daquele fechamento.
+                                @if(!empty($dataInicioLogicoShow) && !empty($dataInicioExtratoShow) && $dataInicioLogicoShow !== $dataInicioExtratoShow)
+                                    <span class="d-block mt-2 small">Data inicial lógica: {{ \Carbon\Carbon::parse($dataInicioLogicoShow)->format('d/m/Y') }}; data mínima nas linhas: {{ \Carbon\Carbon::parse($dataInicioExtratoShow)->format('d/m/Y') }}.</span>
+                                @endif
+                                @if(!empty($totaisReferenciaInicioLogico))
+                                    <span class="d-block mt-2 small">
+                                        O <strong>saldo inicial</strong> e os <strong>totais</strong> usam a abertura em
+                                        {{ \Carbon\Carbon::parse($dataInicioLogicoShow)->format('d/m/Y') }}; linhas do dia anterior estão para conferência e já entram no saldo inicial.
+                                    </span>
+                                @endif
+                            </div>
+                        @endif
                         <div class="row">
                             <div class="col-md-3 mb-3">
                                 <div class="border rounded p-3 h-100">
@@ -71,11 +95,17 @@
                             </div>
                             <div class="col-md-3 mb-3">
                                 <div class="border rounded p-3 h-100">
-                                    <p class="text-muted mb-1 small">Período</p>
+                                    <p class="text-muted mb-1 small">Período da prestação</p>
                                     <h5 class="mb-0">
                                         {{ $settlement->data_inicio->format('d/m/Y') }} até
                                         {{ $settlement->data_fim->format('d/m/Y') }}
                                     </h5>
+                                    @if(!empty($extratoAlinhadoConferencia) && !empty($dataInicioExtratoShow) && !empty($dataFimExtratoShow))
+                                        <p class="small text-muted mb-0 mt-2">Extrato (conferência): {{ \Carbon\Carbon::parse($dataInicioExtratoShow)->format('d/m/Y') }} até {{ \Carbon\Carbon::parse($dataFimExtratoShow)->format('d/m/Y') }}</p>
+                                        @if(!empty($dataInicioLogicoShow) && $dataInicioLogicoShow !== $dataInicioExtratoShow)
+                                            <p class="small text-muted mb-0">Início lógico: {{ \Carbon\Carbon::parse($dataInicioLogicoShow)->format('d/m/Y') }}</p>
+                                        @endif
+                                    @endif
                                 </div>
                             </div>
                             <div class="col-md-3 mb-3">
@@ -85,11 +115,28 @@
                                 </div>
                             </div>
                         </div>
+                        @if($settlement->status === 'concluido')
+                            <div class="row mt-2">
+                                <div class="col-12 mb-3">
+                                    <div class="border border-primary rounded p-3 bg-light">
+                                        <p class="text-muted mb-1 small mb-0">Valor registrado no fechamento (prestação)</p>
+                                        <h3 class="mb-0 text-primary">
+                                            <i class="bx bx-check-shield me-2"></i>R$ {{ number_format((float) $settlement->valor_total, 2, ',', '.') }}
+                                        </h3>
+                                    </div>
+                                </div>
+                            </div>
+                        @endif
                         <div class="row mt-3">
                             <div class="col-md-3 mb-3 d-flex">
                                 <div class="card border-{{ $saldoInicial >= 0 ? 'success' : 'danger' }} w-100">
                                     <div class="card-body d-flex flex-column">
-                                        <p class="text-muted mb-1 small">Saldo Inicial</p>
+                                        <p class="text-muted mb-1 small">
+                                            Saldo Inicial
+                                            @if(!empty($totaisReferenciaInicioLogico) && !empty($dataInicioLogicoShow))
+                                                <span class="d-block fw-normal">(abertura {{ \Carbon\Carbon::parse($dataInicioLogicoShow)->format('d/m/Y') }})</span>
+                                            @endif
+                                        </p>
                                         <h4 class="mb-0 text-{{ $saldoInicial >= 0 ? 'success' : 'danger' }} flex-grow-1">
                                             <i class="bx bx-wallet me-2"></i>R$ {{ number_format($saldoInicial, 2, ',', '.') }}
                                         </h4>
@@ -99,7 +146,14 @@
                             <div class="col-md-3 mb-3 d-flex">
                                 <div class="card border-success w-100">
                                     <div class="card-body d-flex flex-column">
-                                        <p class="text-muted mb-1 small">Total de Entradas</p>
+                                        <p class="text-muted mb-1 small">
+                                            Total de Entradas
+                                            @if(!empty($extratoComRecorteConfirmacao))
+                                                <span class="d-block fw-normal">(até a confirmação)</span>
+                                            @elseif(!empty($totaisReferenciaInicioLogico) && !empty($dataInicioLogicoShow))
+                                                <span class="d-block fw-normal">(a partir de {{ \Carbon\Carbon::parse($dataInicioLogicoShow)->format('d/m/Y') }})</span>
+                                            @endif
+                                        </p>
                                         <h4 class="mb-0 text-success flex-grow-1">
                                             <i class="bx bx-trending-up me-2"></i>R$ {{ number_format($totalEntradas, 2, ',', '.') }}
                                         </h4>
@@ -109,7 +163,14 @@
                             <div class="col-md-3 mb-3 d-flex">
                                 <div class="card border-danger w-100">
                                     <div class="card-body d-flex flex-column">
-                                        <p class="text-muted mb-1 small">Total de Saídas</p>
+                                        <p class="text-muted mb-1 small">
+                                            Total de Saídas
+                                            @if(!empty($extratoComRecorteConfirmacao))
+                                                <span class="d-block fw-normal">(até a confirmação)</span>
+                                            @elseif(!empty($totaisReferenciaInicioLogico) && !empty($dataInicioLogicoShow))
+                                                <span class="d-block fw-normal">(a partir de {{ \Carbon\Carbon::parse($dataInicioLogicoShow)->format('d/m/Y') }})</span>
+                                            @endif
+                                        </p>
                                         <h4 class="mb-0 text-danger flex-grow-1">
                                             <i class="bx bx-trending-down me-2"></i>R$ {{ number_format($totalSaidas, 2, ',', '.') }}
                                         </h4>
@@ -119,7 +180,16 @@
                             <div class="col-md-3 mb-3 d-flex">
                                 <div class="card border-{{ $saldoFinal >= 0 ? 'primary' : 'warning' }} w-100">
                                     <div class="card-body d-flex flex-column">
-                                        <p class="text-muted mb-1 small">Saldo Final (Valor da Prestação)</p>
+                                        <p class="text-muted mb-1 small">
+                                            @if(!empty($extratoAlinhadoConferencia))
+                                                Saldo (extrato)
+                                            @else
+                                                Saldo Final (Valor da Prestação)
+                                            @endif
+                                            @if(!empty($extratoComRecorteConfirmacao))
+                                                <span class="d-block fw-normal">(até a confirmação)</span>
+                                            @endif
+                                        </p>
                                         <h4 class="mb-0 text-{{ $saldoFinal >= 0 ? 'primary' : 'warning' }} flex-grow-1">
                                             <i class="bx bx-dollar-circle me-2"></i>R$ {{ number_format($saldoFinal, 2, ',', '.') }}
                                         </h4>
@@ -128,6 +198,37 @@
                                 </div>
                             </div>
                         </div>
+                        @if(!empty($extratoComRecorteConfirmacao) && ($quantidadeMovimentacoesAposConfirmacao ?? 0) > 0)
+                            <div class="row mt-1">
+                                <div class="col-12">
+                                    <p class="text-muted small mb-2">Movimentações posteriores à confirmação ({{ $quantidadeMovimentacoesAposConfirmacao }} no extrato; próximo ciclo)</p>
+                                </div>
+                                <div class="col-md-4 mb-3 d-flex">
+                                    <div class="card border-success border-opacity-50 w-100">
+                                        <div class="card-body py-2">
+                                            <p class="text-muted mb-1 small">Entradas após confirmação</p>
+                                            <h5 class="mb-0 text-success">R$ {{ number_format($totalEntradasAposConfirmacao, 2, ',', '.') }}</h5>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3 d-flex">
+                                    <div class="card border-danger border-opacity-50 w-100">
+                                        <div class="card-body py-2">
+                                            <p class="text-muted mb-1 small">Saídas após confirmação</p>
+                                            <h5 class="mb-0 text-danger">R$ {{ number_format($totalSaidasAposConfirmacao, 2, ',', '.') }}</h5>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3 d-flex">
+                                    <div class="card border-secondary w-100">
+                                        <div class="card-body py-2">
+                                            <p class="text-muted mb-1 small">Líquido após confirmação</p>
+                                            <h5 class="mb-0 {{ $saldoLiquidoAposConfirmacao >= 0 ? 'text-success' : 'text-danger' }}">R$ {{ number_format($saldoLiquidoAposConfirmacao, 2, ',', '.') }}</h5>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        @endif
                         @if($saldoFinal < 0)
                             <div class="row mt-3">
                                 <div class="col-12">
@@ -220,6 +321,9 @@
                                         <thead>
                                             <tr>
                                                 <th>Data</th>
+                                                @if(!empty($mostrarColunaBadgeExtrato))
+                                                    <th class="text-nowrap"></th>
+                                                @endif
                                                 <th>Tipo</th>
                                                 <th>Descrição</th>
                                                 <th>Origem</th>
@@ -228,8 +332,21 @@
                                         </thead>
                                         <tbody>
                                             @foreach($movimentacoes as $movimentacao)
-                                                <tr>
+                                                @php
+                                                    $linhaAposRecebimento = !empty($extratoComRecorteConfirmacao) && $settlement->recebido_em && $movimentacao->created_at->gt($settlement->recebido_em);
+                                                    $linhaPosPrestacaoAnterior = !empty($extratoAlinhadoConferencia) && in_array((int) $movimentacao->id, $idsMovimentacoesPosFechamentoAnterior ?? [], true);
+                                                @endphp
+                                                <tr class="{{ $linhaAposRecebimento ? 'table-warning' : ($linhaPosPrestacaoAnterior ? 'table-info' : '') }}">
                                                     <td>{{ $movimentacao->data_movimentacao->format('d/m/Y') }}</td>
+                                                    @if(!empty($mostrarColunaBadgeExtrato))
+                                                        <td class="align-middle">
+                                                            @if($linhaAposRecebimento)
+                                                                <span class="badge bg-warning text-dark">Após confirmação</span>
+                                                            @elseif($linhaPosPrestacaoAnterior)
+                                                                <span class="badge bg-info text-dark">Pós-prestação anterior</span>
+                                                            @endif
+                                                        </td>
+                                                    @endif
                                                     <td>
                                                         <span class="badge bg-{{ $movimentacao->isEntrada() ? 'success' : 'danger' }}">
                                                             {{ $movimentacao->isEntrada() ? 'Entrada' : 'Saída' }}
@@ -262,29 +379,90 @@
                                         </tbody>
                                         <tfoot>
                                             <tr class="table-light">
-                                                <th colspan="4" class="text-end">Saldo Inicial:</th>
+                                                <th colspan="{{ !empty($mostrarColunaBadgeExtrato) ? 5 : 4 }}" class="text-end">
+                                                    Saldo inicial
+                                                    @if(!empty($totaisReferenciaInicioLogico) && !empty($dataInicioLogicoShow))
+                                                        (abertura {{ \Carbon\Carbon::parse($dataInicioLogicoShow)->format('d/m/Y') }})
+                                                    @endif
+                                                    :
+                                                </th>
                                                 <th class="text-end {{ $saldoInicial >= 0 ? 'text-success' : 'text-danger' }}">
                                                     R$ {{ number_format($saldoInicial, 2, ',', '.') }}
                                                 </th>
                                             </tr>
+                                            @if(!empty($totaisReferenciaInicioLogico) && (abs($totalEntradasComplementoAnterior ?? 0) > 0.009 || abs($totalSaidasComplementoAnterior ?? 0) > 0.009))
+                                                <tr class="table-secondary">
+                                                    <th colspan="{{ !empty($mostrarColunaBadgeExtrato) ? 5 : 4 }}" class="text-end small text-muted">
+                                                        Complemento do dia {{ \Carbon\Carbon::parse($dataInicioExtratoShow)->format('d/m/Y') }} (já no saldo inicial; informativo)
+                                                    </th>
+                                                    <th class="text-end small">
+                                                        + R$ {{ number_format($totalEntradasComplementoAnterior, 2, ',', '.') }}
+                                                        @if(abs($totalSaidasComplementoAnterior ?? 0) > 0.009)
+                                                            &nbsp; / − R$ {{ number_format($totalSaidasComplementoAnterior, 2, ',', '.') }}
+                                                        @endif
+                                                    </th>
+                                                </tr>
+                                            @endif
                                             <tr class="table-success">
-                                                <th colspan="4" class="text-end">Total Entradas:</th>
+                                                <th colspan="{{ !empty($mostrarColunaBadgeExtrato) ? 5 : 4 }}" class="text-end">
+                                                    Total Entradas
+                                                    @if(!empty($extratoComRecorteConfirmacao))
+                                                        (até confirmação)
+                                                    @elseif(!empty($totaisReferenciaInicioLogico) && !empty($dataInicioLogicoShow))
+                                                        (a partir de {{ \Carbon\Carbon::parse($dataInicioLogicoShow)->format('d/m/Y') }})
+                                                    @endif
+                                                    :
+                                                </th>
                                                 <th class="text-end text-success">
                                                     + R$ {{ number_format($totalEntradas, 2, ',', '.') }}
                                                 </th>
                                             </tr>
                                             <tr class="table-danger">
-                                                <th colspan="4" class="text-end">Total Saídas:</th>
+                                                <th colspan="{{ !empty($mostrarColunaBadgeExtrato) ? 5 : 4 }}" class="text-end">
+                                                    Total Saídas
+                                                    @if(!empty($extratoComRecorteConfirmacao))
+                                                        (até confirmação)
+                                                    @elseif(!empty($totaisReferenciaInicioLogico) && !empty($dataInicioLogicoShow))
+                                                        (a partir de {{ \Carbon\Carbon::parse($dataInicioLogicoShow)->format('d/m/Y') }})
+                                                    @endif
+                                                    :
+                                                </th>
                                                 <th class="text-end text-danger">
                                                     - R$ {{ number_format($totalSaidas, 2, ',', '.') }}
                                                 </th>
                                             </tr>
                                             <tr class="table-{{ $saldoFinal >= 0 ? 'primary' : 'warning' }}">
-                                                <th colspan="4" class="text-end"><strong>Saldo Final (Valor da Prestação):</strong></th>
+                                                <th colspan="{{ !empty($mostrarColunaBadgeExtrato) ? 5 : 4 }}" class="text-end">
+                                                    <strong>
+                                                        @if(!empty($extratoAlinhadoConferencia))
+                                                            Saldo (extrato)
+                                                        @else
+                                                            Saldo Final (Valor da Prestação)
+                                                            @if(!empty($extratoComRecorteConfirmacao))
+                                                                — até confirmação
+                                                            @endif
+                                                        @endif
+                                                        :
+                                                    </strong>
+                                                </th>
                                                 <th class="text-end text-{{ $saldoFinal >= 0 ? 'primary' : 'warning' }}">
                                                     <strong>R$ {{ number_format($saldoFinal, 2, ',', '.') }}</strong>
                                                 </th>
                                             </tr>
+                                            @if(!empty($extratoComRecorteConfirmacao) && ($quantidadeMovimentacoesAposConfirmacao ?? 0) > 0)
+                                                <tr class="table-success">
+                                                    <th colspan="{{ !empty($mostrarColunaBadgeExtrato) ? 5 : 4 }}" class="text-end small text-muted">Entradas após confirmação (referência)</th>
+                                                    <th class="text-end text-success small">+ R$ {{ number_format($totalEntradasAposConfirmacao, 2, ',', '.') }}</th>
+                                                </tr>
+                                                <tr class="table-danger">
+                                                    <th colspan="{{ !empty($mostrarColunaBadgeExtrato) ? 5 : 4 }}" class="text-end small text-muted">Saídas após confirmação (referência)</th>
+                                                    <th class="text-end text-danger small">- R$ {{ number_format($totalSaidasAposConfirmacao, 2, ',', '.') }}</th>
+                                                </tr>
+                                                <tr class="table-secondary">
+                                                    <th colspan="{{ !empty($mostrarColunaBadgeExtrato) ? 5 : 4 }}" class="text-end small"><strong>Líquido após confirmação (próximo ciclo)</strong></th>
+                                                    <th class="text-end small {{ $saldoLiquidoAposConfirmacao >= 0 ? 'text-success' : 'text-danger' }}"><strong>R$ {{ number_format($saldoLiquidoAposConfirmacao, 2, ',', '.') }}</strong></th>
+                                                </tr>
+                                            @endif
                                         </tfoot>
                                     </table>
                                 </div>

@@ -191,8 +191,14 @@ class FechamentoCaixaController extends Controller
         $totalSaidas = $dados['totalSaidas'];
         $saldoFinal = $dados['saldoFinal'];
         $saldoAtual = $dados['saldoAtual'];
-        $dataInicioConf = $dados['dataInicio'];
+        $dataInicioConf = $dados['dataInicioExtrato'];
         $dataFimConf = $dados['dataFim'];
+        $dataInicioLogicoConf = $dados['dataInicio'];
+        $extratoIncluiPosFechamentoAnterior = $dados['extratoIncluiPosFechamentoAnterior'];
+        $totaisReferenciaInicioLogico = $dados['totaisReferenciaInicioLogico'];
+        $totalEntradasComplementoAnterior = $dados['totalEntradasComplementoAnterior'];
+        $totalSaidasComplementoAnterior = $dados['totalSaidasComplementoAnterior'];
+        $idsMovimentacoesPosFechamentoAnterior = $dados['idsMovimentacoesPosFechamentoAnterior'];
 
         $fichasContatoPorClienteOperacao = FichaContatoLookup::mapFromCashLedgerEntries($movimentacoes);
 
@@ -211,6 +217,12 @@ class FechamentoCaixaController extends Controller
             'subtotalParcelasFiltrado',
             'dataInicioConf',
             'dataFimConf',
+            'dataInicioLogicoConf',
+            'extratoIncluiPosFechamentoAnterior',
+            'totaisReferenciaInicioLogico',
+            'totalEntradasComplementoAnterior',
+            'totalSaidasComplementoAnterior',
+            'idsMovimentacoesPosFechamentoAnterior',
             'fichasContatoPorClienteOperacao',
             'permiteFechar',
             'podeConfirmarFechamento',
@@ -238,42 +250,99 @@ class FechamentoCaixaController extends Controller
             abort(403, 'Acesso negado.');
         }
 
-        // Calcular valores do período
-        $saldoInicial = $this->cashService->calcularSaldoInicial(
-            $settlement->consultor_id,
-            $settlement->operacao_id,
-            $settlement->data_inicio->format('Y-m-d')
-        );
+        $recebidoEm = $settlement->recebido_em;
+        $extratoComRecorteConfirmacao = $settlement->status === 'concluido' && $recebidoEm !== null;
 
-        $totalEntradas = $this->cashService->calcularTotalEntradas(
-            $settlement->consultor_id,
-            $settlement->operacao_id,
-            $settlement->data_inicio->format('Y-m-d'),
-            $settlement->data_fim->format('Y-m-d')
-        );
+        $extratoAlinhadoConferencia = in_array($settlement->status, ['pendente', 'aprovado', 'enviado'], true);
+        $totaisReferenciaInicioLogico = false;
+        $extratoIncluiPosFechamentoAnterior = false;
+        $idsMovimentacoesPosFechamentoAnterior = [];
+        $totalEntradasComplementoAnterior = 0.0;
+        $totalSaidasComplementoAnterior = 0.0;
+        $dataInicioExtratoShow = null;
+        $dataFimExtratoShow = null;
+        $dataInicioLogicoShow = null;
 
-        $totalSaidas = $this->cashService->calcularTotalSaidas(
-            $settlement->consultor_id,
-            $settlement->operacao_id,
-            $settlement->data_inicio->format('Y-m-d'),
-            $settlement->data_fim->format('Y-m-d')
-        );
+        if ($extratoAlinhadoConferencia) {
+            $dadosExtrato = $this->settlementService->prepararConferenciaFechamento(
+                (int) $settlement->consultor_id,
+                (int) $settlement->operacao_id
+            );
+            $movimentacoes = $dadosExtrato['movimentacoes'];
+            CashLedgerEmprestimoLink::warmForCollection($movimentacoes);
+            $saldoInicial = $dadosExtrato['saldoInicial'];
+            $totalEntradas = $dadosExtrato['totalEntradas'];
+            $totalSaidas = $dadosExtrato['totalSaidas'];
+            $saldoFinal = $dadosExtrato['saldoFinal'];
+            $totaisReferenciaInicioLogico = $dadosExtrato['totaisReferenciaInicioLogico'];
+            $extratoIncluiPosFechamentoAnterior = $dadosExtrato['extratoIncluiPosFechamentoAnterior'];
+            $idsMovimentacoesPosFechamentoAnterior = $dadosExtrato['idsMovimentacoesPosFechamentoAnterior'];
+            $totalEntradasComplementoAnterior = $dadosExtrato['totalEntradasComplementoAnterior'];
+            $totalSaidasComplementoAnterior = $dadosExtrato['totalSaidasComplementoAnterior'];
+            $dataInicioExtratoShow = $dadosExtrato['dataInicioExtrato'];
+            $dataFimExtratoShow = $dadosExtrato['dataFim'];
+            $dataInicioLogicoShow = $dadosExtrato['dataInicio'];
+            $totalEntradasAposConfirmacao = null;
+            $totalSaidasAposConfirmacao = null;
+            $saldoLiquidoAposConfirmacao = null;
+            $quantidadeMovimentacoesAposConfirmacao = 0;
+        } else {
+            $movimentacoes = \App\Modules\Cash\Models\CashLedgerEntry::where('consultor_id', $settlement->consultor_id)
+                ->where('operacao_id', $settlement->operacao_id)
+                ->whereBetween('data_movimentacao', [
+                    $settlement->data_inicio->format('Y-m-d'),
+                    $settlement->data_fim->format('Y-m-d'),
+                ])
+                ->with(['operacao', 'pagamento.parcela.emprestimo.cliente'])
+                ->orderBy('data_movimentacao', 'asc')
+                ->orderBy('created_at', 'asc')
+                ->get();
 
-        $saldoFinal = $saldoInicial + $totalEntradas - $totalSaidas;
+            $saldoInicialBase = $this->cashService->calcularSaldoInicial(
+                $settlement->consultor_id,
+                $settlement->operacao_id,
+                $settlement->data_inicio->format('Y-m-d')
+            );
 
-        // Movimentações do período
-        $movimentacoes = \App\Modules\Cash\Models\CashLedgerEntry::where('consultor_id', $settlement->consultor_id)
-            ->where('operacao_id', $settlement->operacao_id)
-            ->whereBetween('data_movimentacao', [
-                $settlement->data_inicio->format('Y-m-d'),
-                $settlement->data_fim->format('Y-m-d'),
-            ])
-            ->with(['operacao', 'pagamento.parcela.emprestimo.cliente'])
-            ->orderBy('data_movimentacao', 'asc')
-            ->orderBy('created_at', 'asc')
-            ->get();
+            if ($extratoComRecorteConfirmacao) {
+                $saldoInicial = $saldoInicialBase;
+                $ateConfirmacao = static fn (\App\Modules\Cash\Models\CashLedgerEntry $m) => $m->created_at->lte($recebidoEm);
+                $aposConfirmacao = static fn (\App\Modules\Cash\Models\CashLedgerEntry $m) => $m->created_at->gt($recebidoEm);
+
+                $totalEntradas = (float) $movimentacoes->filter($ateConfirmacao)->filter(fn ($m) => $m->isEntrada())->sum('valor');
+                $totalSaidas = (float) $movimentacoes->filter($ateConfirmacao)->filter(fn ($m) => $m->isSaida())->sum('valor');
+                $saldoFinal = $saldoInicial + $totalEntradas - $totalSaidas;
+
+                $totalEntradasAposConfirmacao = (float) $movimentacoes->filter($aposConfirmacao)->filter(fn ($m) => $m->isEntrada())->sum('valor');
+                $totalSaidasAposConfirmacao = (float) $movimentacoes->filter($aposConfirmacao)->filter(fn ($m) => $m->isSaida())->sum('valor');
+                $saldoLiquidoAposConfirmacao = $totalEntradasAposConfirmacao - $totalSaidasAposConfirmacao;
+                $quantidadeMovimentacoesAposConfirmacao = $movimentacoes->filter($aposConfirmacao)->count();
+            } else {
+                $saldoInicial = $saldoInicialBase;
+                $totalEntradas = $this->cashService->calcularTotalEntradas(
+                    $settlement->consultor_id,
+                    $settlement->operacao_id,
+                    $settlement->data_inicio->format('Y-m-d'),
+                    $settlement->data_fim->format('Y-m-d')
+                );
+                $totalSaidas = $this->cashService->calcularTotalSaidas(
+                    $settlement->consultor_id,
+                    $settlement->operacao_id,
+                    $settlement->data_inicio->format('Y-m-d'),
+                    $settlement->data_fim->format('Y-m-d')
+                );
+                $saldoFinal = $saldoInicial + $totalEntradas - $totalSaidas;
+                $totalEntradasAposConfirmacao = null;
+                $totalSaidasAposConfirmacao = null;
+                $saldoLiquidoAposConfirmacao = null;
+                $quantidadeMovimentacoesAposConfirmacao = 0;
+            }
+        }
 
         $quantidadeMovimentacoes = $movimentacoes->count();
+
+        $mostrarColunaBadgeExtrato = $extratoComRecorteConfirmacao
+            || (! empty($idsMovimentacoesPosFechamentoAnterior));
 
         $fichasContatoPorClienteOperacao = FichaContatoLookup::mapFromCashLedgerEntries($movimentacoes);
 
@@ -285,6 +354,21 @@ class FechamentoCaixaController extends Controller
             'totalSaidas',
             'saldoFinal',
             'quantidadeMovimentacoes',
+            'extratoComRecorteConfirmacao',
+            'extratoAlinhadoConferencia',
+            'extratoIncluiPosFechamentoAnterior',
+            'totaisReferenciaInicioLogico',
+            'idsMovimentacoesPosFechamentoAnterior',
+            'totalEntradasComplementoAnterior',
+            'totalSaidasComplementoAnterior',
+            'dataInicioExtratoShow',
+            'dataFimExtratoShow',
+            'dataInicioLogicoShow',
+            'mostrarColunaBadgeExtrato',
+            'totalEntradasAposConfirmacao',
+            'totalSaidasAposConfirmacao',
+            'saldoLiquidoAposConfirmacao',
+            'quantidadeMovimentacoesAposConfirmacao',
             'fichasContatoPorClienteOperacao'
         ));
     }
