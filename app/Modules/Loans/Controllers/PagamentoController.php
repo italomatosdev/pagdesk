@@ -11,6 +11,7 @@ use App\Support\ClienteNomeExibicao;
 use App\Support\NotificacaoClienteDisplayName;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class PagamentoController extends Controller
@@ -750,7 +751,7 @@ class PagamentoController extends Controller
     }
 
     /**
-     * Formulário para pagar mais de uma parcela de uma vez (checkboxes + juros + um comprovante).
+     * Formulário para pagar mais de uma parcela de uma vez (checkboxes + juros + comprovante único ou por parcela).
      */
     public function multiParcelasCreate($emprestimo): View|RedirectResponse
     {
@@ -793,6 +794,7 @@ class PagamentoController extends Controller
         $validated = $request->validate([
             'parcela_ids' => 'required|array|min:2',
             'parcela_ids.*' => 'integer|exists:parcelas,id',
+            'modo_comprovante' => 'required|in:unico,por_parcela',
             'metodo' => 'required|in:dinheiro,pix,transferencia,outro',
             'data_pagamento' => 'required|date',
             'comprovante' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
@@ -802,16 +804,52 @@ class PagamentoController extends Controller
             'valor_juros_fixo' => 'nullable|string|max:50|required_if:tipo_juros,fixo',
         ]);
 
-        if ($request->hasFile('comprovante')) {
-            try {
-                $validated['comprovante_path'] = $request->file('comprovante')->store('comprovantes', 'public');
-            } catch (\Exception $e) {
-                \Log::error('Erro upload comprovante multi-parcelas: '.$e->getMessage());
+        $validated['comprovantes_por_parcela'] = [];
+        $validated['comprovante_path'] = null;
 
-                return back()->with('error', 'Erro ao enviar comprovante.')->withInput();
+        if ($validated['modo_comprovante'] === 'unico') {
+            if ($request->hasFile('comprovante')) {
+                try {
+                    $validated['comprovante_path'] = $request->file('comprovante')->store('comprovantes', 'public');
+                } catch (\Exception $e) {
+                    \Log::error('Erro upload comprovante multi-parcelas: '.$e->getMessage());
+
+                    return back()->with('error', 'Erro ao enviar comprovante.')->withInput();
+                }
             }
         } else {
-            $validated['comprovante_path'] = null;
+            foreach ($validated['parcela_ids'] as $pid) {
+                $key = 'comprovante_parcela.'.$pid;
+                if (! $request->hasFile($key)) {
+                    throw ValidationException::withMessages([
+                        $key => 'Anexe o comprovante da parcela selecionada (obrigatório neste modo).',
+                    ]);
+                }
+                $file = $request->file($key);
+                if (! $file->isValid()) {
+                    throw ValidationException::withMessages([
+                        $key => 'Arquivo de comprovante inválido.',
+                    ]);
+                }
+                $ext = strtolower($file->getClientOriginalExtension());
+                if (! in_array($ext, ['pdf', 'jpg', 'jpeg', 'png'], true)) {
+                    throw ValidationException::withMessages([
+                        $key => 'Use PDF, JPG, JPEG ou PNG (máx. 2MB).',
+                    ]);
+                }
+                if ($file->getSize() > 2048 * 1024) {
+                    throw ValidationException::withMessages([
+                        $key => 'O arquivo deve ter no máximo 2MB.',
+                    ]);
+                }
+                try {
+                    $validated['comprovantes_por_parcela'][(int) $pid] = $file->store('comprovantes', 'public');
+                } catch (\Exception $e) {
+                    \Log::error('Erro upload comprovante multi-parcelas (por parcela): '.$e->getMessage());
+
+                    return back()->with('error', 'Erro ao enviar um dos comprovantes.')->withInput();
+                }
+            }
         }
 
         if (! empty($validated['valor_juros_fixo']) && $validated['tipo_juros'] === 'fixo') {
@@ -822,12 +860,15 @@ class PagamentoController extends Controller
 
         $validated['consultor_id'] = auth()->id();
 
+        $msgSucesso = $validated['modo_comprovante'] === 'por_parcela'
+            ? 'Pagamento registrado. Cada parcela recebeu o respectivo comprovante.'
+            : 'Pagamento registrado para as parcelas selecionadas. O comprovante único foi associado a todos os pagamentos.';
+
         try {
             $this->pagamentoService->registrarPagamentoMultiplasParcelas((int) $emprestimo, $validated['parcela_ids'], $validated);
 
-            return redirect()->route('emprestimos.show', $emprestimo)
-                ->with('success', 'Pagamento registrado para as parcelas selecionadas. Um único comprovante foi associado a todos.');
-        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()->route('emprestimos.show', $emprestimo)->with('success', $msgSucesso);
+        } catch (ValidationException $e) {
             $msg = collect($e->errors())->flatten()->first() ?? $e->getMessage();
 
             return back()->with('error', $msg)->withInput();

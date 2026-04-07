@@ -22,10 +22,20 @@
                     @if(session('error'))
                         <div class="alert alert-danger">{{ session('error') }}</div>
                     @endif
+                    @if($errors->any())
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                @foreach($errors->all() as $err)
+                                    <li>{{ $err }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
 
                     <div class="alert alert-info mb-3">
                         <strong>Empréstimo #{{ $emprestimo->id }}</strong> – {{ $nomeClienteExibicao ?? ($emprestimo->cliente->nome ?? 'Cliente') }}<br>
-                        Selecione <strong>pelo menos duas</strong> parcelas em aberto. O valor total é a <strong>soma</strong> do que falta em cada uma + juros de atraso (conforme opção abaixo). Um único comprovante vale para todos os pagamentos.
+                        Selecione <strong>pelo menos duas</strong> parcelas em aberto. O valor total é a <strong>soma</strong> do que falta em cada uma + juros de atraso (conforme opção abaixo).
+                        Escolha abaixo se anexa <strong>um comprovante para todas</strong> ou <strong>um comprovante por parcela</strong> (útil na diária quando o cliente paga cada dia separado).
                     </div>
 
                     <form action="{{ route('pagamentos.multi-parcelas.store', $emprestimo->id) }}" method="POST" enctype="multipart/form-data" id="formMultiParcelas">
@@ -44,6 +54,7 @@
                                         <th>Já pago</th>
                                         <th>Falta pagar</th>
                                         <th>Dias atraso</th>
+                                        <th class="th-comprovante-parcela d-none" style="min-width: 200px;">Comprovante desta parcela</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -65,6 +76,14 @@
                                             <td>R$ {{ number_format($p->valor_pago ?? 0, 2, ',', '.') }}</td>
                                             <td><strong>R$ {{ number_format($falta, 2, ',', '.') }}</strong></td>
                                             <td>{{ $dias > 0 ? $dias . ' dias' : '-' }}</td>
+                                            <td class="td-comprovante-parcela d-none">
+                                                <input type="file"
+                                                       name="comprovante_parcela[{{ $p->id }}]"
+                                                       class="form-control form-control-sm input-comprovante-parcela"
+                                                       accept=".pdf,.jpg,.jpeg,.png"
+                                                       disabled
+                                                       data-parcela-id="{{ $p->id }}">
+                                            </td>
                                         </tr>
                                     @endforeach
                                 </tbody>
@@ -124,6 +143,30 @@
                             <small class="text-muted">Soma do que falta nas parcelas marcadas + juros conforme opção acima. O servidor recalcula na confirmação.</small>
                         </div>
 
+                        <div class="mb-3">
+                            <span class="form-label d-block mb-2"><strong>Comprovantes</strong></span>
+                            <div class="card border">
+                                <div class="card-body">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="radio" name="modo_comprovante" id="modo_comp_unico" value="unico"
+                                               {{ old('modo_comprovante', 'unico') === 'unico' ? 'checked' : '' }}>
+                                        <label class="form-check-label" for="modo_comp_unico">
+                                            <strong>Um comprovante para todas as parcelas</strong>
+                                            <span class="text-muted d-block small">Mesmo arquivo em todos os pagamentos do lote (ex.: um PIX com o valor total).</span>
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="modo_comprovante" id="modo_comp_parcela" value="por_parcela"
+                                               {{ old('modo_comprovante') === 'por_parcela' ? 'checked' : '' }}>
+                                        <label class="form-check-label" for="modo_comp_parcela">
+                                            <strong>Um comprovante por parcela</strong>
+                                            <span class="text-muted d-block small">Use a coluna na tabela para anexar o arquivo de cada parcela marcada (obrigatório neste modo).</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label class="form-label">Método <span class="text-danger">*</span></label>
@@ -138,9 +181,9 @@
                                 <label class="form-label">Data do pagamento <span class="text-danger">*</span></label>
                                 <input type="date" name="data_pagamento" class="form-control" value="{{ old('data_pagamento', now()->format('Y-m-d')) }}" required>
                             </div>
-                            <div class="col-12">
-                                <label class="form-label">Comprovante (único para todas)</label>
-                                <input type="file" name="comprovante" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+                            <div class="col-12" id="bloco-comprovante-unico">
+                                <label class="form-label">Comprovante único <span class="text-muted">(opcional)</span></label>
+                                <input type="file" name="comprovante" id="input-comprovante-unico" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
                             </div>
                             <div class="col-12">
                                 <label class="form-label">Observações</label>
@@ -178,6 +221,37 @@
 
             function getSelecionadas() {
                 return Array.prototype.slice.call(document.querySelectorAll('.parcela-check:checked'));
+            }
+
+            function isModoPorParcela() {
+                var r = document.getElementById('modo_comp_parcela');
+                return r && r.checked;
+            }
+
+            function syncParcelaFileEnabled() {
+                var porParcela = isModoPorParcela();
+                document.querySelectorAll('.parcela-check').forEach(function(cb) {
+                    var tr = cb.closest('tr');
+                    var inp = tr ? tr.querySelector('.input-comprovante-parcela') : null;
+                    if (inp) {
+                        inp.disabled = !porParcela || !cb.checked;
+                    }
+                });
+            }
+
+            function aplicarModoComprovante() {
+                var porParcela = isModoPorParcela();
+                var unicoInput = document.getElementById('input-comprovante-unico');
+                var blocoUnico = document.getElementById('bloco-comprovante-unico');
+                document.querySelectorAll('.th-comprovante-parcela').forEach(function(el) {
+                    el.classList.toggle('d-none', !porParcela);
+                });
+                document.querySelectorAll('.td-comprovante-parcela').forEach(function(el) {
+                    el.classList.toggle('d-none', !porParcela);
+                });
+                if (blocoUnico) blocoUnico.classList.toggle('d-none', porParcela);
+                if (unicoInput) unicoInput.disabled = porParcela;
+                syncParcelaFileEnabled();
             }
 
             function somaPrincipal() {
@@ -238,12 +312,19 @@
             }
 
             document.querySelectorAll('.parcela-check').forEach(function(cb) {
-                cb.addEventListener('change', atualizar);
+                cb.addEventListener('change', function() {
+                    atualizar();
+                    syncParcelaFileEnabled();
+                });
             });
             document.getElementById('check_todas').addEventListener('change', function() {
                 var on = this.checked;
                 document.querySelectorAll('.parcela-check').forEach(function(cb) { cb.checked = on; });
                 atualizar();
+                syncParcelaFileEnabled();
+            });
+            document.querySelectorAll('input[name="modo_comprovante"]').forEach(function(r) {
+                r.addEventListener('change', aplicarModoComprovante);
             });
             document.querySelectorAll('input[name="tipo_juros"]').forEach(function(r) {
                 r.addEventListener('change', atualizar);
@@ -262,9 +343,27 @@
                     if (typeof showError === 'function') showError('Selecione pelo menos duas parcelas.');
                     else if (typeof Swal !== 'undefined') Swal.fire({ icon: 'warning', title: 'Atenção', text: 'Selecione pelo menos duas parcelas.', confirmButtonColor: '#038edc' });
                     else alert('Selecione pelo menos duas parcelas.');
+                    return;
+                }
+                if (isModoPorParcela()) {
+                    var faltando = [];
+                    getSelecionadas().forEach(function(cb) {
+                        var tr = cb.closest('tr');
+                        var inp = tr ? tr.querySelector('.input-comprovante-parcela') : null;
+                        if (!inp || !inp.files || inp.files.length === 0) {
+                            faltando.push(cb.value);
+                        }
+                    });
+                    if (faltando.length > 0) {
+                        e.preventDefault();
+                        var msg = 'No modo "um comprovante por parcela", anexe um arquivo para cada parcela marcada.';
+                        if (typeof Swal !== 'undefined') Swal.fire({ icon: 'warning', title: 'Comprovantes', text: msg, confirmButtonColor: '#038edc' });
+                        else alert(msg);
+                    }
                 }
             });
 
+            aplicarModoComprovante();
             atualizar();
         });
     </script>
