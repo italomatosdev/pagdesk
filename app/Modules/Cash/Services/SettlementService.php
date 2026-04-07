@@ -12,6 +12,31 @@ class SettlementService
 {
     use Auditable;
 
+    /** Status que impedem novo fechamento/prestação em aberto para o mesmo consultor + operação. */
+    public const STATUSES_FECHAMENTO_EM_ABERTO = ['pendente', 'aprovado', 'enviado'];
+
+    /**
+     * Há prestação/fechamento ainda não concluído (nem rejeitado) para o consultor nesta operação.
+     */
+    public function existeFechamentoAberto(int $consultorId, int $operacaoId): bool
+    {
+        return Settlement::query()
+            ->where('consultor_id', $consultorId)
+            ->where('operacao_id', $operacaoId)
+            ->whereIn('status', self::STATUSES_FECHAMENTO_EM_ABERTO)
+            ->exists();
+    }
+
+    public function buscarFechamentoAberto(int $consultorId, int $operacaoId): ?Settlement
+    {
+        return Settlement::query()
+            ->where('consultor_id', $consultorId)
+            ->where('operacao_id', $operacaoId)
+            ->whereIn('status', self::STATUSES_FECHAMENTO_EM_ABERTO)
+            ->orderByDesc('id')
+            ->first();
+    }
+
     /**
      * Criar prestação de contas (solicitação pelo próprio usuário)
      * Calcula o saldo líquido do consultor (saldo inicial + entradas - saídas)
@@ -19,6 +44,12 @@ class SettlementService
     public function criar(array $dados): Settlement
     {
         return DB::transaction(function () use ($dados) {
+            if ($this->existeFechamentoAberto((int) $dados['consultor_id'], (int) $dados['operacao_id'])) {
+                throw ValidationException::withMessages([
+                    'operacao' => 'Já existe uma prestação de contas em aberto para este consultor nesta operação. Conclua, cancele (rejeite) ou aguarde antes de abrir outra.',
+                ]);
+            }
+
             $cashService = app(\App\Modules\Cash\Services\CashService::class);
 
             // Calcular saldo inicial (antes do período)
@@ -80,6 +111,12 @@ class SettlementService
     public function fecharCaixa(int $usuarioId, int $operacaoId, int $criadoPorId, ?string $observacoes = null): Settlement
     {
         return DB::transaction(function () use ($usuarioId, $operacaoId, $criadoPorId, $observacoes) {
+            if ($this->existeFechamentoAberto($usuarioId, $operacaoId)) {
+                throw ValidationException::withMessages([
+                    'usuario' => 'Já existe um fechamento em aberto para este usuário nesta operação. Cancele-o (rejeite) na tela do fechamento antes de iniciar outro.',
+                ]);
+            }
+
             $cashService = app(\App\Modules\Cash\Services\CashService::class);
 
             // Verificar se é o próprio usuário fechando o caixa
@@ -479,10 +516,10 @@ class SettlementService
     {
         $settlement = Settlement::findOrFail($settlementId);
 
-        // Pode rejeitar se estiver pendente ou aprovado
-        if (! in_array($settlement->status, ['pendente', 'aprovado'])) {
+        // Pendente, aprovado ou enviado (cancelamento pelo gestor antes de concluir)
+        if (! in_array($settlement->status, ['pendente', 'aprovado', 'enviado'], true)) {
             throw ValidationException::withMessages([
-                'settlement' => 'Apenas prestações pendentes ou aprovadas podem ser rejeitadas. Status atual: '.$settlement->status,
+                'settlement' => 'Apenas prestações pendentes, aprovadas ou com comprovante enviado podem ser canceladas (rejeitadas). Status atual: '.$settlement->status,
             ]);
         }
 

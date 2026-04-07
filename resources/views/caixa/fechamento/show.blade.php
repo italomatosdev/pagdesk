@@ -306,16 +306,25 @@
                                 <i class="bx bx-arrow-back"></i> Voltar
                             </a>
                             
+                            @php
+                                $gestorOuAdminNaOperacaoFechamento = auth()->user()->temAlgumPapelNaOperacao($settlement->operacao_id, ['gestor', 'administrador']);
+                            @endphp
                             <div class="d-flex gap-2 flex-wrap">
-                                @if($settlement->isPendente() && !empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])))
+                                @if($settlement->isPendente() && $gestorOuAdminNaOperacaoFechamento)
                                     <form action="{{ route('fechamento-caixa.aprovar', $settlement->id) }}" method="POST" class="d-inline" id="formAprovar">
                                         @csrf
                                         <button type="submit" class="btn btn-success" id="btnAprovar">
                                             <i class="bx bx-check"></i> Aprovar Prestação
                                         </button>
                                     </form>
-                                    <button type="button" class="btn btn-danger" onclick="mostrarModalRejeitar()">
-                                        <i class="bx bx-x"></i> Rejeitar Prestação
+                                    <button type="button" class="btn btn-outline-danger" onclick="mostrarModalRejeitar()">
+                                        <i class="bx bx-x"></i> Cancelar fechamento
+                                    </button>
+                                @endif
+
+                                @if($settlement->isAprovado() && $gestorOuAdminNaOperacaoFechamento)
+                                    <button type="button" class="btn btn-outline-danger" onclick="mostrarModalRejeitar()">
+                                        <i class="bx bx-x"></i> Cancelar fechamento
                                     </button>
                                 @endif
                                 
@@ -325,7 +334,7 @@
                                     </button>
                                 @endif
                                 
-                                @if($settlement->isEnviado() && !empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])) && ($settlement->criado_por === null || (int) auth()->id() === (int) $settlement->criado_por))
+                                @if($settlement->isEnviado() && $gestorOuAdminNaOperacaoFechamento && ($settlement->criado_por === null || (int) auth()->id() === (int) $settlement->criado_por))
                                     <form action="{{ route('fechamento-caixa.confirmar', $settlement->id) }}" method="POST" class="d-inline" id="formConfirmarRecebimento">
                                         @csrf
                                         <button type="submit" class="btn btn-success" id="btnConfirmarRecebimento">
@@ -334,7 +343,13 @@
                                     </form>
                                 @endif
 
-                                @if($settlement->isAprovado() && $settlement->consultor && $settlement->consultor->isBloqueado() && !empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador'])))
+                                @if($settlement->isEnviado() && $gestorOuAdminNaOperacaoFechamento)
+                                    <button type="button" class="btn btn-outline-danger" onclick="mostrarModalRejeitar()">
+                                        <i class="bx bx-x"></i> Cancelar fechamento
+                                    </button>
+                                @endif
+
+                                @if($settlement->isAprovado() && $settlement->consultor && $settlement->consultor->isBloqueado() && $gestorOuAdminNaOperacaoFechamento)
                                     <form action="{{ route('fechamento-caixa.marcar-pago-consultor-bloqueado', $settlement->id) }}" method="POST" class="d-inline" id="formMarcarPagoBloqueado">
                                         @csrf
                                         <button type="submit" class="btn btn-warning" id="btnMarcarPagoBloqueado" title="Consultor bloqueado não pode enviar comprovante. Marque como pago para encerrar o ciclo.">
@@ -354,20 +369,20 @@
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="rejeitarModalLabel">Rejeitar Prestação de Contas</h5>
+                        <h5 class="modal-title" id="rejeitarModalLabel">Cancelar fechamento</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <form id="formRejeitar" method="POST" action="{{ route('fechamento-caixa.rejeitar', $settlement->id) }}">
                         @csrf
                         <div class="modal-body">
                             <div class="mb-3">
-                                <label for="motivo_rejeicao" class="form-label">Motivo da Rejeição <span class="text-danger">*</span></label>
-                                <textarea class="form-control" id="motivo_rejeicao" name="motivo_rejeicao" rows="3" required maxlength="500"></textarea>
+                                <label for="motivo_rejeicao" class="form-label">Motivo do cancelamento <span class="text-danger">*</span></label>
+                                <textarea class="form-control" id="motivo_rejeicao" name="motivo_rejeicao" rows="3" required maxlength="500" placeholder="Registrado no histórico; o status será marcado como rejeitado."></textarea>
                             </div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                            <button type="submit" class="btn btn-danger">Rejeitar</button>
+                            <button type="submit" class="btn btn-danger">Confirmar cancelamento</button>
                         </div>
                     </form>
                 </div>

@@ -165,10 +165,12 @@ class FechamentoCaixaController extends Controller
             ->get();
 
         $permiteFechar = round((float) $dados['saldoAtual'], 2) > 0;
+        $settlementAberto = $this->settlementService->buscarFechamentoAberto($usuarioId, $operacaoId);
+        $fechamentoAberto = $settlementAberto !== null;
         $podeConfirmarFechamento = $permiteFechar && (
             $usuarioId !== $user->id
             || $user->temAlgumPapelNaOperacao($operacaoId, ['gestor', 'administrador'])
-        );
+        ) && ! $fechamentoAberto;
 
         $usuarioAlvo = \App\Models\User::findOrFail($usuarioId);
         $operacao = Operacao::findOrFail($operacaoId);
@@ -212,6 +214,8 @@ class FechamentoCaixaController extends Controller
             'fichasContatoPorClienteOperacao',
             'permiteFechar',
             'podeConfirmarFechamento',
+            'fechamentoAberto',
+            'settlementAberto',
             'liberacoesSemPagamentoCliente',
             'liberacoesSemPagamentoClienteCount',
         ));
@@ -332,7 +336,7 @@ class FechamentoCaixaController extends Controller
 
             return redirect()->route('fechamento-caixa.show', $settlement->id)->with('success', $msg);
         } catch (ValidationException $e) {
-            throw $e;
+            return back()->withErrors($e->errors())->withInput();
         } catch (\Exception $e) {
             return back()->with('error', 'Erro ao fechar caixa: '.$e->getMessage())->withInput();
         }
@@ -415,7 +419,7 @@ class FechamentoCaixaController extends Controller
         try {
             $this->settlementService->rejeitar($id, $user->id, $validated['motivo_rejeicao']);
 
-            return redirect()->route('fechamento-caixa.show', $id)->with('success', 'Fechamento rejeitado.');
+            return redirect()->route('fechamento-caixa.show', $id)->with('success', 'Fechamento cancelado.');
         } catch (\Exception $e) {
             return back()->with('error', 'Erro: '.$e->getMessage());
         }

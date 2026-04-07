@@ -38,6 +38,15 @@
                     </ul>
                 </div>
             @endif
+            @if(!empty($fechamentoAberto ?? false) && ($settlementAberto ?? null))
+                <div class="alert alert-danger mb-3">
+                    <i class="bx bx-error-circle me-2"></i>
+                    Já existe um <strong>fechamento em aberto</strong> para este usuário nesta operação
+                    (status: <strong>{{ $settlementAberto->status }}</strong>).
+                    <a href="{{ route('fechamento-caixa.show', $settlementAberto->id) }}" class="alert-link">Abrir o fechamento #{{ $settlementAberto->id }}</a>
+                    e cancele-o (gestor/admin) antes de iniciar outro.
+                </div>
+            @endif
             @if($podeConfirmarFechamento ?? false)
                 <div class="alert alert-info mb-3">
                     <i class="bx bx-info-circle me-2"></i>
