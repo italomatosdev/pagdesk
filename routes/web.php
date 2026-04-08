@@ -268,6 +268,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::get('/create', [App\Modules\Loans\Controllers\PagamentoController::class, 'create'])->name('create');
         Route::post('/', [App\Modules\Loans\Controllers\PagamentoController::class, 'store'])->name('store');
         Route::post('/{id}/anexar-comprovante', [App\Modules\Loans\Controllers\PagamentoController::class, 'anexarComprovante'])->name('anexar-comprovante');
+        Route::post('/{id}/estorno', [App\Modules\Loans\Controllers\PagamentoEstornoController::class, 'store'])->name('estorno');
         Route::get('/quitar-diarias/{emprestimo}', [App\Modules\Loans\Controllers\PagamentoController::class, 'quitarDiariasCreate'])->name('quitar-diarias.create');
         Route::post('/quitar-diarias/{emprestimo}', [App\Modules\Loans\Controllers\PagamentoController::class, 'quitarDiariasStore'])->name('quitar-diarias.store');
         Route::get('/multi-parcelas/{emprestimo}', [App\Modules\Loans\Controllers\PagamentoController::class, 'multiParcelasCreate'])->name('multi-parcelas.create');
