@@ -35,6 +35,11 @@ class Pagamento extends Model
         'rejeitado_em',
         'lote_id',
         'aguardando_aprovacao_diaria_parcial',
+        'quitacao_grupo_id',
+        'estornado_em',
+        'estornado_por_user_id',
+        'estorno_motivo',
+        'estorno_cash_ledger_entry_id',
     ];
 
     protected $casts = [
@@ -47,6 +52,7 @@ class Pagamento extends Model
         'produto_imagens' => 'array',
         'rejeitado_em' => 'datetime',
         'aguardando_aprovacao_diaria_parcial' => 'boolean',
+        'estornado_em' => 'datetime',
     ];
 
     /**
@@ -55,6 +61,21 @@ class Pagamento extends Model
     public function isProdutoObjeto(): bool
     {
         return $this->metodo === self::METODO_PRODUTO_OBJETO;
+    }
+
+    public function isEstornado(): bool
+    {
+        return $this->estornado_em !== null;
+    }
+
+    public function estornadoPor()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'estornado_por_user_id');
+    }
+
+    public function estornoCashLedgerEntry()
+    {
+        return $this->belongsTo(\App\Modules\Cash\Models\CashLedgerEntry::class, 'estorno_cash_ledger_entry_id');
     }
 
     /**

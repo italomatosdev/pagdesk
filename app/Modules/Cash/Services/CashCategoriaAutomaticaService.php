@@ -8,6 +8,7 @@ class CashCategoriaAutomaticaService
 {
     private const MAPEAMENTO = [
         'pagamento_parcela|entrada' => ['nome' => 'Recebimento de parcela', 'categoria_tipo' => 'entrada'],
+        'estorno_pagamento|saida' => ['nome' => 'Estorno de recebimento', 'categoria_tipo' => 'despesa'],
         'quitacao_emprestimo|entrada' => ['nome' => 'Quitacao de emprestimo', 'categoria_tipo' => 'entrada'],
         'cancelamento_emprestimo|saida' => ['nome' => 'Estorno cancelamento (saida consultor)', 'categoria_tipo' => 'despesa'],
         'cancelamento_emprestimo|entrada' => ['nome' => 'Estorno cancelamento (entrada gestor)', 'categoria_tipo' => 'entrada'],
@@ -35,20 +36,21 @@ class CashCategoriaAutomaticaService
             $referenciaTipo = 'venda';
         }
         $tipoLedger = strtolower($tipoLedger);
-        if (!in_array($tipoLedger, ['entrada', 'saida'], true)) {
+        if (! in_array($tipoLedger, ['entrada', 'saida'], true)) {
             return null;
         }
-        $chave = $referenciaTipo . '|' . $tipoLedger;
-        if (!isset(self::MAPEAMENTO[$chave])) {
+        $chave = $referenciaTipo.'|'.$tipoLedger;
+        if (! isset(self::MAPEAMENTO[$chave])) {
             return null;
         }
         $cfg = self::MAPEAMENTO[$chave];
+
         return $this->obterOuCriarCategoriaId($empresaId, $cfg['nome'], $cfg['categoria_tipo']);
     }
 
     public function obterOuCriarCategoriaId(int $empresaId, string $nome, string $categoriaTipo): int
     {
-        if (!in_array($categoriaTipo, ['entrada', 'despesa'], true)) {
+        if (! in_array($categoriaTipo, ['entrada', 'despesa'], true)) {
             $categoriaTipo = 'entrada';
         }
         $categoria = CategoriaMovimentacao::withoutGlobalScopes()
@@ -71,6 +73,7 @@ class CashCategoriaAutomaticaService
             'ordem' => $maxOrdem + 1,
             'empresa_id' => $empresaId,
         ]);
+
         return (int) $categoria->id;
     }
 

@@ -10,6 +10,17 @@
     <body>
     @endsection
     @section('content')
+        @if($errors->has('pagamento') || $errors->has('permissao') || $errors->has('parcela') || $errors->has('motivo'))
+            <div class="row">
+                <div class="col-12">
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <strong>Não foi possível concluir o estorno.</strong>
+                        {{ $errors->first('pagamento') ?: $errors->first('permissao') ?: $errors->first('parcela') ?: $errors->first('motivo') }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+                    </div>
+                </div>
+            </div>
+        @endif
         <div class="row">
             <div class="col-lg-8">
                 <!-- Informações do Empréstimo -->
@@ -1934,10 +1945,10 @@
                                                     <div class="d-flex gap-1">
                                                         @foreach($parcela->pagamentos as $pagamento)
                                                             <button type="button" 
-                                                                    class="btn btn-sm btn-info" 
+                                                                    class="btn btn-sm {{ $pagamento->isEstornado() ? 'btn-secondary' : 'btn-info' }}" 
                                                                     data-bs-toggle="modal" 
                                                                     data-bs-target="#pagamentoModal{{ $pagamento->id }}"
-                                                                    title="Ver detalhes do pagamento">
+                                                                    title="{{ $pagamento->isEstornado() ? 'Pagamento estornado (ver detalhes)' : 'Ver detalhes do pagamento' }}">
                                                                 <i class="bx bx-receipt"></i>
                                                             </button>
                                                         @endforeach
@@ -2002,6 +2013,22 @@
                                         @endif
                                     </div>
                                 @endif
+                                @if($pagamento->isEstornado())
+                                    <div class="alert alert-secondary mb-3">
+                                        <i class="bx bx-undo"></i>
+                                        <strong>Este recebimento foi estornado.</strong><br>
+                                        @if($pagamento->estornado_em)
+                                            <span class="text-nowrap">{{ $pagamento->estornado_em->format('d/m/Y H:i') }}</span>
+                                        @endif
+                                        @if($pagamento->estornadoPor)
+                                            — por {{ $pagamento->estornadoPor->name }}
+                                        @endif
+                                        @if($pagamento->estorno_motivo)
+                                            <div class="mt-2 mb-0 small"><strong>Motivo:</strong> {{ $pagamento->estorno_motivo }}</div>
+                                        @endif
+                                    </div>
+                                @endif
+                                <div id="pagamentoDetalheBody{{ $pagamento->id }}">
                                 <div class="row mb-3">
                                     <div class="col-md-6">
                                         <strong>Valor Original da Parcela:</strong><br>
@@ -2161,13 +2188,72 @@
                                     'canUpload' => ($podeVerAcoesGestorAdmin ?? false) || ($emprestimo->consultor_id === auth()->id()),
                                     'modalSuffix' => 'Pag'.$pagamento->id,
                                 ])
+                                </div>
+                                @if(($podeVerAcoesGestorAdmin ?? false) && !$pagamento->isEstornado() && !$pagamento->isProdutoObjeto() && !$pagamento->isPendenteAceite())
+                                    <div id="pagamentoEstornoBody{{ $pagamento->id }}" class="d-none">
+                                        <p class="text-muted small">Estorno técnico (gestor/admin): registra uma <strong>saída no caixa com a data de hoje</strong>, reverte o efeito nas parcelas e não remove o histórico original. Bloqueado se o recebimento já tiver entrado em fechamento concluído.</p>
+                                        @error('pagamento')
+                                            <div class="alert alert-danger">{{ $message }}</div>
+                                        @enderror
+                                        @error('permissao')
+                                            <div class="alert alert-danger">{{ $message }}</div>
+                                        @enderror
+                                        @error('parcela')
+                                            <div class="alert alert-danger">{{ $message }}</div>
+                                        @enderror
+                                        <form method="post" action="{{ route('pagamentos.estorno', $pagamento->id) }}" id="formEstornoPagamento{{ $pagamento->id }}">
+                                            @csrf
+                                            <div class="mb-3">
+                                                <label class="form-label" for="estorno_motivo_{{ $pagamento->id }}">Motivo do estorno <span class="text-danger">*</span></label>
+                                                <textarea class="form-control @error('motivo') is-invalid @enderror" id="estorno_motivo_{{ $pagamento->id }}" name="motivo" rows="3" required maxlength="2000" placeholder="Descreva o motivo (obrigatório)">{{ old('motivo') }}</textarea>
+                                                @error('motivo')
+                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+                                            <div class="d-flex gap-2 flex-wrap">
+                                                <button type="submit" class="btn btn-danger"><i class="bx bx-undo"></i> Confirmar estorno</button>
+                                                <button type="button" class="btn btn-outline-secondary" id="btnCancelarEstorno{{ $pagamento->id }}">Voltar aos detalhes</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                @endif
                             </div>
-                            <div class="modal-footer">
+                            <div class="modal-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <div>
+                                    @if(($podeVerAcoesGestorAdmin ?? false) && !$pagamento->isEstornado() && !$pagamento->isProdutoObjeto() && !$pagamento->isPendenteAceite())
+                                        <button type="button" class="btn btn-outline-danger" id="btnIrEstorno{{ $pagamento->id }}">
+                                            <i class="bx bx-undo"></i> Estornar recebimento
+                                        </button>
+                                    @endif
+                                </div>
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
                             </div>
                         </div>
                     </div>
                 </div>
+                @if(($podeVerAcoesGestorAdmin ?? false) && !$pagamento->isEstornado() && !$pagamento->isProdutoObjeto() && !$pagamento->isPendenteAceite())
+                <script>
+                    (function () {
+                        var det = document.getElementById('pagamentoDetalheBody{{ $pagamento->id }}');
+                        var est = document.getElementById('pagamentoEstornoBody{{ $pagamento->id }}');
+                        var btnIr = document.getElementById('btnIrEstorno{{ $pagamento->id }}');
+                        var btnVolta = document.getElementById('btnCancelarEstorno{{ $pagamento->id }}');
+                        if (!det || !est || !btnIr || !btnVolta) return;
+                        btnIr.addEventListener('click', function () {
+                            det.classList.add('d-none');
+                            est.classList.remove('d-none');
+                        });
+                        btnVolta.addEventListener('click', function () {
+                            est.classList.add('d-none');
+                            det.classList.remove('d-none');
+                        });
+                        document.getElementById('pagamentoModal{{ $pagamento->id }}').addEventListener('hidden.bs.modal', function () {
+                            est.classList.add('d-none');
+                            det.classList.remove('d-none');
+                        });
+                    })();
+                </script>
+                @endif
                 @if(!$pagamento->hasComprovante())
                 <div class="modal fade" id="modalAnexarComprovantePagamento{{ $pagamento->id }}" tabindex="-1" aria-hidden="true">
                     <div class="modal-dialog">
@@ -2373,6 +2459,21 @@
     @endsection
 
     @section('scripts')
+    @if(session('estorno_pagamento_com_erro'))
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var pid = {{ (int) session('estorno_pagamento_com_erro') }};
+            var modalEl = document.getElementById('pagamentoModal' + pid);
+            if (modalEl && typeof bootstrap !== 'undefined') {
+                bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                var btnIr = document.getElementById('btnIrEstorno' + pid);
+                if (btnIr) {
+                    btnIr.click();
+                }
+            }
+        });
+    </script>
+    @endif
     <script>
         // Função para abrir modal de edição de garantia
         // Funções para Cheques

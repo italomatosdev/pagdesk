@@ -6,12 +6,13 @@ use App\Modules\Cash\Services\CashService;
 use App\Modules\Core\Services\NotificacaoService;
 use App\Modules\Core\Traits\Auditable;
 use App\Modules\Loans\Models\Emprestimo;
-use App\Modules\Loans\Models\Parcela;
 use App\Modules\Loans\Models\Pagamento;
+use App\Modules\Loans\Models\Parcela;
 use App\Modules\Loans\Models\SolicitacaoQuitacao;
 use App\Support\NotificacaoClienteDisplayName;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class QuitacaoService
@@ -21,8 +22,7 @@ class QuitacaoService
     public function __construct(
         protected PagamentoService $pagamentoService,
         protected CashService $cashService
-    ) {
-    }
+    ) {}
 
     /**
      * Retorna o saldo devedor do empréstimo (soma do que falta em parcelas não quitadas).
@@ -40,6 +40,7 @@ class QuitacaoService
                 $saldo += $restante;
             }
         }
+
         return round($saldo, 2);
     }
 
@@ -62,7 +63,7 @@ class QuitacaoService
      * Quando quitacao_com_desconto = true, todas as parcelas que recebem pagamento são
      * marcadas como 'paga' (inclusive a última com valor parcial), para o empréstimo finalizar.
      *
-     * @param array $dados valor, data_pagamento, metodo, consultor_id, comprovante_path?, observacoes?, quitacao_com_desconto?
+     * @param  array  $dados  valor, data_pagamento, metodo, consultor_id, comprovante_path?, observacoes?, quitacao_com_desconto?
      */
     public function executarQuitacao(Emprestimo $emprestimo, array $dados): void
     {
@@ -78,15 +79,16 @@ class QuitacaoService
 
         $saldoDevedor = $this->getSaldoDevedor($emprestimo);
         if ($valor > $saldoDevedor) {
-            throw ValidationException::withMessages(['valor' => 'O valor informado é maior que o saldo devedor (R$ ' . number_format($saldoDevedor, 2, ',', '.') . ').']);
+            throw ValidationException::withMessages(['valor' => 'O valor informado é maior que o saldo devedor (R$ '.number_format($saldoDevedor, 2, ',', '.').').']);
         }
 
-        $quitacaoComDesconto = !empty($dados['quitacao_com_desconto']);
+        $quitacaoComDesconto = ! empty($dados['quitacao_com_desconto']);
 
         DB::transaction(function () use ($emprestimo, $dados, $valor, $parcelas, $quitacaoComDesconto) {
             $restante = $valor;
             $dataPagamento = isset($dados['data_pagamento']) ? Carbon::parse($dados['data_pagamento']) : Carbon::today();
             $consultorId = (int) $dados['consultor_id'];
+            $quitacaoGrupoId = (string) Str::uuid();
             $metodo = $dados['metodo'] ?? 'dinheiro';
             $comprovantePath = isset($dados['comprovante_path']) && trim((string) $dados['comprovante_path']) !== ''
                 ? trim((string) $dados['comprovante_path'])
@@ -130,6 +132,7 @@ class QuitacaoService
                     'tipo_juros' => null,
                     'taxa_juros_aplicada' => null,
                     'valor_juros' => 0,
+                    'quitacao_grupo_id' => $quitacaoGrupoId,
                 ]);
                 if ($primeiroPagamento === null) {
                     $primeiroPagamento = $pagamento;
@@ -172,7 +175,7 @@ class QuitacaoService
                     'tipo' => 'entrada',
                     'origem' => 'automatica',
                     'valor' => $valorTotalMovimentacao,
-                    'descricao' => 'Quitação empréstimo #' . $emprestimo->id,
+                    'descricao' => 'Quitação empréstimo #'.$emprestimo->id,
                     'data_movimentacao' => $dataPagamento,
                     'referencia_tipo' => 'quitacao_emprestimo',
                     'referencia_id' => $emprestimo->id,
@@ -196,12 +199,12 @@ class QuitacaoService
 
         if ($valorSolicitado >= $saldoDevedor) {
             throw ValidationException::withMessages([
-                'valor_solicitado' => 'Para solicitar com desconto, o valor deve ser menor que o saldo devedor (R$ ' . number_format($saldoDevedor, 2, ',', '.') . ').',
+                'valor_solicitado' => 'Para solicitar com desconto, o valor deve ser menor que o saldo devedor (R$ '.number_format($saldoDevedor, 2, ',', '.').').',
             ]);
         }
         if ($valorSolicitado < $valorEmprestado) {
             throw ValidationException::withMessages([
-                'valor_solicitado' => 'O valor não pode ser menor que o valor emprestado (R$ ' . number_format($valorEmprestado, 2, ',', '.') . ').',
+                'valor_solicitado' => 'O valor não pode ser menor que o valor emprestado (R$ '.number_format($valorEmprestado, 2, ',', '.').').',
             ]);
         }
         if (empty(trim($dados['motivo_desconto'] ?? ''))) {
@@ -228,7 +231,7 @@ class QuitacaoService
             self::auditar('solicitar_quitacao_desconto', $solicitacao, null, $solicitacao->toArray());
 
             $clienteNome = NotificacaoClienteDisplayName::forEmprestimo($emprestimo);
-            $mensagem = "Quitação com desconto do empréstimo #{$emprestimo->id} ({$clienteNome}): R$ " . number_format($valorSolicitado, 2, ',', '.') . " (saldo R$ " . number_format($saldoDevedor, 2, ',', '.') . "). Solicitado por {$user->name}.";
+            $mensagem = "Quitação com desconto do empréstimo #{$emprestimo->id} ({$clienteNome}): R$ ".number_format($valorSolicitado, 2, ',', '.').' (saldo R$ '.number_format($saldoDevedor, 2, ',', '.')."). Solicitado por {$user->name}.";
             $notificacaoService = app(NotificacaoService::class);
             $operacaoId = (int) $emprestimo->operacao_id;
             $dadosNotif = [
@@ -252,19 +255,19 @@ class QuitacaoService
      */
     public function aprovarSolicitacao(SolicitacaoQuitacao $solicitacao, int $aprovadorId): void
     {
-        if (!$solicitacao->isPendente()) {
+        if (! $solicitacao->isPendente()) {
             throw ValidationException::withMessages(['solicitacao' => 'Esta solicitação já foi processada.']);
         }
 
         $emprestimo = $solicitacao->emprestimo;
-        if (!$emprestimo->isAtivo()) {
+        if (! $emprestimo->isAtivo()) {
             throw ValidationException::withMessages(['emprestimo' => 'O empréstimo não está ativo.']);
         }
 
         $valorEmprestado = (float) $emprestimo->valor_total;
         if ((float) $solicitacao->valor_solicitado < $valorEmprestado) {
             throw ValidationException::withMessages([
-                'valor_solicitado' => 'O valor aprovado não pode ser menor que o valor emprestado (R$ ' . number_format($valorEmprestado, 2, ',', '.') . ').',
+                'valor_solicitado' => 'O valor aprovado não pode ser menor que o valor emprestado (R$ '.number_format($valorEmprestado, 2, ',', '.').').',
             ]);
         }
 
@@ -283,7 +286,7 @@ class QuitacaoService
                 'metodo' => $solicitacao->metodo,
                 'consultor_id' => $solicitacao->solicitante_id,
                 'comprovante_path' => $solicitacao->comprovante_path,
-                'observacoes' => 'Quitação com desconto aprovada. ' . ($solicitacao->observacoes ?? ''),
+                'observacoes' => 'Quitação com desconto aprovada. '.($solicitacao->observacoes ?? ''),
                 'quitacao_com_desconto' => true,
             ]);
 
@@ -304,7 +307,7 @@ class QuitacaoService
      */
     public function rejeitarSolicitacao(SolicitacaoQuitacao $solicitacao, int $aprovadorId, string $motivoRejeicao): void
     {
-        if (!$solicitacao->isPendente()) {
+        if (! $solicitacao->isPendente()) {
             throw ValidationException::withMessages(['solicitacao' => 'Esta solicitação já foi processada.']);
         }
 
@@ -321,7 +324,7 @@ class QuitacaoService
             'user_id' => $solicitacao->solicitante_id,
             'tipo' => 'quitacao_desconto_rejeitada',
             'titulo' => 'Quitação com desconto rejeitada',
-            'mensagem' => "Sua solicitação de quitação do empréstimo #{$solicitacao->emprestimo_id} foi rejeitada. Motivo: " . \Str::limit($motivoRejeicao, 100),
+            'mensagem' => "Sua solicitação de quitação do empréstimo #{$solicitacao->emprestimo_id} foi rejeitada. Motivo: ".\Str::limit($motivoRejeicao, 100),
             'url' => route('emprestimos.show', $solicitacao->emprestimo_id),
             'dados' => ['solicitacao_id' => $solicitacao->id, 'emprestimo_id' => $solicitacao->emprestimo_id],
         ]);

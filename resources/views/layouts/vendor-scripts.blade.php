@@ -93,6 +93,10 @@
             @if(session('info'))
                 showInfo('{{ session('info') }}');
             @endif
+
+            @if($errors->any())
+                showError(@json(implode("\n\n", $errors->all())));
+            @endif
         });
 
         // Expor funções globalmente

@@ -684,6 +684,8 @@ class EmprestimoController extends Controller
             'parcelas.pagamentos.produtoObjetoItens',
             'parcelas.pagamentos.rejeitadoPor',
             'parcelas.pagamentos.comprovanteAnexos',
+            'parcelas.pagamentos.cashLedgerEntry',
+            'parcelas.pagamentos.estornadoPor',
             'aprovacao.aprovador',
             'liberacao.consultor',
             'liberacao.gestor',
