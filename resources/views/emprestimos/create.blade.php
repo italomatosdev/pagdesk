@@ -290,6 +290,21 @@
                                     </div>
                                 </div>
 
+                                <div class="row mb-3">
+                                    <div class="col-12">
+                                        <input type="hidden" name="deslocar_vencimento_domingo" value="0">
+                                        <div class="form-check form-switch">
+                                            <input type="checkbox" class="form-check-input" role="switch" name="deslocar_vencimento_domingo" id="deslocar-vencimento-domingo" value="1"
+                                                {{ old('deslocar_vencimento_domingo', '1') === '1' || old('deslocar_vencimento_domingo') === true || old('deslocar_vencimento_domingo') === 1 ? 'checked' : '' }}>
+                                            <label class="form-check-label" for="deslocar-vencimento-domingo">Evitar vencimento aos domingos (passa para segunda-feira)</label>
+                                        </div>
+                                        <small class="text-muted d-block mt-1">Só vale para novos cronogramas de parcelas; não altera empréstimos já cadastrados.</small>
+                                        @error('deslocar_vencimento_domingo')
+                                            <div class="text-danger">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                </div>
+
                                 <div class="row">
                                     @php
                                         $hojeBrasil = \Carbon\Carbon::today('America/Sao_Paulo')->format('Y-m-d');
@@ -1096,31 +1111,73 @@
                     return new Date(ano, mes, dia);
                 }
 
-                // Função auxiliar para calcular data de vencimento
-                // Mesma lógica do backend: primeira parcela vence 1 período após data_inicio
-                function calcularDataVencimento(dataInicio, frequencia, numeroParcela) {
-                    const data = typeof dataInicio === 'string' ? parseDateInput(dataInicio) : new Date(dataInicio);
-                    
-                    // Checkbox "1ª parcela em 30/03": mensal, 1ª parcela, data em fev
-                    if (frequencia === 'mensal' && numeroParcela === 1) {
+                // Alinhado ao EmprestimoService (cursor + normalizarDataVencimentoCursor)
+                function deveDeslocarDomingoSimulacao() {
+                    const el = document.getElementById('deslocar-vencimento-domingo');
+                    if (!el) return true;
+                    return el.checked;
+                }
+
+                function normalizarDomingoCursor(data, deslocar) {
+                    if (!deslocar) return data;
+                    const d = new Date(data.getTime());
+                    if (d.getDay() === 0) d.setDate(d.getDate() + 1);
+                    return d;
+                }
+
+                function inicializarCursorPrimeiraParcela(dataInicio, frequencia) {
+                    const base = typeof dataInicio === 'string' ? parseDateInput(dataInicio) : new Date(dataInicio);
+                    if (frequencia === 'mensal') {
                         const cb = document.getElementById('primeira-parcela-dia-30');
-                        if (cb && cb.checked && data.getMonth() === 1) {
-                            return new Date(data.getFullYear(), 2, 30);
+                        if (cb && cb.checked && base.getMonth() === 1) {
+                            return new Date(base.getFullYear(), 2, 30);
                         }
+                        return proximoMesMesmoDia(base, 1);
                     }
-                    
-                    switch(frequencia) {
-                        case 'diaria':
-                            data.setDate(data.getDate() + numeroParcela);
-                            break;
-                        case 'semanal':
-                            data.setDate(data.getDate() + (numeroParcela * 7));
-                            break;
-                        case 'mensal':
-                            return proximoMesMesmoDia(data, numeroParcela);
+                    if (frequencia === 'diaria') {
+                        const d = new Date(base.getTime());
+                        d.setDate(d.getDate() + 1);
+                        return d;
                     }
-                    
-                    return data;
+                    if (frequencia === 'semanal') {
+                        const d = new Date(base.getTime());
+                        d.setDate(d.getDate() + 7);
+                        return d;
+                    }
+                    return new Date(base.getTime());
+                }
+
+                function avancarCursorVencimento(cursor, frequencia) {
+                    if (frequencia === 'diaria') {
+                        const d = new Date(cursor.getTime());
+                        d.setDate(d.getDate() + 1);
+                        return d;
+                    }
+                    if (frequencia === 'semanal') {
+                        const d = new Date(cursor.getTime());
+                        d.setDate(d.getDate() + 7);
+                        return d;
+                    }
+                    if (frequencia === 'mensal') {
+                        return proximoMesMesmoDia(cursor, 1);
+                    }
+                    const d = new Date(cursor.getTime());
+                    d.setDate(d.getDate() + 1);
+                    return d;
+                }
+
+                function calcularDatasVencimentoParcelas(dataInicio, frequencia, numeroParcelas) {
+                    const deslocar = deveDeslocarDomingoSimulacao();
+                    let cursor = inicializarCursorPrimeiraParcela(dataInicio, frequencia);
+                    const datas = [];
+                    for (let i = 1; i <= numeroParcelas; i++) {
+                        if (i > 1) {
+                            cursor = avancarCursorVencimento(cursor, frequencia);
+                        }
+                        cursor = normalizarDomingoCursor(cursor, deslocar);
+                        datas.push(new Date(cursor.getTime()));
+                    }
+                    return datas;
                 }
 
                 // Simular empréstimo
@@ -1220,6 +1277,7 @@
                     let saldoDevedor = valorTotal;
                     let totalJuros = 0;
                     let html = '';
+                    const datasVencimento = calcularDatasVencimentoParcelas(dataInicio, frequencia, numeroParcelas);
 
                     for (let i = 1; i <= numeroParcelas; i++) {
                         const juros = saldoDevedor * taxaDecimal;
@@ -1231,8 +1289,7 @@
                             saldoDevedor = 0;
                         }
 
-                        // Calcular data de vencimento
-                        const dataVencimento = calcularDataVencimento(dataInicio, frequencia, i);
+                        const dataVencimento = datasVencimento[i - 1];
                         const dataVencimentoFormatada = formatarData(dataVencimento);
 
                         html += 
@@ -1265,11 +1322,11 @@
                     const valorJuros = valorTotal * (taxaJuros / 100);
                     const valorTotalComJuros = valorTotal + valorJuros;
                     const valorParcela = valorTotalComJuros / numeroParcelas;
+                    const datasVencimento = calcularDatasVencimentoParcelas(dataInicio, frequencia, numeroParcelas);
 
                     let html = '';
                     for (let i = 1; i <= numeroParcelas; i++) {
-                        // Calcular data de vencimento
-                        const dataVencimento = calcularDataVencimento(dataInicio, frequencia, i);
+                        const dataVencimento = datasVencimento[i - 1];
                         const dataVencimentoFormatada = formatarData(dataVencimento);
 
                         html += 
@@ -1897,6 +1954,21 @@
 
 
                 btnSimular.addEventListener('click', simularEmprestimo);
+
+                function resimularSePreviewAberto() {
+                    if (!previewEmprestimo || previewEmprestimo.style.display !== 'block') return;
+                    const tipo = tipoEmprestimo.value;
+                    if (tipo === 'troca_cheque') return;
+                    simularEmprestimo();
+                }
+                const deslocarDomingoEl = document.getElementById('deslocar-vencimento-domingo');
+                if (deslocarDomingoEl) {
+                    deslocarDomingoEl.addEventListener('change', resimularSePreviewAberto);
+                }
+                const primeiraParcela30El = document.getElementById('primeira-parcela-dia-30');
+                if (primeiraParcela30El) {
+                    primeiraParcela30El.addEventListener('change', resimularSePreviewAberto);
+                }
 
                 // Inicializar validação
                 atualizarValidacaoTaxa();

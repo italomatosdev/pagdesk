@@ -35,6 +35,7 @@ class Emprestimo extends Model
         'venda_id', // Venda que originou o crediário (quando tipo = crediario)
         'sandbox', // Dados fictícios para ambiente de testes (Super Admin)
         'juros_incorporados', // Juros do empréstimo anterior incorporados ao principal (em negociações)
+        'deslocar_vencimento_domingo', // null = legado; true = vencimento em domingo vai para segunda
     ];
 
     protected $casts = [
@@ -45,6 +46,7 @@ class Emprestimo extends Model
         'aprovado_em' => 'datetime',
         'sandbox' => 'boolean',
         'is_retroativo' => 'boolean',
+        // deslocar_vencimento_domingo: sem cast boolean para preservar null (legado) no banco
     ];
 
     /**
@@ -320,6 +322,17 @@ class Emprestimo extends Model
     public function isAtivo(): bool
     {
         return $this->status === 'ativo';
+    }
+
+    /**
+     * Na geração de parcelas: se true, vencimento que cairia em domingo grava-se como segunda-feira.
+     * null no banco = legado (não desloca).
+     */
+    public function deveDeslocarVencimentoDomingo(): bool
+    {
+        $v = $this->attributes['deslocar_vencimento_domingo'] ?? null;
+
+        return $v === true || $v === 1 || $v === '1';
     }
 
     /**

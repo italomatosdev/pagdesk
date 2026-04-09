@@ -495,8 +495,17 @@ class EmprestimoController extends Controller
             'is_retroativo' => 'boolean',
             'consultor_id' => 'nullable|exists:users,id',
             'primeira_parcela_dia_30' => 'nullable|boolean',
+            'deslocar_vencimento_domingo' => 'nullable|in:0,1',
         ];
         $validated = $request->validate($rules);
+
+        if (($validated['tipo'] ?? '') !== 'troca_cheque') {
+            $deslocarRaw = $request->input('deslocar_vencimento_domingo', 1);
+            if (is_array($deslocarRaw)) {
+                $deslocarRaw = collect($deslocarRaw)->filter(fn ($v) => $v !== '' && $v !== null)->last() ?? 1;
+            }
+            $validated['deslocar_vencimento_domingo'] = (bool) (int) $deslocarRaw;
+        }
 
         // Gestor ou administrador na operação: devem selecionar o consultor responsável (podem escolher a si mesmos — "Nome (Você)")
         $ehGestorOuAdminQueEscolhe = $user->temAlgumPapelNaOperacao((int) $validated['operacao_id'], ['gestor', 'administrador']);

@@ -2,17 +2,17 @@
 
 namespace App\Modules\Loans\Services;
 
+use App\Models\Scopes\EmpresaScope;
+use App\Models\User;
+use App\Modules\Cash\Models\CashLedgerEntry;
 use App\Modules\Core\Models\OperationClient;
 use App\Modules\Core\Services\NotificacaoService;
 use App\Modules\Core\Traits\Auditable;
-use App\Modules\Cash\Models\CashLedgerEntry;
-use App\Models\User;
-use App\Models\Scopes\EmpresaScope;
-use App\Support\NotificacaoClienteDisplayName;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\Parcela;
 use App\Modules\Loans\Services\Strategies\LoanStrategyFactory;
+use App\Support\NotificacaoClienteDisplayName;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -24,8 +24,6 @@ class EmprestimoService
     /**
      * Criar novo empréstimo
      *
-     * @param array $dados
-     * @return Emprestimo
      * @throws ValidationException
      */
     public function criar(array $dados): Emprestimo
@@ -43,14 +41,14 @@ class EmprestimoService
             $operacao = \App\Modules\Core\Models\Operacao::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)
                 ->with('empresa')
                 ->find($dados['operacao_id']);
-            
-            if (!$operacao) {
+
+            if (! $operacao) {
                 throw new ValidationException(['operacao_id' => 'Operação não encontrada.']);
             }
-            
+
             // Verificar se operação requer aprovação
             $requerAprovacao = $operacao->requerAprovacao();
-            
+
             // Verificar valor de aprovação automática da operação
             $valorAprovacaoAutomatica = $operacao->getValorAprovacaoAutomatica();
 
@@ -64,9 +62,9 @@ class EmprestimoService
 
             // Definir status inicial
             $status = 'draft';
-            
+
             // Se empresa não requer aprovação, aprovar automaticamente
-            if (!$requerAprovacao) {
+            if (! $requerAprovacao) {
                 $status = 'aprovado';
             } elseif ($aprovacaoAutomatica) {
                 // Aprovado automaticamente (ignora outras validações)
@@ -92,16 +90,24 @@ class EmprestimoService
             }
 
             // Obter empresa_id da operação (já temos $operacao carregado acima)
-            $empresaId = $operacao->empresa_id ?? (auth()->check() && !auth()->user()->isSuperAdmin() ? auth()->user()->empresa_id : null);
+            $empresaId = $operacao->empresa_id ?? (auth()->check() && ! auth()->user()->isSuperAdmin() ? auth()->user()->empresa_id : null);
 
             // Empréstimo retroativo: gestor/admin → ativo direto; consultor → aguardando aceite
-            $isRetroativo = !empty($dados['is_retroativo']);
-            $solicitarAceiteRetroativo = !empty($dados['solicitar_aceite_retroativo']);
+            $isRetroativo = ! empty($dados['is_retroativo']);
+            $solicitarAceiteRetroativo = ! empty($dados['solicitar_aceite_retroativo']);
             if ($isRetroativo) {
                 $status = $solicitarAceiteRetroativo ? 'aguardando_aceite_retroativo' : 'ativo';
             }
 
             // Criar empréstimo (criado_por = quem estava logado ao criar)
+            $tipoEmprestimo = $dados['tipo'] ?? 'dinheiro';
+            $deslocarVencimentoDomingo = null;
+            if ($tipoEmprestimo !== 'troca_cheque') {
+                $deslocarVencimentoDomingo = array_key_exists('deslocar_vencimento_domingo', $dados)
+                    ? (bool) $dados['deslocar_vencimento_domingo']
+                    : true;
+            }
+
             $emprestimo = Emprestimo::create([
                 'operacao_id' => $dados['operacao_id'],
                 'cliente_id' => $dados['cliente_id'],
@@ -112,15 +118,16 @@ class EmprestimoService
                 'frequencia' => $dados['frequencia'],
                 'data_inicio' => $dados['data_inicio'],
                 'taxa_juros' => $dados['taxa_juros'] ?? 0,
-                'tipo' => $dados['tipo'] ?? 'dinheiro',
+                'tipo' => $tipoEmprestimo,
                 'status' => $status,
                 'observacoes' => $dados['observacoes'] ?? null,
                 'is_retroativo' => $isRetroativo,
                 'empresa_id' => $empresaId,
+                'deslocar_vencimento_domingo' => $deslocarVencimentoDomingo,
             ]);
 
             // Checkbox "1ª parcela em 30/03": só para mensal, 1 parcela, data início em fevereiro
-            if (!empty($dados['primeira_parcela_dia_30'])
+            if (! empty($dados['primeira_parcela_dia_30'])
                 && $emprestimo->frequencia === 'mensal'
                 && (int) $emprestimo->numero_parcelas === 1
                 && (int) Carbon::parse($emprestimo->data_inicio)->month === 2) {
@@ -134,14 +141,14 @@ class EmprestimoService
             $strategy->gerarEstruturaPagamento($emprestimo);
 
             // Se for troca_cheque, criar os cheques agora
-            if ($emprestimo->tipo === 'troca_cheque' && !empty($dados['cheques'])) {
+            if ($emprestimo->tipo === 'troca_cheque' && ! empty($dados['cheques'])) {
                 $chequeService = app(\App\Modules\Loans\Services\ChequeService::class);
                 foreach ($dados['cheques'] as $chequeData) {
                     // Usar taxa de juros do cheque ou do empréstimo
                     $chequeData['taxa_juros'] = $chequeData['taxa_juros'] ?? $emprestimo->taxa_juros ?? null;
                     $chequeService->criar($emprestimo->id, $chequeData);
                 }
-                
+
                 // Recalcular valor_total baseado nos cheques
                 $emprestimo->refresh();
                 $emprestimo->load('cheques');
@@ -162,31 +169,31 @@ class EmprestimoService
                 $dadosNotif = [
                     'tipo' => 'emprestimo_retroativo_aguardando_aceite',
                     'titulo' => 'Empréstimo retroativo aguardando aceite',
-                    'mensagem' => 'Empréstimo #' . $emprestimo->id . ' (retroativo) — ' . NotificacaoClienteDisplayName::forEmprestimo($emprestimo) . ' — criado por consultor aguardando sua aprovação.',
+                    'mensagem' => 'Empréstimo #'.$emprestimo->id.' (retroativo) — '.NotificacaoClienteDisplayName::forEmprestimo($emprestimo).' — criado por consultor aguardando sua aprovação.',
                     'url' => route('emprestimos.retroativo.pendentes'),
                 ];
                 $notificacaoService->criarParaGestoresDaOperacao($operacaoId, $dadosNotif);
             }
 
             // Se aprovado, verificar se precisa criar liberação (retroativo não cria liberação)
-            if ($status === 'aprovado' && !$isRetroativo) {
+            if ($status === 'aprovado' && ! $isRetroativo) {
                 $requerLiberacao = $operacao->requerLiberacao();
-                
+
                 if ($requerLiberacao) {
                     // Criar registro de liberação pendente (gestor precisa liberar dinheiro)
                     $this->criarLiberacaoPendente($emprestimo);
-                    
+
                     // Status permanece 'aprovado' até o dinheiro ser liberado e pago ao cliente
                     // Depois muda para 'ativo'
                 } else {
                     // Não requer liberação - liberar automaticamente
                     $liberacaoService = app(\App\Modules\Loans\Services\LiberacaoService::class);
                     $liberacao = $this->criarLiberacaoPendente($emprestimo);
-                    
+
                     // Liberar automaticamente (sem necessidade de gestor)
                     // Usar o consultor como gestor para liberação automática
                     $liberacaoService->liberar($liberacao->id, $emprestimo->consultor_id, 'Liberação automática - empresa não requer aprovação de gestor');
-                    
+
                     // Status permanece 'aprovado' até o consultor confirmar pagamento ao cliente
                     // Depois muda para 'ativo'
                 }
@@ -204,21 +211,21 @@ class EmprestimoService
             // Auditoria
             $mensagemAuditoria = null;
             if ($aprovacaoAutomatica) {
-                $mensagemAuditoria = "Empréstimo aprovado automaticamente (valor dentro do limite de aprovação automática da operação)";
+                $mensagemAuditoria = 'Empréstimo aprovado automaticamente (valor dentro do limite de aprovação automática da operação)';
             } elseif ($status === 'pendente') {
                 $mensagemAuditoria = 'Empréstimo criado como pendente (dívida ativa ou limite excedido)';
             }
-            
+
             self::auditar('criar_emprestimo', $emprestimo, null, $emprestimo->toArray(), $mensagemAuditoria);
 
             // Notificações
             $notificacaoService = app(NotificacaoService::class);
             // Carregar cliente se ainda não estiver carregado
-            if (!$emprestimo->relationLoaded('cliente')) {
+            if (! $emprestimo->relationLoaded('cliente')) {
                 $emprestimo->load('cliente');
             }
             $cliente = $emprestimo->cliente;
-            
+
             if ($cliente) {
                 $operacaoId = (int) $emprestimo->operacao_id;
                 $nomeCliente = NotificacaoClienteDisplayName::forEmprestimo($emprestimo);
@@ -226,7 +233,7 @@ class EmprestimoService
                     $notificacaoService->criarParaRoleComOperacao('administrador', $operacaoId, [
                         'tipo' => 'emprestimo_pendente',
                         'titulo' => 'Novo Empréstimo Pendente',
-                        'mensagem' => "Empréstimo de R$ " . number_format($emprestimo->valor_total, 2, ',', '.') . " para {$nomeCliente} aguardando aprovação",
+                        'mensagem' => 'Empréstimo de R$ '.number_format($emprestimo->valor_total, 2, ',', '.')." para {$nomeCliente} aguardando aprovação",
                         'url' => route('aprovacoes.index'),
                         'dados' => ['emprestimo_id' => $emprestimo->id],
                     ]);
@@ -234,7 +241,7 @@ class EmprestimoService
                     $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, [
                         'tipo' => 'emprestimo_aprovado',
                         'titulo' => 'Empréstimo Aprovado - Liberação Pendente',
-                        'mensagem' => "Empréstimo de R$ " . number_format($emprestimo->valor_total, 2, ',', '.') . " para {$nomeCliente} aprovado e aguardando liberação",
+                        'mensagem' => 'Empréstimo de R$ '.number_format($emprestimo->valor_total, 2, ',', '.')." para {$nomeCliente} aprovado e aguardando liberação",
                         'url' => route('liberacoes.index'),
                         'dados' => ['emprestimo_id' => $emprestimo->id],
                     ]);
@@ -250,15 +257,13 @@ class EmprestimoService
      * Fluxo pensado especialmente para empréstimos mensais com 1 parcela,
      * onde o cliente paga apenas os juros e renova o prazo do principal.
      *
-     * @param int $emprestimoId
+     * @param  int  $emprestimoId
      * @return Emprestimo Novo empréstimo gerado pela renovação
+     *
      * @throws ValidationException
      */
     /**
      * Verificar se os juros do empréstimo já foram pagos
-     *
-     * @param Emprestimo $emprestimo
-     * @return bool
      */
     public function jurosJaForamPagos(Emprestimo $emprestimo): bool
     {
@@ -281,7 +286,7 @@ class EmprestimoService
             $emprestimo = Emprestimo::with(['parcelas', 'garantias.anexos', 'operacao'])->findOrFail($emprestimoId);
 
             // Apenas empréstimos ativos podem ser renovados por este fluxo
-            if (!$emprestimo->isAtivo()) {
+            if (! $emprestimo->isAtivo()) {
                 throw ValidationException::withMessages([
                     'emprestimo' => 'Apenas empréstimos ativos podem ser renovados.',
                 ]);
@@ -302,7 +307,7 @@ class EmprestimoService
             }
 
             $parcela = $emprestimo->parcelas->first();
-            if (!$parcela) {
+            if (! $parcela) {
                 throw ValidationException::withMessages([
                     'parcela' => 'Parcela não encontrada para este empréstimo.',
                 ]);
@@ -310,7 +315,7 @@ class EmprestimoService
 
             // Empréstimo mensal: pode renovar antes do vencimento (parcela pendente). Demais frequências: só quando atrasada.
             $ehMensal = $emprestimo->frequencia === 'mensal';
-            if (!$ehMensal && !$parcela->isAtrasada()) {
+            if (! $ehMensal && ! $parcela->isAtrasada()) {
                 throw ValidationException::withMessages([
                     'emprestimo' => 'A renovação só é permitida quando a parcela está em vencimento ou atrasada.',
                 ]);
@@ -329,12 +334,12 @@ class EmprestimoService
 
                 if ($valorTotalPago > $valorParcelaTotal) {
                     throw ValidationException::withMessages([
-                        'valor' => 'O valor pago na renovação não pode ser maior que o valor total da parcela (R$ ' . number_format($valorParcelaTotal, 2, ',', '.') . ').',
+                        'valor' => 'O valor pago na renovação não pode ser maior que o valor total da parcela (R$ '.number_format($valorParcelaTotal, 2, ',', '.').').',
                     ]);
                 }
-                if (!$solicitacaoAprovada && $valorTotalPago < $valorPrincipalParcela) {
+                if (! $solicitacaoAprovada && $valorTotalPago < $valorPrincipalParcela) {
                     throw ValidationException::withMessages([
-                        'valor' => 'O valor pago na renovação não pode ser menor que o principal (R$ ' . number_format($valorPrincipalParcela, 2, ',', '.') . '). Para valores inferiores, solicite aprovação.',
+                        'valor' => 'O valor pago na renovação não pode ser menor que o principal (R$ '.number_format($valorPrincipalParcela, 2, ',', '.').'). Para valores inferiores, solicite aprovação.',
                     ]);
                 }
 
@@ -352,7 +357,7 @@ class EmprestimoService
                     'valor' => $valorTotalPago,
                     'metodo' => $metodoPagamento ?? 'dinheiro',
                     'data_pagamento' => $dataPagamentoObj,
-                    'observacoes' => "Renovação com abate do empréstimo #{$emprestimo->id}. Juros: R$ " . number_format($parteJuros, 2, ',', '.') . "; principal abatido: R$ " . number_format($partePrincipal, 2, ',', '.') . ". Novo saldo: R$ " . number_format($saldoRestante, 2, ',', '.'),
+                    'observacoes' => "Renovação com abate do empréstimo #{$emprestimo->id}. Juros: R$ ".number_format($parteJuros, 2, ',', '.').'; principal abatido: R$ '.number_format($partePrincipal, 2, ',', '.').'. Novo saldo: R$ '.number_format($saldoRestante, 2, ',', '.'),
                     'tipo_juros' => 'fixo',
                     'valor_juros_fixo' => $parteJuros,
                     'encerra_parcela_renovacao_abate' => true,
@@ -372,13 +377,13 @@ class EmprestimoService
                     $pagamentoService = app(\App\Modules\Loans\Services\PagamentoService::class);
                     $observacoes = "Pagamento automático de juros na renovação do empréstimo #{$emprestimo->id}";
                     if ($tipoJurosRenovacao === 'nenhum') {
-                        $observacoes .= " (renovação sem juros)";
+                        $observacoes .= ' (renovação sem juros)';
                     } elseif ($tipoJurosRenovacao === 'automatico') {
-                        $observacoes .= " (juros automático)";
+                        $observacoes .= ' (juros automático)';
                     } elseif ($tipoJurosRenovacao === 'manual') {
                         $observacoes .= " (juros manual: {$taxaJurosManual}%)";
                     } elseif ($tipoJurosRenovacao === 'fixo') {
-                        $observacoes .= " (valor fixo: R$ " . number_format($valorJurosFixo ?? 0, 2, ',', '.') . ")";
+                        $observacoes .= ' (valor fixo: R$ '.number_format($valorJurosFixo ?? 0, 2, ',', '.').')';
                     }
                     $pagamentoService->registrar([
                         'parcela_id' => $parcela->id,
@@ -417,6 +422,7 @@ class EmprestimoService
                 'observacoes' => $emprestimo->observacoes,
                 'empresa_id' => $emprestimo->empresa_id,
                 'emprestimo_origem_id' => $emprestimo->id,
+                'deslocar_vencimento_domingo' => $emprestimo->getAttributes()['deslocar_vencimento_domingo'] ?? null,
             ]);
 
             // Gerar parcelas para o novo empréstimo
@@ -442,7 +448,7 @@ class EmprestimoService
                         'descricao' => $garantiaOriginal->descricao,
                         'valor_avaliado' => $garantiaOriginal->valor_avaliado,
                         'localizacao' => $garantiaOriginal->localizacao,
-                        'observacoes' => $garantiaOriginal->observacoes . (empty($garantiaOriginal->observacoes) ? '' : "\n\n") . 
+                        'observacoes' => $garantiaOriginal->observacoes.(empty($garantiaOriginal->observacoes) ? '' : "\n\n").
                                         "Garantia transferida da renovação do empréstimo #{$emprestimo->id}",
                     ]);
 
@@ -480,8 +486,8 @@ class EmprestimoService
                 $novoEmprestimo,
                 null,
                 $dadosNovos,
-                "Empréstimo #{$emprestimo->id} renovado para o empréstimo #{$novoEmprestimo->id}" . 
-                ($registrarPagamentoAutomatico ? " - Pagamento de juros (R$ " . number_format($valorJuros, 2, ',', '.') . ") registrado automaticamente" : "")
+                "Empréstimo #{$emprestimo->id} renovado para o empréstimo #{$novoEmprestimo->id}".
+                ($registrarPagamentoAutomatico ? ' - Pagamento de juros (R$ '.number_format($valorJuros, 2, ',', '.').') registrado automaticamente' : '')
             );
 
             return $novoEmprestimo->fresh();
@@ -490,10 +496,6 @@ class EmprestimoService
 
     /**
      * Verificar se cliente tem dívida ativa na operação
-     *
-     * @param int $clienteId
-     * @param int $operacaoId
-     * @return bool
      */
     public function temDividaAtiva(int $clienteId, int $operacaoId): bool
     {
@@ -505,11 +507,6 @@ class EmprestimoService
 
     /**
      * Verificar se valor excede limite de crédito
-     *
-     * @param int $clienteId
-     * @param int $operacaoId
-     * @param float $valorEmprestimo
-     * @return bool
      */
     public function limiteExcedido(int $clienteId, int $operacaoId, float $valorEmprestimo): bool
     {
@@ -518,7 +515,7 @@ class EmprestimoService
             ->where('status', 'ativo')
             ->first();
 
-        if (!$vinculo) {
+        if (! $vinculo) {
             return true; // Sem vínculo = sem limite = excedido
         }
 
@@ -533,13 +530,27 @@ class EmprestimoService
     }
 
     /**
+     * Se o empréstimo exige deslocar domingo, converte domingo na segunda seguinte.
+     * Retorna o cursor já ajustado para a próxima iteração da geração de parcelas.
+     */
+    public static function normalizarDataVencimentoCursor(Emprestimo $emprestimo, Carbon $dataVencimento): Carbon
+    {
+        if (! $emprestimo->deveDeslocarVencimentoDomingo()) {
+            return $dataVencimento;
+        }
+        $d = $dataVencimento->copy();
+        if ($d->dayOfWeek === Carbon::SUNDAY) {
+            $d->addDay();
+        }
+
+        return $d;
+    }
+
+    /**
      * Gerar parcelas automaticamente
-     * 
+     *
      * @deprecated Use LoanStrategyFactory instead
      * Mantido para compatibilidade com código existente
-     *
-     * @param Emprestimo $emprestimo
-     * @return void
      */
     public function gerarParcelas(Emprestimo $emprestimo): void
     {
@@ -551,6 +562,7 @@ class EmprestimoService
         // Se for tipo Price, gera com amortização
         if ($emprestimo->isPrice()) {
             $this->gerarParcelasPrice($emprestimo);
+
             return;
         }
 
@@ -565,7 +577,7 @@ class EmprestimoService
 
     /**
      * Gerar parcelas para sistema Price (amortização)
-     * 
+     *
      * @internal Usado pelas Strategies
      */
     public function gerarParcelasPrice(Emprestimo $emprestimo): void
@@ -606,7 +618,7 @@ class EmprestimoService
             } else {
                 // Primeira parcela: 1 período após data_inicio
                 if ($emprestimo->frequencia === 'mensal') {
-                    if (!empty($emprestimo->dia_primeira_parcela_override)) {
+                    if (! empty($emprestimo->dia_primeira_parcela_override)) {
                         $ano = (int) Carbon::parse($emprestimo->data_inicio)->year;
                         $dataVencimento = Carbon::createFromDate($ano, 3, min((int) $emprestimo->dia_primeira_parcela_override, 31));
                     } else {
@@ -623,6 +635,8 @@ class EmprestimoService
                     }
                 }
             }
+
+            $dataVencimento = self::normalizarDataVencimentoCursor($emprestimo, $dataVencimento);
 
             Parcela::create([
                 'emprestimo_id' => $emprestimo->id,
@@ -641,7 +655,7 @@ class EmprestimoService
 
     /**
      * Gerar parcelas para sistema simples (juros simples)
-     * 
+     *
      * @internal Usado pelas Strategies
      */
     public function gerarParcelasSimples(Emprestimo $emprestimo): void
@@ -662,7 +676,7 @@ class EmprestimoService
                 break;
             case 'mensal':
             default:
-                if (!empty($emprestimo->dia_primeira_parcela_override)) {
+                if (! empty($emprestimo->dia_primeira_parcela_override)) {
                     $ano = (int) Carbon::parse($emprestimo->data_inicio)->year;
                     $dataVencimento = Carbon::createFromDate($ano, 3, min((int) $emprestimo->dia_primeira_parcela_override, 31));
                 } else {
@@ -690,6 +704,8 @@ class EmprestimoService
                 }
             }
 
+            $dataVencimento = self::normalizarDataVencimentoCursor($emprestimo, $dataVencimento);
+
             Parcela::create([
                 'emprestimo_id' => $emprestimo->id,
                 'numero' => $i,
@@ -710,9 +726,8 @@ class EmprestimoService
      * - Se o próximo mês tem 30 dias: usar no máximo dia 30 (ex.: 31/03 → 30/04).
      * - Se o próximo mês é fevereiro (não tem 30 dias): usar dia 01 do próximo mês (ex.: 28/02 → 01/03).
      *
-     * @param \Carbon\Carbon $dataVencimentoAntiga Data de vencimento de referência (ex.: parcela antiga)
-     * @param int $numeroMeses Quantidade de meses a adicionar (default 1)
-     * @return \Carbon\Carbon
+     * @param  \Carbon\Carbon  $dataVencimentoAntiga  Data de vencimento de referência (ex.: parcela antiga)
+     * @param  int  $numeroMeses  Quantidade de meses a adicionar (default 1)
      */
     public static function proximoMesMesmoDia(Carbon $dataVencimentoAntiga, int $numeroMeses = 1): Carbon
     {
@@ -736,6 +751,7 @@ class EmprestimoService
             }
             $ultimoDiaFev = Carbon::createFromDate($ano, 2, 1)->endOfMonth()->day;
             $dia = min($diaOriginal, $ultimoDiaFev);
+
             return Carbon::createFromDate($ano, 2, $dia);
         }
 
@@ -743,21 +759,18 @@ class EmprestimoService
         $mesesCom30Dias = [4, 6, 9, 11];
         if (in_array($mes, $mesesCom30Dias)) {
             $dia = $diaOriginal > 30 ? 30 : $diaOriginal;
+
             return Carbon::createFromDate($ano, $mes, $dia);
         }
 
         // Meses com 31 dias: mesmo dia (até 31)
         $dia = min($diaOriginal, 31);
+
         return Carbon::createFromDate($ano, $mes, $dia);
     }
 
     /**
      * Aprovar empréstimo pendente
-     *
-     * @param int $emprestimoId
-     * @param int $aprovadorId
-     * @param string|null $observacoes
-     * @return Emprestimo
      */
     public function aprovar(int $emprestimoId, int $aprovadorId, ?string $observacoes = null): Emprestimo
     {
@@ -766,7 +779,7 @@ class EmprestimoService
 
             if ($emprestimo->status !== 'pendente') {
                 throw ValidationException::withMessages([
-                    'emprestimo' => 'Apenas empréstimos pendentes podem ser aprovados.'
+                    'emprestimo' => 'Apenas empréstimos pendentes podem ser aprovados.',
                 ]);
             }
 
@@ -779,14 +792,14 @@ class EmprestimoService
             // Verificar se estrutura de pagamento já foi gerada
             // Se não existir, gerar agora (para empréstimos antigos)
             // Para troca_cheque: cheques são cadastrados manualmente, não precisa gerar
-            if (!$emprestimo->isTrocaCheque() && $emprestimo->parcelas()->count() === 0) {
+            if (! $emprestimo->isTrocaCheque() && $emprestimo->parcelas()->count() === 0) {
                 $strategy = LoanStrategyFactory::create($emprestimo);
                 $strategy->gerarEstruturaPagamento($emprestimo);
             }
 
             // Verificar se operação requer liberação
             // Carregar operação se ainda não estiver carregado
-            if (!$emprestimo->relationLoaded('operacao')) {
+            if (! $emprestimo->relationLoaded('operacao')) {
                 $emprestimo->load('operacao');
             }
             $requerLiberacao = $emprestimo->operacao ? $emprestimo->operacao->requerLiberacao() : true;
@@ -805,11 +818,11 @@ class EmprestimoService
                 // Não requer liberação - liberar automaticamente
                 $liberacaoService = app(\App\Modules\Loans\Services\LiberacaoService::class);
                 $liberacao = $this->criarLiberacaoPendente($emprestimo);
-                
+
                 // Liberar automaticamente (sem necessidade de gestor)
                 // Usar o aprovador como gestor para liberação automática
                 $liberacaoService->liberar($liberacao->id, $aprovadorId, 'Liberação automática - operação não requer aprovação de gestor');
-                
+
                 // Status permanece 'aprovado' até o consultor confirmar pagamento ao cliente
                 // Depois muda para 'ativo'
                 $emprestimo->update([
@@ -831,18 +844,18 @@ class EmprestimoService
             // Notificações
             $notificacaoService = app(NotificacaoService::class);
             // Carregar cliente se ainda não estiver carregado
-            if (!$emprestimo->relationLoaded('cliente')) {
+            if (! $emprestimo->relationLoaded('cliente')) {
                 $emprestimo->load('cliente');
             }
             $cliente = $emprestimo->cliente;
-            
+
             if ($cliente) {
                 $operacaoId = (int) $emprestimo->operacao_id;
                 $nomeCliente = NotificacaoClienteDisplayName::forEmprestimo($emprestimo);
                 $notificacaoService->criarParaRoleComOperacao('gestor', $operacaoId, [
                     'tipo' => 'emprestimo_aprovado',
                     'titulo' => 'Empréstimo Aprovado - Liberação Pendente',
-                    'mensagem' => "Empréstimo de R$ " . number_format($emprestimo->valor_total, 2, ',', '.') . " para {$nomeCliente} aprovado e aguardando liberação",
+                    'mensagem' => 'Empréstimo de R$ '.number_format($emprestimo->valor_total, 2, ',', '.')." para {$nomeCliente} aprovado e aguardando liberação",
                     'url' => route('liberacoes.index'),
                     'dados' => ['emprestimo_id' => $emprestimo->id],
                 ]);
@@ -854,11 +867,6 @@ class EmprestimoService
 
     /**
      * Rejeitar empréstimo pendente
-     *
-     * @param int $emprestimoId
-     * @param int $aprovadorId
-     * @param string $motivoRejeicao
-     * @return Emprestimo
      */
     public function rejeitar(int $emprestimoId, int $aprovadorId, string $motivoRejeicao): Emprestimo
     {
@@ -867,7 +875,7 @@ class EmprestimoService
 
             if ($emprestimo->status !== 'pendente') {
                 throw ValidationException::withMessages([
-                    'emprestimo' => 'Apenas empréstimos pendentes podem ser rejeitados.'
+                    'emprestimo' => 'Apenas empréstimos pendentes podem ser rejeitados.',
                 ]);
             }
 
@@ -906,11 +914,6 @@ class EmprestimoService
     /**
      * Garantir que existe vínculo entre cliente e operação
      * Cria automaticamente se não existir
-     *
-     * @param int $clienteId
-     * @param int $operacaoId
-     * @param int|null $consultorId
-     * @return OperationClient
      */
     public function garantirVinculoClienteOperacao(int $clienteId, int $operacaoId, ?int $consultorId = null): OperationClient
     {
@@ -918,7 +921,7 @@ class EmprestimoService
             ->where('operacao_id', $operacaoId)
             ->first();
 
-        if (!$vinculo) {
+        if (! $vinculo) {
             // Criar vínculo automaticamente com limite padrão (0 = sem limite definido)
             $vinculo = OperationClient::create([
                 'cliente_id' => $clienteId,
@@ -930,7 +933,7 @@ class EmprestimoService
 
             // Auditoria
             self::auditar('criar_vinculo_cliente_operacao_automatico', $vinculo, null, $vinculo->toArray(), 'Vínculo criado automaticamente ao criar empréstimo');
-        } elseif ($consultorId && !$vinculo->consultor_id) {
+        } elseif ($consultorId && ! $vinculo->consultor_id) {
             // Atualizar consultor se não estiver definido
             $vinculo->update(['consultor_id' => $consultorId]);
         }
@@ -940,13 +943,11 @@ class EmprestimoService
 
     /**
      * Criar liberação pendente para empréstimo aprovado
-     *
-     * @param Emprestimo $emprestimo
-     * @return \App\Modules\Loans\Models\LiberacaoEmprestimo
      */
     protected function criarLiberacaoPendente(Emprestimo $emprestimo): \App\Modules\Loans\Models\LiberacaoEmprestimo
     {
         $liberacaoService = app(\App\Modules\Loans\Services\LiberacaoService::class);
+
         return $liberacaoService->criarPendente($emprestimo);
     }
 
@@ -956,13 +957,9 @@ class EmprestimoService
      * Só pode cancelar se:
      * - Dinheiro ainda não foi pago ao cliente
      * - Não há parcelas pagas
-     * 
+     *
      * Se o dinheiro já foi liberado para o consultor, cria movimentações de estorno
      *
-     * @param int $emprestimoId
-     * @param int $administradorId
-     * @param string $motivoCancelamento
-     * @return Emprestimo
      * @throws ValidationException
      */
     public function cancelar(int $emprestimoId, int $administradorId, string $motivoCancelamento): Emprestimo
@@ -974,21 +971,21 @@ class EmprestimoService
             // VALIDAÇÃO 1: Não pode cancelar se já está cancelado
             if ($emprestimo->isCancelado()) {
                 throw ValidationException::withMessages([
-                    'emprestimo' => 'Este empréstimo já está cancelado.'
+                    'emprestimo' => 'Este empréstimo já está cancelado.',
                 ]);
             }
 
             // VALIDAÇÃO 2: Não pode cancelar se já foi finalizado
             if ($emprestimo->isFinalizado()) {
                 throw ValidationException::withMessages([
-                    'emprestimo' => 'Não é possível cancelar um empréstimo finalizado.'
+                    'emprestimo' => 'Não é possível cancelar um empréstimo finalizado.',
                 ]);
             }
 
             // VALIDAÇÃO 2.5: Não pode cancelar se é um empréstimo renovado
             if ($emprestimo->isRenovacao()) {
                 throw ValidationException::withMessages([
-                    'emprestimo' => 'Não é possível cancelar um empréstimo renovado. O empréstimo original já foi finalizado e o dinheiro foi pago ao cliente. As garantias foram transferidas e não podem ser revertidas automaticamente.'
+                    'emprestimo' => 'Não é possível cancelar um empréstimo renovado. O empréstimo original já foi finalizado e o dinheiro foi pago ao cliente. As garantias foram transferidas e não podem ser revertidas automaticamente.',
                 ]);
             }
 
@@ -996,17 +993,17 @@ class EmprestimoService
             $parcelasComPagamento = $emprestimo->parcelas->filter(function ($parcela) {
                 return $parcela->valor_pago > 0 || $parcela->pagamentos()->count() > 0 || $parcela->isQuitada();
             });
-            
+
             if ($parcelasComPagamento->count() > 0) {
                 throw ValidationException::withMessages([
-                    'emprestimo' => 'Não é possível cancelar um empréstimo que já possui parcelas pagas ou quitadas.'
+                    'emprestimo' => 'Não é possível cancelar um empréstimo que já possui parcelas pagas ou quitadas.',
                 ]);
             }
 
             // VALIDAÇÃO 4: Verificar se dinheiro já foi pago ao cliente
             if ($emprestimo->liberacao && $emprestimo->liberacao->isPagoAoCliente()) {
                 throw ValidationException::withMessages([
-                    'emprestimo' => 'Não é possível cancelar um empréstimo cujo dinheiro já foi pago ao cliente.'
+                    'emprestimo' => 'Não é possível cancelar um empréstimo cujo dinheiro já foi pago ao cliente.',
                 ]);
             }
 
@@ -1049,7 +1046,7 @@ class EmprestimoService
             // Atualizar status da liberação para cancelado (se existir)
             if ($emprestimo->liberacao) {
                 $emprestimo->liberacao->update([
-                    'status' => 'cancelado'
+                    'status' => 'cancelado',
                 ]);
             }
 
@@ -1066,13 +1063,13 @@ class EmprestimoService
                     // Apenas cancelar garantias que ainda estão ativas
                     if ($garantia->isAtiva()) {
                         $observacoesAnteriores = $garantia->observacoes ?? '';
-                        $observacaoCancelamento = "\n\n[CANCELADA EM " . Carbon::now()->format('d/m/Y H:i') . "]\n" .
-                                                   "Empréstimo #{$emprestimo->id} foi cancelado.\n" .
+                        $observacaoCancelamento = "\n\n[CANCELADA EM ".Carbon::now()->format('d/m/Y H:i')."]\n".
+                                                   "Empréstimo #{$emprestimo->id} foi cancelado.\n".
                                                    "Motivo do cancelamento: {$motivoCancelamento}";
-                        
+
                         $garantia->update([
                             'status' => 'cancelada',
-                            'observacoes' => $observacoesAnteriores . $observacaoCancelamento,
+                            'observacoes' => $observacoesAnteriores.$observacaoCancelamento,
                         ]);
 
                         // Auditoria da garantia
@@ -1098,7 +1095,7 @@ class EmprestimoService
             // Auditoria
             $observacoesAuditoria = "Empréstimo cancelado por administrador. Motivo: {$motivoCancelamento}";
             if ($emprestimo->liberacao && $emprestimo->liberacao->isLiberado()) {
-                $observacoesAuditoria .= " Movimentações de estorno criadas.";
+                $observacoesAuditoria .= ' Movimentações de estorno criadas.';
             }
 
             self::auditar(
@@ -1112,7 +1109,7 @@ class EmprestimoService
             // Notificações
             $notificacaoService = app(NotificacaoService::class);
             $nomeCliente = NotificacaoClienteDisplayName::forEmprestimo($emprestimo);
-            
+
             // Notificar consultor sobre cancelamento
             if ($emprestimo->consultor_id) {
                 $notificacaoService->criar([
@@ -1133,10 +1130,6 @@ class EmprestimoService
      * Cancelar empréstimo com desfazimento de todos os pagamentos (gestor ou administrador).
      * Desfaz: movimentações de caixa, pagamentos, zera parcelas, soft-delete parcelas, marca empréstimo e liberação como cancelados.
      *
-     * @param int $emprestimoId
-     * @param int $userId
-     * @param string $motivoCancelamento
-     * @return Emprestimo
      * @throws ValidationException
      */
     public function cancelarComDesfazimento(int $emprestimoId, int $userId, string $motivoCancelamento): Emprestimo
@@ -1161,7 +1154,7 @@ class EmprestimoService
             $pagamentoIds = $parcelasComPagamento->flatMap(fn ($p) => $p->pagamentos->pluck('id'))->unique()->filter()->values()->all();
 
             // 1) Soft-delete das movimentações de caixa ligadas aos pagamentos
-            if (!empty($pagamentoIds)) {
+            if (! empty($pagamentoIds)) {
                 CashLedgerEntry::whereIn('pagamento_id', $pagamentoIds)->delete();
                 Pagamento::whereIn('id', $pagamentoIds)->delete();
             }
@@ -1185,7 +1178,7 @@ class EmprestimoService
             if ($emprestimo->isEmpenho() && $emprestimo->garantias->isNotEmpty()) {
                 foreach ($emprestimo->garantias as $garantia) {
                     if ($garantia->isAtiva()) {
-                        $obs = ($garantia->observacoes ?? '') . "\n\n[CANCELADA EM " . Carbon::now()->format('d/m/Y H:i') . "]\nEmpréstimo #{$emprestimo->id} cancelado com desfazimento. Motivo: {$motivoCancelamento}";
+                        $obs = ($garantia->observacoes ?? '')."\n\n[CANCELADA EM ".Carbon::now()->format('d/m/Y H:i')."]\nEmpréstimo #{$emprestimo->id} cancelado com desfazimento. Motivo: {$motivoCancelamento}";
                         $garantia->update(['status' => 'cancelada', 'observacoes' => $obs]);
                     }
                 }
@@ -1230,12 +1223,9 @@ class EmprestimoService
     /**
      * Calcular juros de renovação baseado na sub-opção escolhida
      *
-     * @param Emprestimo $emprestimo
-     * @param Parcela $parcela
-     * @param string $tipoJurosRenovacao (nenhum, automatico, manual, fixo)
-     * @param float|null $taxaJurosManual Taxa informada manualmente (se tipo = manual)
-     * @param float|null $valorJurosFixo Valor fixo informado (se tipo = fixo)
-     * @return float
+     * @param  string  $tipoJurosRenovacao  (nenhum, automatico, manual, fixo)
+     * @param  float|null  $taxaJurosManual  Taxa informada manualmente (se tipo = manual)
+     * @param  float|null  $valorJurosFixo  Valor fixo informado (se tipo = fixo)
      */
     private function calcularJurosRenovacao(
         Emprestimo $emprestimo,
@@ -1246,25 +1236,25 @@ class EmprestimoService
     ): float {
         $valorPrincipal = $emprestimo->valor_total;
         $diasAtraso = $parcela->calcularDiasAtraso();
-        
+
         // Carregar operação se não estiver carregada
-        if (!$emprestimo->relationLoaded('operacao')) {
+        if (! $emprestimo->relationLoaded('operacao')) {
             $emprestimo->load('operacao');
         }
-        
+
         $operacao = $emprestimo->operacao;
         $taxaJurosAtraso = $operacao->taxa_juros_atraso ?? 0;
         $tipoCalculo = $operacao->tipo_calculo_juros ?? 'por_dia';
-        
+
         switch ($tipoJurosRenovacao) {
             case 'nenhum':
                 // Sem juros de atraso, mas o cliente paga ao menos os juros do contrato
                 return round($emprestimo->calcularValorJuros(), 2);
-                
+
             case 'automatico':
                 // Juros originais do empréstimo (taxa_juros)
                 $jurosOriginais = $emprestimo->calcularValorJuros();
-                
+
                 // Juros por atraso (taxa_juros_atraso × dias)
                 $jurosAtraso = 0;
                 if ($taxaJurosAtraso > 0 && $diasAtraso > 0) {
@@ -1274,14 +1264,14 @@ class EmprestimoService
                         $jurosAtraso = $valorPrincipal * ($taxaJurosAtraso / 100) * ($diasAtraso / 30);
                     }
                 }
-                
+
                 // Total = Juros originais + Juros por atraso
                 return round($jurosOriginais + $jurosAtraso, 2);
-                
+
             case 'manual':
                 // Juros originais (sempre incluídos)
                 $jurosOriginais = $emprestimo->calcularValorJuros();
-                
+
                 // Juros por atraso (taxa informada manualmente × dias)
                 $jurosAtraso = 0;
                 if ($taxaJurosManual > 0 && $diasAtraso > 0) {
@@ -1291,16 +1281,17 @@ class EmprestimoService
                         $jurosAtraso = $valorPrincipal * ($taxaJurosManual / 100) * ($diasAtraso / 30);
                     }
                 }
-                
+
                 // Total = Juros originais + Juros por atraso
                 return round($jurosOriginais + $jurosAtraso, 2);
-                
+
             case 'fixo':
                 // Valor fixo = juros de atraso informado; total = juros do contrato + valor fixo
                 $jurosOriginais = $emprestimo->calcularValorJuros();
                 $valorFixo = max(0, (float) ($valorJurosFixo ?? 0));
+
                 return round($jurosOriginais + $valorFixo, 2);
-                
+
             default:
                 // Fallback para juros originais
                 return round($emprestimo->calcularValorJuros(), 2);
@@ -1311,11 +1302,9 @@ class EmprestimoService
      * Executar garantia de empréstimo tipo empenho
      * Finaliza o empréstimo automaticamente quando a garantia é executada
      *
-     * @param int $emprestimoId
-     * @param int $garantiaId
-     * @param int $executorId ID do usuário que está executando
-     * @param string $observacoes Observações/motivo da execução
-     * @return \App\Modules\Loans\Models\EmprestimoGarantia
+     * @param  int  $executorId  ID do usuário que está executando
+     * @param  string  $observacoes  Observações/motivo da execução
+     *
      * @throws ValidationException
      */
     public function executarGarantia(int $emprestimoId, int $garantiaId, int $executorId, string $observacoes): \App\Modules\Loans\Models\EmprestimoGarantia
@@ -1327,28 +1316,28 @@ class EmprestimoService
             // VALIDAÇÃO 1: Garantia deve pertencer ao empréstimo
             if ($garantia->emprestimo_id !== $emprestimoId) {
                 throw ValidationException::withMessages([
-                    'garantia' => 'A garantia não pertence a este empréstimo.'
+                    'garantia' => 'A garantia não pertence a este empréstimo.',
                 ]);
             }
 
             // VALIDAÇÃO 2: Empréstimo deve ser tipo empenho
-            if (!$emprestimo->isEmpenho()) {
+            if (! $emprestimo->isEmpenho()) {
                 throw ValidationException::withMessages([
-                    'emprestimo' => 'Apenas empréstimos do tipo empenho podem ter garantias executadas.'
+                    'emprestimo' => 'Apenas empréstimos do tipo empenho podem ter garantias executadas.',
                 ]);
             }
 
             // VALIDAÇÃO 3: Empréstimo deve estar ativo
-            if (!$emprestimo->isAtivo()) {
+            if (! $emprestimo->isAtivo()) {
                 throw ValidationException::withMessages([
-                    'emprestimo' => 'Apenas empréstimos ativos podem ter garantias executadas.'
+                    'emprestimo' => 'Apenas empréstimos ativos podem ter garantias executadas.',
                 ]);
             }
 
             // VALIDAÇÃO 4: Garantia deve estar ativa
-            if (!$garantia->isAtiva()) {
+            if (! $garantia->isAtiva()) {
                 throw ValidationException::withMessages([
-                    'garantia' => 'Apenas garantias ativas podem ser executadas. Status atual: ' . $garantia->status
+                    'garantia' => 'Apenas garantias ativas podem ser executadas. Status atual: '.$garantia->status,
                 ]);
             }
 
@@ -1358,13 +1347,13 @@ class EmprestimoService
             $oldStatusEmprestimo = $emprestimo->status;
 
             $executor = User::find($executorId);
-            $executorTexto = $executor ? $executor->name . ' (ID ' . $executorId . ')' : 'ID ' . $executorId;
+            $executorTexto = $executor ? $executor->name.' (ID '.$executorId.')' : 'ID '.$executorId;
 
             // Executar garantia
             $garantia->update([
                 'status' => 'executada',
                 'data_execucao' => Carbon::now(),
-                'observacoes' => ($garantia->observacoes ?? '') . "\n\n[EXECUTADA EM " . Carbon::now()->format('d/m/Y H:i') . "]\nExecutor: {$executorTexto}\nMotivo: {$observacoes}",
+                'observacoes' => ($garantia->observacoes ?? '')."\n\n[EXECUTADA EM ".Carbon::now()->format('d/m/Y H:i')."]\nExecutor: {$executorTexto}\nMotivo: {$observacoes}",
             ]);
 
             // Marcar todas as parcelas NÃO PAGAS como quitadas por garantia
@@ -1373,14 +1362,14 @@ class EmprestimoService
                 if ($parcela->status !== 'paga') {
                     $oldStatusParcela = $parcela->status;
                     $oldValorPago = $parcela->valor_pago;
-                    
+
                     $parcela->update([
                         'status' => 'quitada_garantia',
                         'valor_pago' => 0, // Não houve pagamento, apenas execução de garantia
                         'data_pagamento' => Carbon::now(),
                         'dias_atraso' => 0,
                     ]);
-                    
+
                     // Auditoria da parcela
                     self::auditar(
                         'marcar_parcela_quitada_garantia',
@@ -1426,8 +1415,8 @@ class EmprestimoService
                 'finalizar_emprestimo',
                 $emprestimo,
                 ['status' => $oldStatusEmprestimo],
-                ['status' => 'finalizado', 'motivo' => "Garantia executada"],
-                "Empréstimo finalizado automaticamente devido à execução da garantia"
+                ['status' => 'finalizado', 'motivo' => 'Garantia executada'],
+                'Empréstimo finalizado automaticamente devido à execução da garantia'
             );
 
             // Notificações
@@ -1455,10 +1444,10 @@ class EmprestimoService
 
     /**
      * Negociar empréstimo - cria novo empréstimo com saldo devedor e novas condições
-     * 
-     * @param int $emprestimoOrigemId ID do empréstimo sendo negociado
-     * @param array $dadosNovoEmprestimo Dados do novo empréstimo (tipo, frequencia, taxa_juros, numero_parcelas, data_inicio, observacoes)
-     * @param string $motivo Motivo da negociação
+     *
+     * @param  int  $emprestimoOrigemId  ID do empréstimo sendo negociado
+     * @param  array  $dadosNovoEmprestimo  Dados do novo empréstimo (tipo, frequencia, taxa_juros, numero_parcelas, data_inicio, observacoes)
+     * @param  string  $motivo  Motivo da negociação
      * @return Emprestimo Novo empréstimo criado
      */
     public function negociar(int $emprestimoOrigemId, array $dadosNovoEmprestimo, string $motivo): Emprestimo
@@ -1466,7 +1455,7 @@ class EmprestimoService
         return DB::transaction(function () use ($emprestimoOrigemId, $dadosNovoEmprestimo, $motivo) {
             $emprestimoOrigem = Emprestimo::with(['parcelas', 'garantias.anexos', 'cliente', 'operacao'])->findOrFail($emprestimoOrigemId);
 
-            if (!$emprestimoOrigem->isAtivo()) {
+            if (! $emprestimoOrigem->isAtivo()) {
                 throw ValidationException::withMessages([
                     'emprestimo' => 'Apenas empréstimos ativos podem ser negociados.',
                 ]);
@@ -1489,8 +1478,8 @@ class EmprestimoService
 
             $jurosIncorporados = $this->calcularJurosIncorporados($emprestimoOrigem);
 
-            $novaDataInicio = isset($dadosNovoEmprestimo['data_inicio']) 
-                ? Carbon::parse($dadosNovoEmprestimo['data_inicio']) 
+            $novaDataInicio = isset($dadosNovoEmprestimo['data_inicio'])
+                ? Carbon::parse($dadosNovoEmprestimo['data_inicio'])
                 : Carbon::today();
 
             $novoEmprestimo = Emprestimo::create([
@@ -1508,6 +1497,7 @@ class EmprestimoService
                 'empresa_id' => $emprestimoOrigem->empresa_id,
                 'emprestimo_origem_id' => $emprestimoOrigem->id,
                 'juros_incorporados' => $jurosIncorporados,
+                'deslocar_vencimento_domingo' => $emprestimoOrigem->getAttributes()['deslocar_vencimento_domingo'] ?? null,
             ]);
 
             $this->gerarParcelas($novoEmprestimo);
@@ -1521,8 +1511,8 @@ class EmprestimoService
                         'valor_avaliado' => $garantiaOriginal->valor_avaliado,
                         'localizacao' => $garantiaOriginal->localizacao,
                         'status' => 'ativa',
-                        'observacoes' => ($garantiaOriginal->observacoes ?? '') . 
-                            (empty($garantiaOriginal->observacoes) ? '' : "\n\n") . 
+                        'observacoes' => ($garantiaOriginal->observacoes ?? '').
+                            (empty($garantiaOriginal->observacoes) ? '' : "\n\n").
                             "Garantia transferida da negociação do empréstimo #{$emprestimoOrigem->id}",
                     ]);
 
@@ -1572,7 +1562,7 @@ class EmprestimoService
                     'motivo' => $motivo,
                     'novas_condicoes' => $dadosNovoEmprestimo,
                 ],
-                "Empréstimo #{$emprestimoOrigem->id} negociado para empréstimo #{$novoEmprestimo->id}. Juros incorporados: R$ " . number_format($jurosIncorporados, 2, ',', '.') . ". Motivo: {$motivo}"
+                "Empréstimo #{$emprestimoOrigem->id} negociado para empréstimo #{$novoEmprestimo->id}. Juros incorporados: R$ ".number_format($jurosIncorporados, 2, ',', '.').". Motivo: {$motivo}"
             );
 
             return $novoEmprestimo;
@@ -1586,7 +1576,7 @@ class EmprestimoService
     {
         $solicitacao = \App\Modules\Loans\Models\SolicitacaoNegociacao::with(['emprestimo'])->findOrFail($solicitacaoId);
 
-        if (!$solicitacao->isPendente()) {
+        if (! $solicitacao->isPendente()) {
             throw ValidationException::withMessages([
                 'solicitacao' => 'Esta solicitação já foi processada.',
             ]);
@@ -1630,7 +1620,7 @@ class EmprestimoService
     {
         $solicitacao = \App\Modules\Loans\Models\SolicitacaoNegociacao::with(['emprestimo'])->findOrFail($solicitacaoId);
 
-        if (!$solicitacao->isPendente()) {
+        if (! $solicitacao->isPendente()) {
             throw ValidationException::withMessages([
                 'solicitacao' => 'Esta solicitação já foi processada.',
             ]);
@@ -1648,7 +1638,7 @@ class EmprestimoService
             'user_id' => $solicitacao->consultor_id,
             'tipo' => 'negociacao_rejeitada',
             'titulo' => 'Negociação Rejeitada',
-            'mensagem' => "Sua solicitação de negociação do empréstimo #{$solicitacao->emprestimo_id} foi rejeitada." . ($observacao ? " Motivo: {$observacao}" : ''),
+            'mensagem' => "Sua solicitação de negociação do empréstimo #{$solicitacao->emprestimo_id} foi rejeitada.".($observacao ? " Motivo: {$observacao}" : ''),
             'url' => route('emprestimos.show', $solicitacao->emprestimo_id),
             'dados' => [
                 'solicitacao_id' => $solicitacao->id,
@@ -1687,4 +1677,3 @@ class EmprestimoService
         return round($jurosIncorporados, 2);
     }
 }
-
