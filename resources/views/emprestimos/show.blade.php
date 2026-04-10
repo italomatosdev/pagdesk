@@ -1053,63 +1053,80 @@
                 <!-- Tabela de Amortização (Sistema Price) -->
                 @if($emprestimo->isPrice())
                     <div class="card mt-3 border-primary">
-                        <div class="card-header bg-primary text-white">
-                            <h4 class="card-title mb-0 text-white">
-                                <i class="bx bx-table text-white"></i> Tabela de Amortização (Sistema Price)
+                        <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <h4 class="card-title mb-0 text-white d-flex align-items-center gap-2">
+                                <i class="bx bx-table"></i>
+                                <span>Tabela de Amortização (Sistema Price)</span>
                             </h4>
+                            <button type="button" class="btn btn-sm btn-outline-light text-white collapsed tabela-amortizacao-price-toggle"
+                                data-bs-toggle="collapse" data-bs-target="#collapseTabelaAmortizacaoPrice"
+                                aria-expanded="false" aria-controls="collapseTabelaAmortizacaoPrice">
+                                <i class="bx bx-chevron-down tabela-amortizacao-price-chevron"></i>
+                                <span class="ms-1 label-expandir">Mostrar</span>
+                                <span class="ms-1 label-recolher">Ocultar</span>
+                            </button>
                         </div>
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-bordered table-hover mb-0">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th>Parcela</th>
-                                            <th>Vencimento</th>
-                                            <th>Valor Parcela</th>
-                                            <th>Juros</th>
-                                            <th>Amortização</th>
-                                            <th>Saldo Devedor</th>
-                                            <th>Pagamento</th>
-                                            <th>Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach($emprestimo->parcelas->sortBy('numero') as $parcela)
-                                            <tr class="{{ $parcela->isAtrasada() ? 'table-danger' : ($parcela->isPaga() ? 'table-success' : ($parcela->isQuitadaGarantia() ? 'table-info' : '')) }}">
-                                                <td><strong>{{ $parcela->numero }}</strong></td>
-                                                <td class="text-nowrap">{{ $parcela->data_vencimento?->format('d/m/Y') ?? '—' }}</td>
-                                                <td>R$ {{ number_format($parcela->valor, 2, ',', '.') }}</td>
-                                                <td>R$ {{ number_format($parcela->valor_juros ?? 0, 2, ',', '.') }}</td>
-                                                <td>R$ {{ number_format($parcela->valor_amortizacao ?? 0, 2, ',', '.') }}</td>
-                                                <td>
-                                                    <strong>R$ {{ number_format($parcela->saldo_devedor ?? 0, 2, ',', '.') }}</strong>
-                                                </td>
-                                                <td class="text-nowrap">{{ $parcela->dataPagamentoParaExibicao()?->format('d/m/Y') ?? '—' }}</td>
-                                                <td>
-                                                    <span class="badge bg-{{ $parcela->status_cor }}">
-                                                        {{ $parcela->status_nome }}
-                                                    </span>
-                                                    @if($parcela->hasPagamentoProdutoObjetoPendente())
-                                                        <span class="badge bg-warning text-dark ms-1" title="Pagamento em produto/objeto aguardando aceite">Aguardando aceite</span>
-                                                    @endif
-                                                    @if(!$parcela->isQuitada() && $parcela->hasPagamentoProdutoObjetoRejeitado())
-                                                        <span class="badge bg-danger ms-1" title="Pagamento em produto/objeto foi recusado">Recusado</span>
-                                                    @endif
-                                                </td>
+                        <div class="collapse" id="collapseTabelaAmortizacaoPrice">
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Parcela</th>
+                                                <th>Vencimento</th>
+                                                <th>Valor Parcela</th>
+                                                <th>Juros</th>
+                                                <th>Amortização</th>
+                                                <th>Saldo Devedor</th>
+                                                <th>Pagamento</th>
+                                                <th>Status</th>
                                             </tr>
-                                        @endforeach
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div class="mt-3">
-                                <small class="text-muted">
-                                    <i class="bx bx-info-circle"></i> 
-                                    <strong>Sistema Price:</strong> Parcela fixa com juros decrescentes e amortização crescente. 
-                                    O saldo devedor reduz progressivamente até zero na última parcela.
-                                </small>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($emprestimo->parcelas->sortBy('numero') as $parcela)
+                                                <tr class="{{ $parcela->isAtrasada() ? 'table-danger' : ($parcela->isPaga() ? 'table-success' : ($parcela->isQuitadaGarantia() ? 'table-info' : '')) }}">
+                                                    <td><strong>{{ $parcela->numero }}</strong></td>
+                                                    <td class="text-nowrap">{{ $parcela->data_vencimento?->format('d/m/Y') ?? '—' }}</td>
+                                                    <td>R$ {{ number_format($parcela->valor, 2, ',', '.') }}</td>
+                                                    <td>R$ {{ number_format($parcela->valor_juros ?? 0, 2, ',', '.') }}</td>
+                                                    <td>R$ {{ number_format($parcela->valor_amortizacao ?? 0, 2, ',', '.') }}</td>
+                                                    <td>
+                                                        <strong>R$ {{ number_format($parcela->saldo_devedor ?? 0, 2, ',', '.') }}</strong>
+                                                    </td>
+                                                    <td class="text-nowrap">{{ $parcela->dataPagamentoParaExibicao()?->format('d/m/Y') ?? '—' }}</td>
+                                                    <td>
+                                                        <span class="badge bg-{{ $parcela->status_cor }}">
+                                                            {{ $parcela->status_nome }}
+                                                        </span>
+                                                        @if($parcela->hasPagamentoProdutoObjetoPendente())
+                                                            <span class="badge bg-warning text-dark ms-1" title="Pagamento em produto/objeto aguardando aceite">Aguardando aceite</span>
+                                                        @endif
+                                                        @if(!$parcela->isQuitada() && $parcela->hasPagamentoProdutoObjetoRejeitado())
+                                                            <span class="badge bg-danger ms-1" title="Pagamento em produto/objeto foi recusado">Recusado</span>
+                                                        @endif
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="mt-3">
+                                    <small class="text-muted">
+                                        <i class="bx bx-info-circle"></i> 
+                                        <strong>Sistema Price:</strong> Parcela fixa com juros decrescentes e amortização crescente. 
+                                        O saldo devedor reduz progressivamente até zero na última parcela.
+                                    </small>
+                                </div>
                             </div>
                         </div>
                     </div>
+                    <style>
+                        .tabela-amortizacao-price-chevron { transition: transform 0.2s ease; display: inline-block; vertical-align: middle; }
+                        .tabela-amortizacao-price-toggle:not(.collapsed) .tabela-amortizacao-price-chevron { transform: rotate(180deg); }
+                        .tabela-amortizacao-price-toggle .label-recolher { display: none; }
+                        .tabela-amortizacao-price-toggle:not(.collapsed) .label-expandir { display: none; }
+                        .tabela-amortizacao-price-toggle:not(.collapsed) .label-recolher { display: inline; }
+                    </style>
                 @endif
 
                 <!-- Garantias (Empenho) -->
