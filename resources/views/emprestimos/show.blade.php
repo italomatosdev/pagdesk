@@ -1064,11 +1064,11 @@
                                     <thead class="table-light">
                                         <tr>
                                             <th>Parcela</th>
+                                            <th>Vencimento</th>
                                             <th>Valor Parcela</th>
                                             <th>Juros</th>
                                             <th>Amortização</th>
                                             <th>Saldo Devedor</th>
-                                            <th>Vencimento</th>
                                             <th>Pagamento</th>
                                             <th>Status</th>
                                         </tr>
@@ -1077,13 +1077,13 @@
                                         @foreach($emprestimo->parcelas->sortBy('numero') as $parcela)
                                             <tr class="{{ $parcela->isAtrasada() ? 'table-danger' : ($parcela->isPaga() ? 'table-success' : ($parcela->isQuitadaGarantia() ? 'table-info' : '')) }}">
                                                 <td><strong>{{ $parcela->numero }}</strong></td>
+                                                <td class="text-nowrap">{{ $parcela->data_vencimento?->format('d/m/Y') ?? '—' }}</td>
                                                 <td>R$ {{ number_format($parcela->valor, 2, ',', '.') }}</td>
                                                 <td>R$ {{ number_format($parcela->valor_juros ?? 0, 2, ',', '.') }}</td>
                                                 <td>R$ {{ number_format($parcela->valor_amortizacao ?? 0, 2, ',', '.') }}</td>
                                                 <td>
                                                     <strong>R$ {{ number_format($parcela->saldo_devedor ?? 0, 2, ',', '.') }}</strong>
                                                 </td>
-                                                <td class="text-nowrap">{{ $parcela->data_vencimento?->format('d/m/Y') ?? '—' }}</td>
                                                 <td class="text-nowrap">{{ $parcela->dataPagamentoParaExibicao()?->format('d/m/Y') ?? '—' }}</td>
                                                 <td>
                                                     <span class="badge bg-{{ $parcela->status_cor }}">
