@@ -10,6 +10,7 @@ use App\Modules\Core\Services\OperacaoDadosClienteService;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Parcela;
 use App\Modules\Loans\Models\SolicitacaoEmprestimoRetroativo;
+use App\Modules\Loans\Services\CorrecaoVencimentoDomingoLegadoService;
 use App\Modules\Loans\Services\EmprestimoService;
 use App\Support\ClienteNomeExibicao;
 use App\Support\ClienteVinculosOperacoesLookup;
@@ -17,9 +18,11 @@ use App\Support\FichaContatoLookup;
 use App\Support\NotificacaoClienteDisplayName;
 use App\Support\OperacaoPreferida;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -753,6 +756,12 @@ class EmprestimoController extends Controller
             $vinculosOutrasOperacoesCount = count($outros);
         }
 
+        $correcaoDomingoLegado = app(CorrecaoVencimentoDomingoLegadoService::class);
+        $mostrarAvisoCorrecaoDomingoLegado = $correcaoDomingoLegado->podeExibirAviso($emprestimo);
+        $qtdParcelasDomingoAbertoLegado = $mostrarAvisoCorrecaoDomingoLegado
+            ? $correcaoDomingoLegado->contarParcelasDomingoEmAberto($emprestimo)
+            : 0;
+
         return view('emprestimos.show', compact(
             'emprestimo',
             'fichaContatoEmprestimo',
@@ -770,8 +779,70 @@ class EmprestimoController extends Controller
             'podeAprovarLiberacao',
             'vinculosOutrasOperacoesCount',
             'podeAcoesCheque',
-            'podeEditarGarantias'
+            'podeEditarGarantias',
+            'mostrarAvisoCorrecaoDomingoLegado',
+            'qtdParcelasDomingoAbertoLegado'
         ));
+    }
+
+    /**
+     * Prévia JSON da remontagem de vencimentos em domingo (legado, deslocar_vencimento_domingo NULL).
+     */
+    public function previewCorrecaoVencimentoDomingoLegado(int $id): JsonResponse
+    {
+        $user = auth()->user();
+        $emprestimo = Emprestimo::with('parcelas')->findOrFail($id);
+        if (! $user->temAcessoOperacao($emprestimo->operacao_id)) {
+            abort(403, 'Sem acesso a esta operação.');
+        }
+
+        $svc = app(CorrecaoVencimentoDomingoLegadoService::class);
+
+        try {
+            $dados = $svc->previsualizar($emprestimo);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => collect($e->errors())->flatten()->first() ?? $e->getMessage(),
+                'errors' => $e->errors(),
+            ], 422);
+        }
+
+        return response()->json([
+            'alteracoes' => $dados['alteracoes'],
+            'fingerprint' => $dados['fingerprint'],
+            'qtd_parcelas_domingo' => $svc->contarParcelasDomingoEmAberto($emprestimo),
+        ]);
+    }
+
+    /**
+     * Aplica remontagem de vencimentos (legado) e define deslocar_vencimento_domingo = true.
+     */
+    public function aplicarCorrecaoVencimentoDomingoLegado(Request $request, int $id): RedirectResponse
+    {
+        $request->validate([
+            'fingerprint' => 'required|string|max:128',
+        ]);
+
+        $user = auth()->user();
+        $emprestimo = Emprestimo::with('parcelas')->findOrFail($id);
+        if (! $user->temAcessoOperacao($emprestimo->operacao_id)) {
+            abort(403, 'Sem acesso a esta operação.');
+        }
+
+        try {
+            app(CorrecaoVencimentoDomingoLegadoService::class)->aplicar(
+                $emprestimo,
+                (string) $request->input('fingerprint')
+            );
+        } catch (ValidationException $e) {
+            return redirect()
+                ->route('emprestimos.show', $id)
+                ->withErrors($e->errors());
+        }
+
+        return redirect()
+            ->route('emprestimos.show', $id)
+            ->with('success', 'Cronograma corrigido: vencimentos em domingo foram remontados. Valores e pagamentos não foram alterados.');
     }
 
     /**

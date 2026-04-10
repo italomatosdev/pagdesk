@@ -91,6 +91,20 @@
                                 Nos relatórios de juros, esse valor será contabilizado proporcionalmente aos pagamentos recebidos.
                             </div>
                         @endif
+                        @if(!empty($mostrarAvisoCorrecaoDomingoLegado) && $mostrarAvisoCorrecaoDomingoLegado)
+                            <div class="alert alert-warning mb-3 mb-md-4" role="alert">
+                                <i class="bx bx-calendar-x"></i>
+                                <strong>Vencimento em domingo (contrato legado):</strong>
+                                Este empréstimo tem <strong>{{ $qtdParcelasDomingoAbertoLegado }}</strong>
+                                {{ $qtdParcelasDomingoAbertoLegado === 1 ? 'parcela em aberto que vence' : 'parcelas em aberto que vencem' }} em domingo.
+                                Deseja <strong>corrigir o cronograma</strong>? Os valores e os pagamentos registrados não serão alterados; apenas as datas das parcelas em aberto serão remontadas (sem domingo) e os dias de atraso podem ser recalculados.
+                                <div class="mt-2">
+                                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalCorrecaoVencimentoDomingoLegado">
+                                        <i class="bx bx-calendar-check"></i> Corrigir cronograma
+                                    </button>
+                                </div>
+                            </div>
+                        @endif
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <strong>Cliente:</strong> 
@@ -2456,6 +2470,50 @@
     </div>
     @endif
 
+    @if(!empty($mostrarAvisoCorrecaoDomingoLegado) && $mostrarAvisoCorrecaoDomingoLegado)
+    <div class="modal fade" id="modalCorrecaoVencimentoDomingoLegado" tabindex="-1" aria-labelledby="modalCorrecaoVencimentoDomingoLegadoLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalCorrecaoVencimentoDomingoLegadoLabel">
+                        <i class="bx bx-calendar-check"></i> Corrigir vencimentos em domingo
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small" id="correcao-domingo-legado-msg-loading">Carregando prévia…</p>
+                    <div id="correcao-domingo-legado-erro" class="alert alert-danger d-none" role="alert"></div>
+                    <div id="correcao-domingo-legado-conteudo" class="d-none">
+                        <p class="small text-muted">Confira as alterações de <strong>data de vencimento</strong> (somente parcelas em aberto). Parcelas já quitadas não mudam.</p>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Parcela</th>
+                                        <th>Vencimento atual</th>
+                                        <th>Novo vencimento</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="correcao-domingo-legado-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <form id="formCorrecaoVencimentoDomingoLegado" method="POST" action="{{ route('emprestimos.correcao-vencimento-domingo.aplicar', $emprestimo->id) }}" class="d-inline">
+                        @csrf
+                        <input type="hidden" name="fingerprint" id="correcao-domingo-legado-fingerprint" value="">
+                        <button type="submit" class="btn btn-primary" id="btnCorrecaoVencimentoDomingoLegadoConfirmar" disabled>
+                            Confirmar correção
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
+
     @endsection
 
     @section('scripts')
@@ -2471,6 +2529,84 @@
                     btnIr.click();
                 }
             }
+        });
+    </script>
+    @endif
+    @if(!empty($mostrarAvisoCorrecaoDomingoLegado) && $mostrarAvisoCorrecaoDomingoLegado)
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var modalEl = document.getElementById('modalCorrecaoVencimentoDomingoLegado');
+            if (!modalEl) return;
+
+            var previewUrl = @json(route('emprestimos.correcao-vencimento-domingo.preview', $emprestimo->id));
+            var loadingEl = document.getElementById('correcao-domingo-legado-msg-loading');
+            var erroEl = document.getElementById('correcao-domingo-legado-erro');
+            var conteudoEl = document.getElementById('correcao-domingo-legado-conteudo');
+            var tbodyEl = document.getElementById('correcao-domingo-legado-tbody');
+            var fingerprintInput = document.getElementById('correcao-domingo-legado-fingerprint');
+            var btnConfirmar = document.getElementById('btnCorrecaoVencimentoDomingoLegadoConfirmar');
+
+            function fmtBr(ymd) {
+                if (!ymd || typeof ymd !== 'string') return '';
+                var p = ymd.split('-');
+                if (p.length !== 3) return ymd;
+                return p[2] + '/' + p[1] + '/' + p[0];
+            }
+
+            function resetModalState() {
+                if (loadingEl) loadingEl.classList.remove('d-none');
+                if (erroEl) { erroEl.classList.add('d-none'); erroEl.textContent = ''; }
+                if (conteudoEl) conteudoEl.classList.add('d-none');
+                if (tbodyEl) tbodyEl.innerHTML = '';
+                if (fingerprintInput) fingerprintInput.value = '';
+                if (btnConfirmar) btnConfirmar.disabled = true;
+            }
+
+            modalEl.addEventListener('show.bs.modal', function () {
+                resetModalState();
+                fetch(previewUrl, {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    credentials: 'same-origin'
+                }).then(function (r) {
+                    return r.json().then(function (data) {
+                        return { ok: r.ok, status: r.status, data: data };
+                    });
+                }).then(function (res) {
+                    if (loadingEl) loadingEl.classList.add('d-none');
+                    if (!res.ok) {
+                        if (erroEl) {
+                            erroEl.textContent = (res.data && res.data.message) ? res.data.message : 'Não foi possível carregar a prévia.';
+                            erroEl.classList.remove('d-none');
+                        }
+                        return;
+                    }
+                    var alt = res.data.alteracoes || [];
+                    if (alt.length === 0) {
+                        if (erroEl) {
+                            erroEl.textContent = 'Nenhuma alteração necessária.';
+                            erroEl.classList.remove('d-none');
+                        }
+                        return;
+                    }
+                    alt.forEach(function (row) {
+                        var tr = document.createElement('tr');
+                        tr.innerHTML =
+                            '<td><strong>' + row.numero + '</strong></td>' +
+                            '<td>' + fmtBr(row.data_antiga) + '</td>' +
+                            '<td>' + fmtBr(row.data_nova) + '</td>';
+                        tbodyEl.appendChild(tr);
+                    });
+                    if (fingerprintInput) fingerprintInput.value = res.data.fingerprint || '';
+                    if (conteudoEl) conteudoEl.classList.remove('d-none');
+                    if (btnConfirmar) btnConfirmar.disabled = false;
+                }).catch(function () {
+                    if (loadingEl) loadingEl.classList.add('d-none');
+                    if (erroEl) {
+                        erroEl.textContent = 'Erro de rede ao carregar a prévia.';
+                        erroEl.classList.remove('d-none');
+                    }
+                });
+            });
         });
     </script>
     @endif
