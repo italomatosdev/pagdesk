@@ -85,7 +85,7 @@
                         <div class="d-flex align-items-center justify-content-between">
                             <h4 class="card-title mb-0">Lista de Empréstimos</h4>
                             <div class="d-flex gap-2">
-                                <a href="{{ route('emprestimos.export', request()->only(['operacao_id', 'status', 'tipo', 'cliente_nome', 'proximo_vencimento_de', 'proximo_vencimento_ate', 'apenas_atrasadas'])) }}" class="btn btn-outline-success">
+                                <a href="{{ route('emprestimos.export', request()->only(['operacao_id', 'status', 'tipo', 'cliente_nome', 'proximo_vencimento_de', 'proximo_vencimento_ate', 'apenas_atrasadas', 'parcelas_vencimento_domingo'])) }}" class="btn btn-outline-success">
                                     <i class="bx bx-download"></i> Exportar CSV
                                 </a>
                                 @if(!auth()->user()->isSuperAdmin())
@@ -156,6 +156,16 @@
                                             <label class="form-check-label text-danger" for="apenas_atrasadas"><i class="bx bx-error-circle"></i> Atrasadas</label>
                                         </div>
                                     </div>
+                                    @if(auth()->user()->isSuperAdmin())
+                                    <div class="col-auto d-flex align-items-end">
+                                        <div class="form-check">
+                                            <input type="checkbox" name="parcelas_vencimento_domingo" value="1" class="form-check-input" id="parcelas_vencimento_domingo" {{ request('parcelas_vencimento_domingo') ? 'checked' : '' }}>
+                                            <label class="form-check-label" for="parcelas_vencimento_domingo" title="Empréstimos com ao menos uma parcela cujo vencimento cai em domingo">
+                                                <i class="bx bx-calendar-x"></i> Venc. domingo
+                                            </label>
+                                        </div>
+                                    </div>
+                                    @endif
                                     <div class="col-auto d-flex align-items-end">
                                         <button type="submit" class="btn btn-primary"><i class="bx bx-search"></i> Buscar</button>
                                     </div>

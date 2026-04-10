@@ -10,6 +10,7 @@ use App\Modules\Core\Services\OperacaoDadosClienteService;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Parcela;
 use App\Modules\Loans\Models\SolicitacaoEmprestimoRetroativo;
+use App\Modules\Loans\Services\CorrecaoVencimentoDomingoLegadoService;
 use App\Modules\Loans\Services\EmprestimoService;
 use App\Support\ClienteNomeExibicao;
 use App\Support\ClienteVinculosOperacoesLookup;
@@ -17,9 +18,11 @@ use App\Support\FichaContatoLookup;
 use App\Support\NotificacaoClienteDisplayName;
 use App\Support\OperacaoPreferida;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -136,6 +139,11 @@ class EmprestimoController extends Controller
             $query->whereHas('parcelas', fn ($q) => $q->where('status', 'atrasada'));
         }
 
+        // Super Admin: empréstimos com ao menos uma parcela com vencimento em domingo
+        if ($user->isSuperAdmin() && $request->boolean('parcelas_vencimento_domingo')) {
+            $query->whereTemParcelaVencimentoDomingo();
+        }
+
         // Contadores (respeitam os mesmos filtros da listagem)
         $stats = [
             'total' => (clone $query)->count(),
@@ -235,6 +243,10 @@ class EmprestimoController extends Controller
         // Filtro: apenas com parcelas atrasadas
         if ($request->boolean('apenas_atrasadas')) {
             $query->whereHas('parcelas', fn ($q) => $q->where('status', 'atrasada'));
+        }
+
+        if ($user->isSuperAdmin() && $request->boolean('parcelas_vencimento_domingo')) {
+            $query->whereTemParcelaVencimentoDomingo();
         }
 
         $emprestimos = $query->orderBy('created_at', 'desc')->get();
@@ -495,8 +507,17 @@ class EmprestimoController extends Controller
             'is_retroativo' => 'boolean',
             'consultor_id' => 'nullable|exists:users,id',
             'primeira_parcela_dia_30' => 'nullable|boolean',
+            'deslocar_vencimento_domingo' => 'nullable|in:0,1',
         ];
         $validated = $request->validate($rules);
+
+        if (($validated['tipo'] ?? '') !== 'troca_cheque') {
+            $deslocarRaw = $request->input('deslocar_vencimento_domingo', 1);
+            if (is_array($deslocarRaw)) {
+                $deslocarRaw = collect($deslocarRaw)->filter(fn ($v) => $v !== '' && $v !== null)->last() ?? 1;
+            }
+            $validated['deslocar_vencimento_domingo'] = (bool) (int) $deslocarRaw;
+        }
 
         // Gestor ou administrador na operação: devem selecionar o consultor responsável (podem escolher a si mesmos — "Nome (Você)")
         $ehGestorOuAdminQueEscolhe = $user->temAlgumPapelNaOperacao((int) $validated['operacao_id'], ['gestor', 'administrador']);
@@ -744,6 +765,12 @@ class EmprestimoController extends Controller
             $vinculosOutrasOperacoesCount = count($outros);
         }
 
+        $correcaoDomingoLegado = app(CorrecaoVencimentoDomingoLegadoService::class);
+        $mostrarAvisoCorrecaoDomingoLegado = $correcaoDomingoLegado->podeExibirAviso($emprestimo);
+        $qtdParcelasDomingoAbertoLegado = $mostrarAvisoCorrecaoDomingoLegado
+            ? $correcaoDomingoLegado->contarParcelasDomingoEmAberto($emprestimo)
+            : 0;
+
         return view('emprestimos.show', compact(
             'emprestimo',
             'fichaContatoEmprestimo',
@@ -761,8 +788,70 @@ class EmprestimoController extends Controller
             'podeAprovarLiberacao',
             'vinculosOutrasOperacoesCount',
             'podeAcoesCheque',
-            'podeEditarGarantias'
+            'podeEditarGarantias',
+            'mostrarAvisoCorrecaoDomingoLegado',
+            'qtdParcelasDomingoAbertoLegado'
         ));
+    }
+
+    /**
+     * Prévia JSON da remontagem de vencimentos em domingo (legado, deslocar_vencimento_domingo NULL).
+     */
+    public function previewCorrecaoVencimentoDomingoLegado(int $id): JsonResponse
+    {
+        $user = auth()->user();
+        $emprestimo = Emprestimo::with('parcelas')->findOrFail($id);
+        if (! $user->temAcessoOperacao($emprestimo->operacao_id)) {
+            abort(403, 'Sem acesso a esta operação.');
+        }
+
+        $svc = app(CorrecaoVencimentoDomingoLegadoService::class);
+
+        try {
+            $dados = $svc->previsualizar($emprestimo);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => collect($e->errors())->flatten()->first() ?? $e->getMessage(),
+                'errors' => $e->errors(),
+            ], 422);
+        }
+
+        return response()->json([
+            'alteracoes' => $dados['alteracoes'],
+            'fingerprint' => $dados['fingerprint'],
+            'qtd_parcelas_domingo' => $svc->contarParcelasDomingoEmAberto($emprestimo),
+        ]);
+    }
+
+    /**
+     * Aplica remontagem de vencimentos (legado) e define deslocar_vencimento_domingo = true.
+     */
+    public function aplicarCorrecaoVencimentoDomingoLegado(Request $request, int $id): RedirectResponse
+    {
+        $request->validate([
+            'fingerprint' => 'required|string|max:128',
+        ]);
+
+        $user = auth()->user();
+        $emprestimo = Emprestimo::with('parcelas')->findOrFail($id);
+        if (! $user->temAcessoOperacao($emprestimo->operacao_id)) {
+            abort(403, 'Sem acesso a esta operação.');
+        }
+
+        try {
+            app(CorrecaoVencimentoDomingoLegadoService::class)->aplicar(
+                $emprestimo,
+                (string) $request->input('fingerprint')
+            );
+        } catch (ValidationException $e) {
+            return redirect()
+                ->route('emprestimos.show', $id)
+                ->withErrors($e->errors());
+        }
+
+        return redirect()
+            ->route('emprestimos.show', $id)
+            ->with('success', 'Cronograma corrigido: vencimentos em domingo foram remontados. Valores e pagamentos não foram alterados.');
     }
 
     /**
