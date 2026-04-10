@@ -139,6 +139,11 @@ class EmprestimoController extends Controller
             $query->whereHas('parcelas', fn ($q) => $q->where('status', 'atrasada'));
         }
 
+        // Super Admin: empréstimos com ao menos uma parcela com vencimento em domingo
+        if ($user->isSuperAdmin() && $request->boolean('parcelas_vencimento_domingo')) {
+            $query->whereTemParcelaVencimentoDomingo();
+        }
+
         // Contadores (respeitam os mesmos filtros da listagem)
         $stats = [
             'total' => (clone $query)->count(),
@@ -238,6 +243,10 @@ class EmprestimoController extends Controller
         // Filtro: apenas com parcelas atrasadas
         if ($request->boolean('apenas_atrasadas')) {
             $query->whereHas('parcelas', fn ($q) => $q->where('status', 'atrasada'));
+        }
+
+        if ($user->isSuperAdmin() && $request->boolean('parcelas_vencimento_domingo')) {
+            $query->whereTemParcelaVencimentoDomingo();
         }
 
         $emprestimos = $query->orderBy('created_at', 'desc')->get();

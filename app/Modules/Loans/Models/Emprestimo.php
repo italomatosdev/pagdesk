@@ -3,6 +3,7 @@
 namespace App\Modules\Loans\Models;
 
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -55,6 +56,25 @@ class Emprestimo extends Model
     protected static function booted(): void
     {
         static::addGlobalScope(new \App\Models\Scopes\EmpresaScope);
+    }
+
+    /**
+     * Pelo menos uma parcela com vencimento em domingo (filtro listagem Super Admin).
+     * DAYOFWEEK MySQL/MariaDB: 1 = domingo. SQLite strftime %w: 0 = domingo. PostgreSQL DOW: 0 = domingo.
+     */
+    public function scopeWhereTemParcelaVencimentoDomingo(Builder $query): Builder
+    {
+        $driver = $query->getConnection()->getDriverName();
+
+        return $query->whereHas('parcelas', function (Builder $q) use ($driver) {
+            if ($driver === 'sqlite') {
+                $q->whereRaw('CAST(strftime(\'%w\', data_vencimento) AS INTEGER) = 0');
+            } elseif ($driver === 'pgsql') {
+                $q->whereRaw('EXTRACT(DOW FROM data_vencimento::timestamp) = 0');
+            } else {
+                $q->whereRaw('DAYOFWEEK(data_vencimento) = 1');
+            }
+        });
     }
 
     /**
