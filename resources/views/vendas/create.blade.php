@@ -136,6 +136,7 @@
                                                 <option value="mensal" selected>Mensal</option>
                                                 <option value="semanal">Semanal</option>
                                                 <option value="diaria">Diária</option>
+                                                <option value="quinzenal">Quinzenal (15 dias)</option>
                                             </select>
                                         </td>
                                         <td><button type="button" class="btn btn-sm btn-outline-danger btn-remover-forma" title="Remover"><i class="bx bx-trash"></i></button></td>

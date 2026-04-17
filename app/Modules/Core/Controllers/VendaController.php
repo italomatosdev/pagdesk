@@ -159,7 +159,7 @@ class VendaController extends Controller
             'formas.*.valor' => 'required|numeric|min:0',
             'formas.*.descricao' => 'nullable|string|max:255',
             'formas.*.numero_parcelas' => 'nullable|integer|min:1|required_if:formas.*.forma,crediario',
-            'formas.*.frequencia' => 'nullable|string|in:diaria,semanal,mensal|required_if:formas.*.forma,crediario',
+            'formas.*.frequencia' => 'nullable|string|in:diaria,semanal,mensal,quinzenal|required_if:formas.*.forma,crediario',
             'formas.*.comprovante' => 'nullable|file|mimes:pdf,jpeg,jpg,png|max:5120',
         ], [
             'itens.required' => 'Adicione pelo menos um item.',

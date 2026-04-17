@@ -475,7 +475,7 @@ class EmprestimoController extends Controller
             'cliente_id' => 'required|exists:clientes,id',
             'valor_total' => 'required|numeric|min:0.01',
             'numero_parcelas' => 'required|integer|min:1',
-            'frequencia' => 'required|in:diaria,semanal,mensal',
+            'frequencia' => 'required|in:diaria,semanal,mensal,quinzenal',
             'data_inicio' => $isRetroativo
                 ? ['required', 'date']
                 : [

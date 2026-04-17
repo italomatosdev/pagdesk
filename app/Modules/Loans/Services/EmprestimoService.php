@@ -611,9 +611,14 @@ class EmprestimoService
                     case 'semanal':
                         $dataVencimento->addWeek();
                         break;
+                    case 'quinzenal':
+                        $dataVencimento->addDays(15);
+                        break;
                     case 'mensal':
                         $dataVencimento = self::proximoMesMesmoDia($dataVencimento->copy(), 1);
                         break;
+                    default:
+                        throw new \InvalidArgumentException('Frequência de parcelas não suportada: '.$emprestimo->frequencia);
                 }
             } else {
                 // Primeira parcela: 1 período após data_inicio
@@ -632,6 +637,11 @@ class EmprestimoService
                         case 'semanal':
                             $dataVencimento->addWeek();
                             break;
+                        case 'quinzenal':
+                            $dataVencimento->addDays(15);
+                            break;
+                        default:
+                            throw new \InvalidArgumentException('Frequência de parcelas não suportada: '.$emprestimo->frequencia);
                     }
                 }
             }
@@ -674,8 +684,10 @@ class EmprestimoService
             case 'semanal':
                 $dataVencimento->addWeek();
                 break;
+            case 'quinzenal':
+                $dataVencimento->addDays(15);
+                break;
             case 'mensal':
-            default:
                 if (! empty($emprestimo->dia_primeira_parcela_override)) {
                     $ano = (int) Carbon::parse($emprestimo->data_inicio)->year;
                     $dataVencimento = Carbon::createFromDate($ano, 3, min((int) $emprestimo->dia_primeira_parcela_override, 31));
@@ -683,6 +695,8 @@ class EmprestimoService
                     $dataVencimento = self::proximoMesMesmoDia($dataVencimento->copy(), 1);
                 }
                 break;
+            default:
+                throw new \InvalidArgumentException('Frequência de parcelas não suportada: '.$emprestimo->frequencia);
         }
 
         for ($i = 1; $i <= $emprestimo->numero_parcelas; $i++) {
@@ -695,12 +709,14 @@ class EmprestimoService
                     case 'semanal':
                         $dataVencimento->addWeek();
                         break;
+                    case 'quinzenal':
+                        $dataVencimento->addDays(15);
+                        break;
                     case 'mensal':
                         $dataVencimento = self::proximoMesMesmoDia($dataVencimento->copy(), 1);
                         break;
                     default:
-                        $dataVencimento = self::proximoMesMesmoDia($dataVencimento->copy(), 1);
-                        break;
+                        throw new \InvalidArgumentException('Frequência de parcelas não suportada: '.$emprestimo->frequencia);
                 }
             }
 

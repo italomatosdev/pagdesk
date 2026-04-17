@@ -238,7 +238,7 @@ class VendaService
                     if ($numeroParcelas === null || $numeroParcelas < 1) {
                         throw ValidationException::withMessages(['formas' => 'Crediário deve informar o número de parcelas.']);
                     }
-                    $frequenciaCrediario = in_array($f['frequencia'] ?? null, ['diaria', 'semanal', 'mensal'], true)
+                    $frequenciaCrediario = in_array($f['frequencia'] ?? null, ['diaria', 'semanal', 'mensal', 'quinzenal'], true)
                         ? $f['frequencia']
                         : 'mensal';
                     $emprestimoService->garantirVinculoClienteOperacao(

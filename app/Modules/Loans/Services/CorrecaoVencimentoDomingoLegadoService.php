@@ -239,13 +239,17 @@ class CorrecaoVencimentoDomingoLegadoService
                 case 'semanal':
                     $dataVencimento->addWeek();
                     break;
+                case 'quinzenal':
+                    $dataVencimento->addDays(15);
+                    break;
                 case 'mensal':
-                default:
                     $dataVencimento = EmprestimoService::proximoMesMesmoDia(
                         Carbon::parse($emprestimo->data_inicio)->copy()->startOfDay(),
                         1
                     );
                     break;
+                default:
+                    throw new \InvalidArgumentException('Frequência de parcelas não suportada: '.$emprestimo->frequencia);
             }
 
             return $this->normalizarSemDomingo($dataVencimento);
@@ -263,8 +267,9 @@ class CorrecaoVencimentoDomingoLegadoService
         return match ($frequencia) {
             'diaria' => $cursor->copy()->addDay(),
             'semanal' => $cursor->copy()->addWeek(),
+            'quinzenal' => $cursor->copy()->addDays(15),
             'mensal' => EmprestimoService::proximoMesMesmoDia($cursor->copy(), 1),
-            default => EmprestimoService::proximoMesMesmoDia($cursor->copy(), 1),
+            default => throw new \InvalidArgumentException('Frequência de parcelas não suportada: '.$frequencia),
         };
     }
 

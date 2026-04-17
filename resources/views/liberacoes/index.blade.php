@@ -190,6 +190,7 @@
                                             <td>
                                                 @php
                                                     $freqLabels = [
+                                                        'quinzenal' => 'Quinzenal (15 dias)',
                                                         'diaria' => 'Diária',
                                                         'semanal' => 'Semanal',
                                                         'mensal' => 'Mensal',
