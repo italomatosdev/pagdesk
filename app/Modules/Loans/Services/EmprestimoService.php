@@ -933,7 +933,8 @@ class EmprestimoService
      */
     public function garantirVinculoClienteOperacao(int $clienteId, int $operacaoId, ?int $consultorId = null): OperationClient
     {
-        $vinculo = OperationClient::where('cliente_id', $clienteId)
+        $vinculo = OperationClient::withTrashed()
+            ->where('cliente_id', $clienteId)
             ->where('operacao_id', $operacaoId)
             ->first();
 
@@ -949,9 +950,13 @@ class EmprestimoService
 
             // Auditoria
             self::auditar('criar_vinculo_cliente_operacao_automatico', $vinculo, null, $vinculo->toArray(), 'Vínculo criado automaticamente ao criar empréstimo');
-        } elseif ($consultorId && ! $vinculo->consultor_id) {
-            // Atualizar consultor se não estiver definido
-            $vinculo->update(['consultor_id' => $consultorId]);
+        } else {
+            if ($vinculo->trashed()) {
+                $vinculo->restore();
+            }
+            if ($consultorId && ! $vinculo->consultor_id) {
+                $vinculo->update(['consultor_id' => $consultorId]);
+            }
         }
 
         return $vinculo;

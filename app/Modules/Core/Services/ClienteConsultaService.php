@@ -203,12 +203,19 @@ class ClienteConsultaService
         $cliente = Cliente::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)
             ->findOrFail($clienteId);
 
-        // Verificar se já existe vínculo
-        $vinculoExistente = \App\Modules\Core\Models\OperationClient::where('cliente_id', $clienteId)
+        $vinculoExistente = \App\Modules\Core\Models\OperationClient::withTrashed()
+            ->where('cliente_id', $clienteId)
             ->where('operacao_id', $operacaoId)
             ->first();
 
         if ($vinculoExistente) {
+            if ($vinculoExistente->trashed()) {
+                $vinculoExistente->restore();
+                if ($limiteCredito !== null) {
+                    $vinculoExistente->update(['limite_credito' => $limiteCredito]);
+                }
+            }
+
             return $vinculoExistente;
         }
 
