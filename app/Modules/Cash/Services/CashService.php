@@ -14,26 +14,23 @@ class CashService
 
     /**
      * Registrar movimentação de caixa
-     *
-     * @param array $dados
-     * @return CashLedgerEntry
      */
     public function registrarMovimentacao(array $dados): CashLedgerEntry
     {
         // Se não especificar origem, assume 'automatica' (compatibilidade com código existente)
-        if (!isset($dados['origem'])) {
+        if (! isset($dados['origem'])) {
             $dados['origem'] = 'automatica';
         }
 
         // Obter empresa_id da operação se não foi informado
-        if (!isset($dados['empresa_id']) && isset($dados['operacao_id'])) {
+        if (! isset($dados['empresa_id']) && isset($dados['operacao_id'])) {
             $operacao = \App\Modules\Core\Models\Operacao::find($dados['operacao_id']);
-            $dados['empresa_id'] = $operacao->empresa_id ?? (auth()->check() && !auth()->user()->isSuperAdmin() ? auth()->user()->empresa_id : null);
-        } elseif (!isset($dados['empresa_id']) && auth()->check() && !auth()->user()->isSuperAdmin()) {
+            $dados['empresa_id'] = $operacao->empresa_id ?? (auth()->check() && ! auth()->user()->isSuperAdmin() ? auth()->user()->empresa_id : null);
+        } elseif (! isset($dados['empresa_id']) && auth()->check() && ! auth()->user()->isSuperAdmin()) {
             $dados['empresa_id'] = auth()->user()->empresa_id;
         }
 
-        if (empty($dados['categoria_id']) && !empty($dados['referencia_tipo']) && !empty($dados['tipo']) && !empty($dados['empresa_id'])) {
+        if (empty($dados['categoria_id']) && ! empty($dados['referencia_tipo']) && ! empty($dados['tipo']) && ! empty($dados['empresa_id'])) {
             $resolver = app(CashCategoriaAutomaticaService::class);
             $categoriaId = $resolver->resolverCategoriaId(
                 (int) $dados['empresa_id'],
@@ -56,15 +53,13 @@ class CashService
     /**
      * Calcular saldo do consultor em uma operação
      *
-     * @param int $consultorId
-     * @param int $operacaoId (0 = todas as operações)
-     * @return float
+     * @param  int  $operacaoId  (0 = todas as operações)
      */
     public function calcularSaldo(int $consultorId, int $operacaoId = 0): float
     {
         $queryEntradas = CashLedgerEntry::where('consultor_id', $consultorId)
             ->where('tipo', 'entrada');
-        
+
         $querySaidas = CashLedgerEntry::where('consultor_id', $consultorId)
             ->where('tipo', 'saida');
 
@@ -82,8 +77,7 @@ class CashService
     /**
      * Calcular saldo total (todos os consultores + caixa da operação) em uma operação
      *
-     * @param int|null $operacaoId (null = todas as operações)
-     * @return float
+     * @param  int|null  $operacaoId  (null = todas as operações)
      */
     public function calcularSaldoTotal(?int $operacaoId = null): float
     {
@@ -103,9 +97,6 @@ class CashService
 
     /**
      * Calcular saldo do caixa da operação (sem usuário específico)
-     *
-     * @param int $operacaoId
-     * @return float
      */
     public function calcularSaldoOperacao(int $operacaoId): float
     {
@@ -124,13 +115,9 @@ class CashService
 
     /**
      * Listar movimentações
-     * 
-     * @param int|null $consultorId Se null, lista todas (incluindo caixa da operação)
-     * @param int|null $operacaoId
-     * @param string|null $dataInicio
-     * @param string|null $dataFim
-     * @param bool|null $apenasCaixaOperacao Se true, lista apenas movimentações com consultor_id NULL
-     * @return Collection
+     *
+     * @param  int|null  $consultorId  Se null, lista todas (incluindo caixa da operação)
+     * @param  bool|null  $apenasCaixaOperacao  Se true, lista apenas movimentações com consultor_id NULL
      */
     public function listarMovimentacoes(
         ?int $consultorId = null,
@@ -174,12 +161,8 @@ class CashService
     /**
      * Calcular total de entradas com filtros
      *
-     * @param int|null $consultorId Se null, inclui todas (caixa da operação + usuários), a menos que $apenasCaixaOperacao seja true
-     * @param int|null $operacaoId
-     * @param string|null $dataInicio
-     * @param string|null $dataFim
-     * @param bool $apenasCaixaOperacao Se true, filtra apenas movimentações com consultor_id NULL (caixa da operação)
-     * @return float
+     * @param  int|null  $consultorId  Se null, inclui todas (caixa da operação + usuários), a menos que $apenasCaixaOperacao seja true
+     * @param  bool  $apenasCaixaOperacao  Se true, filtra apenas movimentações com consultor_id NULL (caixa da operação)
      */
     public function calcularTotalEntradas(
         ?int $consultorId = null,
@@ -214,12 +197,8 @@ class CashService
     /**
      * Calcular total de saídas com filtros
      *
-     * @param int|null $consultorId Se null, inclui todas (caixa da operação + usuários), a menos que $apenasCaixaOperacao seja true
-     * @param int|null $operacaoId
-     * @param string|null $dataInicio
-     * @param string|null $dataFim
-     * @param bool $apenasCaixaOperacao Se true, filtra apenas movimentações com consultor_id NULL (caixa da operação)
-     * @return float
+     * @param  int|null  $consultorId  Se null, inclui todas (caixa da operação + usuários), a menos que $apenasCaixaOperacao seja true
+     * @param  bool  $apenasCaixaOperacao  Se true, filtra apenas movimentações com consultor_id NULL (caixa da operação)
      */
     public function calcularTotalSaidas(
         ?int $consultorId = null,
@@ -254,11 +233,8 @@ class CashService
     /**
      * Calcular saldo inicial (antes do período filtrado)
      *
-     * @param int|null $consultorId Se null e for caixa da operação, deve filtrar por consultor_id IS NULL
-     * @param int|null $operacaoId
-     * @param string|null $dataInicio
-     * @param bool $apenasCaixaOperacao Se true, filtra apenas por consultor_id IS NULL
-     * @return float
+     * @param  int|null  $consultorId  Se null e for caixa da operação, deve filtrar por consultor_id IS NULL
+     * @param  bool  $apenasCaixaOperacao  Se true, filtra apenas por consultor_id IS NULL
      */
     public function calcularSaldoInicial(
         ?int $consultorId = null,
@@ -266,13 +242,13 @@ class CashService
         ?string $dataInicio = null,
         bool $apenasCaixaOperacao = false
     ): float {
-        if (!$dataInicio) {
+        if (! $dataInicio) {
             return 0;
         }
 
         $queryEntradas = CashLedgerEntry::where('tipo', 'entrada')
             ->where('data_movimentacao', '<', $dataInicio);
-        
+
         $querySaidas = CashLedgerEntry::where('tipo', 'saida')
             ->where('data_movimentacao', '<', $dataInicio);
 
@@ -300,11 +276,6 @@ class CashService
 
     /**
      * Calcular total de entradas do caixa da operação com filtros de período
-     *
-     * @param int|null $operacaoId
-     * @param string|null $dataInicio
-     * @param string|null $dataFim
-     * @return float
      */
     public function calcularTotalEntradasOperacao(
         ?int $operacaoId = null,
@@ -331,11 +302,6 @@ class CashService
 
     /**
      * Calcular total de saídas do caixa da operação com filtros de período
-     *
-     * @param int|null $operacaoId
-     * @param string|null $dataInicio
-     * @param string|null $dataFim
-     * @return float
      */
     public function calcularTotalSaidasOperacao(
         ?int $operacaoId = null,
@@ -361,10 +327,10 @@ class CashService
     }
 
     /**
-     * Obter saldos do usuário por operação (para exibição no header)
+     * Obter saldos do usuário por operação (para exibição no header).
+     * Chaves: total (soma todas), total_topo (valor no botão: operação preferida se existir, senão total), operacoes.
      *
-     * @param \App\Models\User $user
-     * @return array ['total' => float, 'operacoes' => [['id' => int, 'nome' => string, 'saldo' => float], ...]]
+     * @return array{total: float, total_topo: float, operacoes: list<array{id: int, nome: string, saldo: float}>}
      */
     public function getSaldosUsuarioHeader(\App\Models\User $user): array
     {
@@ -382,8 +348,20 @@ class CashService
             $saldoTotal += $saldo;
         }
 
+        $preferidaId = $user->getOperacaoPrincipalId();
+        $saldoTopo = $saldoTotal;
+        if ($preferidaId !== null) {
+            foreach ($saldosPorOperacao as $item) {
+                if ((int) $item['id'] === (int) $preferidaId) {
+                    $saldoTopo = (float) $item['saldo'];
+                    break;
+                }
+            }
+        }
+
         return [
             'total' => $saldoTotal,
+            'total_topo' => $saldoTopo,
             'operacoes' => $saldosPorOperacao,
         ];
     }
