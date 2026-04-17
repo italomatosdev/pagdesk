@@ -16,7 +16,7 @@
         </div>
     @endif
 
-    @if(isset($produtosSemOperacaoCount) && $produtosSemOperacaoCount > 0)
+    @if(isset($produtosSemOperacaoCount) && $produtosSemOperacaoCount > 0 && ($podeGerenciarProdutos ?? true))
         <div class="alert alert-warning alert-dismissible fade show d-flex align-items-center">
             <i class="bx bx-error-circle font-size-24 me-2"></i>
             <div class="flex-grow-1">
@@ -33,6 +33,7 @@
         </div>
     @endif
 
+    @if($podeGerenciarProdutos ?? true)
     <div class="row mb-3">
         <div class="col">
             <a href="{{ route('produtos.create') }}" class="btn btn-primary">
@@ -40,6 +41,7 @@
             </a>
         </div>
     </div>
+    @endif
 
     <!-- Totalizadores (respeitam os filtros da listagem) -->
     <div class="row mb-3">
@@ -197,7 +199,9 @@
                                     </td>
                                     <td>
                                         <a href="{{ route('produtos.show', $p->id) }}" class="btn btn-sm btn-info" title="Ver"><i class="bx bx-show"></i></a>
-                                        <a href="{{ route('produtos.edit', $p->id) }}" class="btn btn-sm btn-warning" title="Editar"><i class="bx bx-edit"></i></a>
+                                        @if($podeGerenciarProdutos ?? true)
+                                            <a href="{{ route('produtos.edit', $p->id) }}" class="btn btn-sm btn-warning" title="Editar"><i class="bx bx-edit"></i></a>
+                                        @endif
                                     </td>
                                 </tr>
                             @endforeach
@@ -210,7 +214,9 @@
                     <i class="bx bx-package font-size-48"></i>
                     <p class="mt-2">Nenhum produto encontrado com os filtros aplicados.</p>
                     <a href="{{ route('produtos.index') }}" class="btn btn-secondary me-2">Limpar filtros</a>
-                    <a href="{{ route('produtos.create') }}" class="btn btn-primary">Cadastrar produto</a>
+                    @if($podeGerenciarProdutos ?? true)
+                        <a href="{{ route('produtos.create') }}" class="btn btn-primary">Cadastrar produto</a>
+                    @endif
                 </div>
             @endif
         </div>

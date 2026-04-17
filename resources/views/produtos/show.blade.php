@@ -19,7 +19,9 @@
     <div class="row mb-3">
         <div class="col">
             <a href="{{ route('produtos.index') }}" class="btn btn-secondary"><i class="bx bx-arrow-back me-1"></i> Voltar</a>
-            <a href="{{ route('produtos.edit', $produto->id) }}" class="btn btn-warning"><i class="bx bx-edit me-1"></i> Editar</a>
+            @if($podeGerenciarProdutos ?? true)
+                <a href="{{ route('produtos.edit', $produto->id) }}" class="btn btn-warning"><i class="bx bx-edit me-1"></i> Editar</a>
+            @endif
         </div>
     </div>
 

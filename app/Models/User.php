@@ -7,8 +7,8 @@ use App\Notifications\ResetPasswordNotification;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
@@ -172,15 +172,14 @@ class User extends Authenticatable
 
     /**
      * Obter IDs das operações vinculadas ao usuário
-     * 
-     * @return array
      */
     public function getOperacoesIds(): array
     {
         // Garantir que o relacionamento está carregado
-        if (!$this->relationLoaded('operacoes')) {
+        if (! $this->relationLoaded('operacoes')) {
             $this->load('operacoes');
         }
+
         return $this->operacoes->pluck('id')->toArray();
     }
 
@@ -197,6 +196,7 @@ class User extends Authenticatable
             ->where('user_id', $this->id)
             ->where('operacao_id', $operacaoId)
             ->value('role');
+
         return $role !== null ? (string) $role : null;
     }
 
@@ -208,12 +208,14 @@ class User extends Authenticatable
         if ($this->isSuperAdmin()) {
             return true;
         }
+
         return $this->getPapelNaOperacao($operacaoId) === $papel;
     }
 
     /**
      * True se na operação $operacaoId o usuário tem algum dos papéis.
-     * @param array<int, string> $papeis ex.: ['gestor', 'administrador']
+     *
+     * @param  array<int, string>  $papeis  ex.: ['gestor', 'administrador']
      */
     public function temAlgumPapelNaOperacao(int $operacaoId, array $papeis): bool
     {
@@ -221,13 +223,15 @@ class User extends Authenticatable
             return true;
         }
         $papel = $this->getPapelNaOperacao($operacaoId);
+
         return $papel !== null && in_array($papel, $papeis, true);
     }
 
     /**
      * IDs das operações em que o usuário tem um dos papéis (útil para sidebar/relatórios).
      * Super Admin: retorna IDs de todas as operações.
-     * @param array<int, string> $papeis ex.: ['gestor', 'administrador']
+     *
+     * @param  array<int, string>  $papeis  ex.: ['gestor', 'administrador']
      * @return array<int>
      */
     public function getOperacoesIdsOndeTemPapel(array $papeis): array
@@ -235,6 +239,7 @@ class User extends Authenticatable
         if ($this->isSuperAdmin()) {
             return \App\Modules\Core\Models\Operacao::query()->pluck('id')->toArray();
         }
+
         return $this->operacoes()
             ->wherePivotIn('role', $papeis)
             ->pluck('operacoes.id')
@@ -242,11 +247,56 @@ class User extends Authenticatable
     }
 
     /**
+     * Operações em que o usuário é consultor e a operação permite venda / visualização de produtos (somente leitura).
+     *
+     * @return array<int>
+     */
+    public function getOperacoesIdsOndeConsultorPodeVender(): array
+    {
+        if ($this->isSuperAdmin()) {
+            return \App\Modules\Core\Models\Operacao::query()->pluck('id')->toArray();
+        }
+
+        return $this->operacoes()
+            ->wherePivot('role', 'consultor')
+            ->where('operacoes.consultor_pode_vender', true)
+            ->pluck('operacoes.id')
+            ->toArray();
+    }
+
+    /**
+     * Operações onde o usuário pode usar vendas e ver produtos no catálogo:
+     * administrador/gestor, ou consultor com permissão na operação.
+     *
+     * @return array<int>
+     */
+    public function getOperacoesIdsParaModuloVendas(): array
+    {
+        $gestao = $this->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']);
+        $consultorVenda = $this->getOperacoesIdsOndeConsultorPodeVender();
+
+        return array_values(array_unique(array_merge($gestao, $consultorVenda)));
+    }
+
+    /**
+     * Administrador ou gestor em pelo menos uma operação (cadastro/edição de produtos, etc.).
+     */
+    public function temPapelGestaoEmAlgumaOperacao(): bool
+    {
+        return ! empty($this->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']));
+    }
+
+    /**
+     * Pode acessar listagem/detalhe de produtos (gestão ou consultor com venda autorizada na operação).
+     */
+    public function podeAcessarCatalogoProdutos(): bool
+    {
+        return $this->temPapelGestaoEmAlgumaOperacao() || ! empty($this->getOperacoesIdsOndeConsultorPodeVender());
+    }
+
+    /**
      * Verificar se o usuário tem acesso a uma operação específica.
      * Sem papel global: só Super Admin vê tudo; demais precisam estar em operacao_user (com role definido).
-     *
-     * @param int $operacaoId
-     * @return bool
      */
     public function temAcessoOperacao(int $operacaoId): bool
     {
@@ -261,8 +311,8 @@ class User extends Authenticatable
      * Aplicar filtro de operações permitidas em uma query.
      * Só Super Admin vê tudo; demais usuários restritos às operações em operacao_user.
      *
-     * @param \Illuminate\Database\Eloquent\Builder $query
-     * @param string $column Nome da coluna (padrão: 'operacao_id')
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @param  string  $column  Nome da coluna (padrão: 'operacao_id')
      * @return \Illuminate\Database\Eloquent\Builder
      */
     public function aplicarFiltroOperacoes($query, string $column = 'operacao_id')
@@ -272,7 +322,7 @@ class User extends Authenticatable
         }
 
         $operacoesIds = $this->getOperacoesIds();
-        
+
         if (empty($operacoesIds)) {
             // Se não tem operações vinculadas, retorna query vazia
             return $query->whereRaw('1 = 0');
@@ -284,15 +334,13 @@ class User extends Authenticatable
     /**
      * Obter URL do avatar do usuário
      * Se não tiver avatar, retorna URL da imagem padrão
-     * 
-     * @return string
      */
     public function getAvatarUrlAttribute(): string
     {
         if ($this->avatar) {
-            return asset('storage/avatars/' . $this->avatar);
+            return asset('storage/avatars/'.$this->avatar);
         }
-        
+
         // Retorna imagem padrão (avatar-3.jpg do template)
         return asset('build/images/users/avatar-3.jpg');
     }
@@ -300,8 +348,6 @@ class User extends Authenticatable
     /**
      * Obter iniciais do nome para usar como fallback no avatar
      * Retorna até 2 iniciais (ex: "IM" para "Ítalo Matos")
-     * 
-     * @return string
      */
     public function getInitialAttribute(): string
     {
@@ -311,16 +357,17 @@ class User extends Authenticatable
 
         $names = preg_split('/\s+/', trim($this->name));
         $names = array_filter($names);
-        
+
         if (empty($names)) {
             return '?';
         }
 
         $first = mb_strtoupper(mb_substr($names[0], 0, 1, 'UTF-8'), 'UTF-8');
-        
+
         if (count($names) > 1) {
             $last = mb_strtoupper(mb_substr(end($names), 0, 1, 'UTF-8'), 'UTF-8');
-            return $first . $last;
+
+            return $first.$last;
         }
 
         return $first;
@@ -362,7 +409,6 @@ class User extends Authenticatable
      * Enviar notificação de redefinição de senha (e-mail em português).
      *
      * @param  string  $token
-     * @return void
      */
     public function sendPasswordResetNotification($token): void
     {

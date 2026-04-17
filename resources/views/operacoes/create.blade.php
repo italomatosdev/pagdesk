@@ -162,6 +162,26 @@
 
                             <hr>
 
+                            <h5 class="mb-3">Vendas e produtos (PagDesk)</h5>
+
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="consultor_pode_vender" id="consultor_pode_vender"
+                                           value="1" {{ old('consultor_pode_vender', false) ? 'checked' : '' }}>
+                                    <label class="form-check-label" for="consultor_pode_vender">
+                                        <strong>Consultor pode vender e ver produtos (somente leitura)</strong>
+                                    </label>
+                                </div>
+                                <small class="text-muted">
+                                    Se marcado, consultores desta operação poderão registrar vendas e consultar o catálogo de produtos, sem cadastrar ou editar produtos.
+                                </small>
+                                @error('consultor_pode_vender')
+                                    <div class="text-danger">{{ $message }}</div>
+                                @enderror
+                            </div>
+
+                            <hr>
+
                             <h5 class="mb-3">Configuração de Juros por Atraso</h5>
 
                             <div class="mb-3">
