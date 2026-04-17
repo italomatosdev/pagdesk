@@ -181,6 +181,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::post('/{id}/renovar', [App\Modules\Loans\Controllers\EmprestimoController::class, 'renovar'])->name('renovar');
         Route::post('/{id}/cancelar', [App\Modules\Loans\Controllers\EmprestimoController::class, 'cancelar'])->name('cancelar');
         Route::post('/{id}/cancelar-com-desfazimento', [App\Modules\Loans\Controllers\EmprestimoController::class, 'cancelarComDesfazimento'])->name('cancelar-com-desfazimento');
+        Route::post('/{id}/cancelar-renovacao-devolucao-principal', [App\Modules\Loans\Controllers\EmprestimoController::class, 'cancelarRenovacaoComDevolucaoPrincipal'])->name('cancelar-renovacao-devolucao-principal');
         Route::post('/{id}/garantias/{garantiaId}/executar', [App\Modules\Loans\Controllers\EmprestimoController::class, 'executarGarantia'])->name('garantias.executar');
         Route::post('/{id}/parcelas-retroativo', [App\Modules\Loans\Controllers\EmprestimoController::class, 'registrarParcelasPagasRetroativo'])->name('parcelas-retroativo');
         Route::get('/{id}/correcao-vencimento-domingo/preview', [App\Modules\Loans\Controllers\EmprestimoController::class, 'previewCorrecaoVencimentoDomingoLegado'])->name('correcao-vencimento-domingo.preview');

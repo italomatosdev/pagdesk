@@ -749,6 +749,14 @@ class EmprestimoController extends Controller
         // Garantias só podem ser editadas/excluídas antes da liberação e se empréstimo não finalizado (apenas empenho)
         $podeEditarGarantias = $emprestimo->isEmpenho() && ! $emprestimo->isFinalizado() && ! $emprestimo->foiLiberado();
 
+        $renovacaoSemParcelasPagas = $emprestimo->isRenovacao() && ! $emprestimo->isCancelado()
+            && ! $emprestimo->parcelas->contains(function ($parcela) {
+                return $parcela->isQuitada()
+                    || (float) ($parcela->valor_pago ?? 0) > 0
+                    || $parcela->pagamentos->isNotEmpty();
+            });
+        $podeCancelarRenovacaoComDevolucaoPrincipal = $podeVerAcoesGestorAdmin && $renovacaoSemParcelasPagas;
+
         $fichaContatoEmprestimo = $this->operacaoDadosClienteService->obterParaOperacao(
             (int) $emprestimo->cliente_id,
             (int) $emprestimo->operacao_id
@@ -790,7 +798,8 @@ class EmprestimoController extends Controller
             'podeAcoesCheque',
             'podeEditarGarantias',
             'mostrarAvisoCorrecaoDomingoLegado',
-            'qtdParcelasDomingoAbertoLegado'
+            'qtdParcelasDomingoAbertoLegado',
+            'podeCancelarRenovacaoComDevolucaoPrincipal'
         ));
     }
 
@@ -957,6 +966,45 @@ class EmprestimoController extends Controller
             \Log::error('Erro ao cancelar empréstimo com desfazimento: '.$e->getMessage());
 
             return back()->with('error', 'Erro ao cancelar empréstimo: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Cancelar renovação com registro de devolução de principal ao caixa (gestor ou administrador).
+     * Não altera o empréstimo de origem. Exige confirmação de ciência (checkbox) no formulário.
+     */
+    public function cancelarRenovacaoComDevolucaoPrincipal(Request $request, int $id): RedirectResponse
+    {
+        $user = auth()->user();
+        $emprestimo = Emprestimo::findOrFail($id);
+
+        if (! $user->temAlgumPapelNaOperacao($emprestimo->operacao_id, ['administrador', 'gestor'])) {
+            abort(403, 'Apenas gestores e administradores podem cancelar renovação com devolução de principal.');
+        }
+
+        $request->validate([
+            'motivo_cancelamento' => 'required|string|min:10|max:1000',
+            'confirmacao_devolucao_principal' => 'required|accepted',
+        ], [
+            'motivo_cancelamento.required' => 'O motivo do cancelamento é obrigatório.',
+            'motivo_cancelamento.min' => 'O motivo deve ter pelo menos 10 caracteres.',
+            'motivo_cancelamento.max' => 'O motivo não pode ter mais de 1000 caracteres.',
+            'confirmacao_devolucao_principal.required' => 'É necessário confirmar que o valor emprestado foi devolvido ao caixa.',
+            'confirmacao_devolucao_principal.accepted' => 'É necessário confirmar que o valor emprestado foi devolvido ao caixa.',
+        ]);
+
+        try {
+            $this->emprestimoService->cancelarRenovacaoComDevolucaoPrincipal($id, $user->id, $request->motivo_cancelamento);
+
+            return redirect()
+                ->route('emprestimos.show', $id)
+                ->with('success', 'Renovação cancelada. Foi registrada a entrada no caixa referente à devolução do principal.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors());
+        } catch (\Exception $e) {
+            \Log::error('Erro ao cancelar renovação com devolução de principal: '.$e->getMessage());
+
+            return back()->with('error', 'Erro ao cancelar renovação: '.$e->getMessage());
         }
     }
 

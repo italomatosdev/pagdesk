@@ -12,6 +12,7 @@ class CashCategoriaAutomaticaService
         'quitacao_emprestimo|entrada' => ['nome' => 'Quitacao de emprestimo', 'categoria_tipo' => 'entrada'],
         'cancelamento_emprestimo|saida' => ['nome' => 'Estorno cancelamento (saida consultor)', 'categoria_tipo' => 'despesa'],
         'cancelamento_emprestimo|entrada' => ['nome' => 'Estorno cancelamento (entrada gestor)', 'categoria_tipo' => 'entrada'],
+        'devolucao_principal_cancelamento_renovacao|entrada' => ['nome' => 'Devolucao principal cancelamento renovacao', 'categoria_tipo' => 'entrada'],
         'compensacao_cheque|entrada' => ['nome' => 'Compensacao de cheque', 'categoria_tipo' => 'entrada'],
         'pagamento_cheque_devolvido|entrada' => ['nome' => 'Pagamento cheque devolvido', 'categoria_tipo' => 'entrada'],
         'venda|entrada' => ['nome' => 'Venda a vista', 'categoria_tipo' => 'entrada'],

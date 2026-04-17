@@ -62,7 +62,7 @@ final class CashLedgerEmprestimoLink
 
         $ref = (int) $ref;
 
-        if (in_array($tipo, ['quitacao_emprestimo', 'pagamento_cliente', 'cancelamento_emprestimo'], true)) {
+        if (in_array($tipo, ['quitacao_emprestimo', 'pagamento_cliente', 'cancelamento_emprestimo', 'devolucao_principal_cancelamento_renovacao'], true)) {
             return $ref > 0 ? $ref : null;
         }
 
