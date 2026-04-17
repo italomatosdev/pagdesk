@@ -139,6 +139,30 @@ class RelatorioController extends Controller
     }
 
     /**
+     * Restringe pagamentos a empréstimos com quitação total (sem renovação gerada) cuja data de quitação
+     * — maior data_pagamento entre parcelas — está no intervalo [dateFrom, dateTo] (comparado como data Y-m-d).
+     *
+     * @param  Builder<Pagamento>  $query
+     */
+    private function aplicarFiltroComissoesQuitacaoTotalPorDataQuitacaoNoPeriodo(
+        Builder $query,
+        Carbon $dateFrom,
+        Carbon $dateTo
+    ): void {
+        $ini = $dateFrom->format('Y-m-d');
+        $fim = $dateTo->format('Y-m-d');
+
+        $query->whereHas('parcela.emprestimo', function ($q) use ($ini, $fim) {
+            $q->where('status', 'finalizado')
+                ->whereDoesntHave('renovacoes')
+                ->whereRaw(
+                    '(SELECT MAX(p.data_pagamento) FROM parcelas p WHERE p.emprestimo_id = emprestimos.id AND p.deleted_at IS NULL) BETWEEN ? AND ?',
+                    [$ini, $fim]
+                );
+        });
+    }
+
+    /**
      * Separa o valor do pagamento em investido (amortização) e juros (contrato + atraso) para relatórios.
      *
      * Regra anterior (incorreta para comissão): escalava juros de contrato por (valor/valorParcela),
@@ -875,6 +899,7 @@ class RelatorioController extends Controller
             : $user->getOperacoesIds();
         $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoesIds, $user);
         $frequencia = self::normalizarFrequenciaComissoes($request->input('frequencia'));
+        $quitacaoTotalPorDataQuitacao = $request->boolean('quitacao_total_periodo_quitacao');
 
         $operacoes = ! empty($operacoesIds)
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
@@ -889,8 +914,13 @@ class RelatorioController extends Controller
         }
 
         $query = Pagamento::with(self::withPagamentoParaReparticaoRelatorio())
-            ->whereBetween('data_pagamento', [$dateFrom, $dateTo])
             ->where('consultor_id', $consultorId);
+
+        if ($quitacaoTotalPorDataQuitacao) {
+            $this->aplicarFiltroComissoesQuitacaoTotalPorDataQuitacaoNoPeriodo($query, $dateFrom, $dateTo);
+        } else {
+            $query->whereBetween('data_pagamento', [$dateFrom, $dateTo]);
+        }
 
         $this->aplicarFiltroComissoesParcelaEmprestimo($query, $user, $operacaoId, $operacoesIds, $frequencia);
 
@@ -925,7 +955,8 @@ class RelatorioController extends Controller
             'consultorNome',
             'linhas',
             'totais',
-            'urlVoltarComissoes'
+            'urlVoltarComissoes',
+            'quitacaoTotalPorDataQuitacao'
         ));
     }
 
