@@ -9,7 +9,7 @@
     <body>
 @endsection
 @section('content')
-    <div class="row">
+    <div class="row no-print">
         <div class="col-12 mb-3">
             <div class="card">
                 <div class="card-header">
@@ -64,8 +64,9 @@
     <div class="row mb-3">
         <div class="col-12">
             <div class="card">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <h5 class="card-title mb-0">Totalizadores do período</h5>
+                    @include('relatorios.partials.botoes-exportar-imprimir', ['exportRoute' => 'relatorios.recebimento-juros-dia.export'])
                 </div>
                 <div class="card-body">
                     <div class="row">
@@ -111,8 +112,9 @@
     <div class="row">
         <div class="col-12">
             <div class="card">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <h5 class="card-title mb-0">Recebimento e juros por dia (por usuário)</h5>
+                    @include('relatorios.partials.botoes-exportar-imprimir', ['exportRoute' => 'relatorios.recebimento-juros-dia.export'])
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">

@@ -256,14 +256,23 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::get('/', [App\Modules\Core\Controllers\RelatorioController::class, 'index'])->name('index');
         Route::get('/consultores-por-operacao', [App\Modules\Core\Controllers\RelatorioController::class, 'consultoresPorOperacao'])->name('consultores-por-operacao');
         Route::get('/recebimento-juros-dia', [App\Modules\Core\Controllers\RelatorioController::class, 'recebimentoJurosDia'])->name('recebimento-juros-dia');
+        Route::get('/recebimento-juros-dia/export', [App\Modules\Core\Controllers\RelatorioController::class, 'exportRecebimentoJurosDia'])->name('recebimento-juros-dia.export');
         Route::get('/parcelas-atrasadas', [App\Modules\Core\Controllers\RelatorioController::class, 'parcelasAtrasadas'])->name('parcelas-atrasadas');
+        Route::get('/parcelas-atrasadas/export', [App\Modules\Core\Controllers\RelatorioController::class, 'exportParcelasAtrasadas'])->name('parcelas-atrasadas.export');
         Route::get('/receber-por-cliente', [App\Modules\Core\Controllers\RelatorioController::class, 'receberPorCliente'])->name('receber-por-cliente');
+        Route::get('/receber-por-cliente/export', [App\Modules\Core\Controllers\RelatorioController::class, 'exportReceberPorCliente'])->name('receber-por-cliente.export');
         Route::get('/quitacoes', [App\Modules\Core\Controllers\RelatorioController::class, 'quitacoes'])->name('quitacoes');
+        Route::get('/quitacoes/export', [App\Modules\Core\Controllers\RelatorioController::class, 'exportQuitacoes'])->name('quitacoes.export');
         Route::get('/comissoes/detalhe', [App\Modules\Core\Controllers\RelatorioController::class, 'comissoesDetalheConsultor'])->name('comissoes-detalhe');
+        Route::get('/comissoes/detalhe/export', [App\Modules\Core\Controllers\RelatorioController::class, 'exportComissoesDetalheConsultor'])->name('comissoes-detalhe.export');
         Route::get('/comissoes', [App\Modules\Core\Controllers\RelatorioController::class, 'comissoes'])->name('comissoes');
+        Route::get('/comissoes/export', [App\Modules\Core\Controllers\RelatorioController::class, 'exportComissoes'])->name('comissoes.export');
         Route::get('/valor-emprestado-principal', [App\Modules\Core\Controllers\RelatorioController::class, 'valorEmprestadoPrincipal'])->name('valor-emprestado-principal');
+        Route::get('/valor-emprestado-principal/export', [App\Modules\Core\Controllers\RelatorioController::class, 'exportValorEmprestadoPrincipal'])->name('valor-emprestado-principal.export');
         Route::get('/entradas-saidas-categoria', [App\Modules\Core\Controllers\RelatorioController::class, 'entradasSaidasPorCategoria'])->name('entradas-saidas-categoria');
+        Route::get('/entradas-saidas-categoria/export', [App\Modules\Core\Controllers\RelatorioController::class, 'exportEntradasSaidasPorCategoria'])->name('entradas-saidas-categoria.export');
         Route::get('/juros-quitacoes', [App\Modules\Core\Controllers\RelatorioController::class, 'jurosQuitacoes'])->name('juros-quitacoes');
+        Route::get('/juros-quitacoes/export', [App\Modules\Core\Controllers\RelatorioController::class, 'exportJurosQuitacoes'])->name('juros-quitacoes.export');
     });
 
     // Pagamentos
