@@ -44,6 +44,14 @@
                             <small class="text-muted">Usado como sugestão à vista e crediário na venda.</small>
                             @error('preco_venda')<div class="text-danger">{{ $message }}</div>@enderror
                         </div>
+                        @if($podeVerCustoProdutos ?? false)
+                            <div class="mb-3">
+                                <label class="form-label">Preço de custo (R$) <span class="text-danger">*</span></label>
+                                <input type="text" id="preco_custo" name="preco_custo" class="form-control" inputmode="decimal" data-mask-money="brl" placeholder="0,00" value="{{ old('preco_custo', '0') }}" required>
+                                <small class="text-muted">Obrigatório para registrar vendas deste produto. Alterações futuras ficam no histórico de custo.</small>
+                                @error('preco_custo')<div class="text-danger">{{ $message }}</div>@enderror
+                            </div>
+                        @endif
                         @php
                             $unidadeValorCreate = old('unidade', 'un');
                             $estoqueInteiroForm = \App\Modules\Core\Models\Produto::estoqueExigeInteiro($unidadeValorCreate);

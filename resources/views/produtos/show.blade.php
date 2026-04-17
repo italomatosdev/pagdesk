@@ -22,6 +22,9 @@
             @if($podeGerenciarProdutos ?? true)
                 <a href="{{ route('produtos.edit', $produto->id) }}" class="btn btn-warning"><i class="bx bx-edit me-1"></i> Editar</a>
             @endif
+            @if(($podeVerCustoProdutos ?? false) && $produto->temCustoVigenteDefinido())
+                <a href="{{ route('produtos.custos.historico', $produto->id) }}" class="btn btn-outline-secondary"><i class="bx bx-history me-1"></i> Histórico de custo</a>
+            @endif
         </div>
     </div>
 
@@ -46,6 +49,17 @@
                         <div class="col-md-4 text-muted">Preço de venda</div>
                         <div class="col-md-8">R$ {{ number_format($produto->preco_venda, 2, ',', '.') }}</div>
                     </div>
+                    @if($podeVerCustoProdutos ?? false)
+                        @if(!$produto->temCustoVigenteDefinido())
+                            <div class="alert alert-warning py-2 mb-2">
+                                <i class="bx bx-error-circle me-1"></i> Sem preço de custo cadastrado. Vendas com este produto ficam bloqueadas até um gestor informar o custo.
+                            </div>
+                        @endif
+                        <div class="row mb-2">
+                            <div class="col-md-4 text-muted">Preço de custo (vigente)</div>
+                            <div class="col-md-8">{{ $produto->temCustoVigenteDefinido() ? 'R$ '.number_format((float) $produto->custo_unitario_vigente, 2, ',', '.') : '—' }}</div>
+                        </div>
+                    @endif
                     <div class="row mb-2">
                         <div class="col-md-4 text-muted">Estoque</div>
                         <div class="col-md-8">{{ $produto->formatarQuantidadeEstoque() }} {{ $produto->rotuloUnidade() }}</div>

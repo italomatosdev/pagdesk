@@ -87,7 +87,7 @@
                                             <select name="itens[0][produto_id]" class="form-select form-select-produto">
                                                 <option value="">— Descrição livre —</option>
                                                 @foreach($produtos as $p)
-                                                    <option value="{{ $p->id }}" data-operacao-id="{{ $p->operacao_id }}" data-preco-vista="{{ $p->preco_venda }}" data-preco-crediario="{{ $p->preco_venda }}" data-estoque="{{ $p->estoque }}" data-estoque-exibicao="{{ $p->formatarQuantidadeEstoque() }}" data-qtd-step="{{ $p->unidadeContagemInteira() ? '1' : '0.001' }}">{{ $p->nome }} (R$ {{ number_format($p->preco_venda, 2, ',', '.') }}) — Estoque: {{ $p->formatarQuantidadeEstoque() }}</option>
+                                                    <option value="{{ $p->id }}" data-operacao-id="{{ $p->operacao_id }}" data-preco-vista="{{ $p->preco_venda }}" data-preco-crediario="{{ $p->preco_venda }}" data-estoque="{{ $p->estoque }}" data-estoque-exibicao="{{ $p->formatarQuantidadeEstoque() }}" data-qtd-step="{{ $p->unidadeContagemInteira() ? '1' : '0.001' }}" data-sem-custo="{{ $p->temCustoVigenteDefinido() ? '0' : '1' }}">{{ $p->nome }} (R$ {{ number_format($p->preco_venda, 2, ',', '.') }}) — Estoque: {{ $p->formatarQuantidadeEstoque() }}</option>
                                                 @endforeach
                                             </select>
                                             <small class="text-muted d-block mt-1 estoque-disponivel" style="display:none !important;"></small>
@@ -204,6 +204,16 @@
             sel.addEventListener('change', function() {
                 var opt = this.options[this.selectedIndex];
                 if (opt.value) {
+                    if (opt.getAttribute('data-sem-custo') === '1') {
+                        var msgSemCusto = @json($podeVerCustoProdutos ?? false
+                            ? 'Este produto não tem preço de custo cadastrado. Informe o custo no cadastro do produto antes de finalizar a venda.'
+                            : 'Este produto ainda não tem preço de custo. Peça a um gestor para cadastrar o custo no produto antes de finalizar a venda.');
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({ icon: 'warning', title: 'Atenção', text: msgSemCusto, confirmButtonColor: '#038edc' });
+                        } else {
+                            alert(msgSemCusto);
+                        }
+                    }
                     pv.value = opt.dataset.precoVista || 0;
                     pc.value = opt.dataset.precoCrediario || opt.dataset.precoVista || 0;
                     desc.classList.add('d-none');

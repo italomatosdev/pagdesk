@@ -156,6 +156,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::get('/', [App\Modules\Core\Controllers\VendaController::class, 'index'])->name('index');
         Route::get('/create', [App\Modules\Core\Controllers\VendaController::class, 'create'])->name('create');
         Route::post('/', [App\Modules\Core\Controllers\VendaController::class, 'store'])->name('store');
+        Route::patch('/{venda}/itens/{vendaItem}/custo', [App\Modules\Core\Controllers\VendaController::class, 'updateItemCusto'])->name('itens.custo');
         Route::get('/{venda}/formas/{forma}/comprovante', [App\Modules\Core\Controllers\VendaController::class, 'comprovante'])->name('formas.comprovante');
         Route::get('/{id}', [App\Modules\Core\Controllers\VendaController::class, 'show'])->name('show');
     });
@@ -165,6 +166,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::get('/', [App\Modules\Core\Controllers\ProdutoController::class, 'index'])->name('index');
         Route::get('/create', [App\Modules\Core\Controllers\ProdutoController::class, 'create'])->name('create');
         Route::post('/', [App\Modules\Core\Controllers\ProdutoController::class, 'store'])->name('store');
+        Route::get('/{id}/custos', [App\Modules\Core\Controllers\ProdutoController::class, 'custosHistorico'])->name('custos.historico');
         Route::get('/{id}', [App\Modules\Core\Controllers\ProdutoController::class, 'show'])->name('show');
         Route::get('/{id}/edit', [App\Modules\Core\Controllers\ProdutoController::class, 'edit'])->name('edit');
         Route::match(['put', 'patch', 'post'], '/{id}', [App\Modules\Core\Controllers\ProdutoController::class, 'update'])->name('update');

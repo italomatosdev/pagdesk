@@ -99,6 +99,17 @@
                 </div>
             </div>
         </div>
+        @if($podeVerCustoProdutos ?? false)
+            <div class="col-6 col-md-4 col-lg-2 mb-2">
+                <div class="card h-100 border-danger">
+                    <div class="card-body text-center py-3">
+                        <i class="bx bx-purchase-tag font-size-24 text-danger"></i>
+                        <h5 class="mt-1 mb-0">{{ number_format($stats['sem_custo'] ?? 0, 0, ',', '.') }}</h5>
+                        <small class="text-muted">Sem custo cadastrado</small>
+                    </div>
+                </div>
+            </div>
+        @endif
     </div>
 
     <div class="card mb-3">
@@ -139,6 +150,16 @@
                         <option value="sem" {{ request('estoque') === 'sem' ? 'selected' : '' }}>Sem estoque</option>
                     </select>
                 </div>
+                @if($podeVerCustoProdutos ?? false)
+                    <div class="col-md-2">
+                        <label class="form-label">Custo</label>
+                        <select name="custo" class="form-select">
+                            <option value="">Todos</option>
+                            <option value="com" {{ request('custo') === 'com' ? 'selected' : '' }}>Com custo</option>
+                            <option value="sem" {{ request('custo') === 'sem' ? 'selected' : '' }}>Sem custo</option>
+                        </select>
+                    </div>
+                @endif
                 <div class="col-md-2 d-flex align-items-end">
                     <button type="submit" class="btn btn-primary me-2"><i class="bx bx-search"></i> Filtrar</button>
                     <a href="{{ route('produtos.index') }}" class="btn btn-secondary">Limpar</a>
@@ -162,6 +183,9 @@
                                 <th>Código</th>
                                 <th>Operação</th>
                                 <th class="text-end">Preço venda</th>
+                                @if($podeVerCustoProdutos ?? false)
+                                    <th class="text-end">Preço custo</th>
+                                @endif
                                 <th class="text-end">Estoque</th>
                                 <th>Status estoque</th>
                                 <th>Unidade</th>
@@ -181,6 +205,15 @@
                                     <td>{{ $p->codigo ?? '—' }}</td>
                                     <td>{{ $p->operacao->nome ?? '—' }}</td>
                                     <td class="text-end">R$ {{ number_format($p->preco_venda, 2, ',', '.') }}</td>
+                                    @if($podeVerCustoProdutos ?? false)
+                                        <td class="text-end">
+                                            @if($p->temCustoVigenteDefinido())
+                                                R$ {{ number_format((float) $p->custo_unitario_vigente, 2, ',', '.') }}
+                                            @else
+                                                <span class="badge bg-warning text-dark">Sem custo</span>
+                                            @endif
+                                        </td>
+                                    @endif
                                     <td class="text-end">{{ $p->formatarQuantidadeEstoque() }}</td>
                                     <td>
                                         @if($statusEstoque === 'sem')

@@ -71,6 +71,9 @@
                                     <th class="text-end">Preço crediário</th>
                                     <th class="text-end">Subtotal vista</th>
                                     <th class="text-end">Subtotal crediário</th>
+                                    @if($podeVerCustoProdutos ?? false)
+                                        <th class="text-end">Custo na venda</th>
+                                    @endif
                                 </tr>
                             </thead>
                             <tbody>
@@ -93,6 +96,29 @@
                                         <td class="text-end">R$ {{ number_format($item->preco_unitario_crediario, 2, ',', '.') }}</td>
                                         <td class="text-end">R$ {{ number_format($item->subtotal_vista, 2, ',', '.') }}</td>
                                         <td class="text-end">R$ {{ number_format($item->subtotal_crediario, 2, ',', '.') }}</td>
+                                        @if($podeVerCustoProdutos ?? false)
+                                            <td class="text-end align-top">
+                                                @if($item->produto_id)
+                                                    @if($item->custo_unitario_aplicado !== null)
+                                                        <div class="small text-muted">Unit.</div>
+                                                        <div>R$ {{ number_format((float) $item->custo_unitario_aplicado, 2, ',', '.') }}</div>
+                                                        <div class="small text-muted mt-1">Total custo</div>
+                                                        <div>R$ {{ number_format((float) ($item->custo_total_aplicado ?? 0), 2, ',', '.') }}</div>
+                                                    @else
+                                                        <span class="badge bg-warning text-dark">Não informado</span>
+                                                    @endif
+                                                    <form method="POST" action="{{ route('vendas.itens.custo', ['venda' => $venda->id, 'vendaItem' => $item->id]) }}" class="mt-2 text-start">
+                                                        @csrf
+                                                        @method('PATCH')
+                                                        <label class="form-label small mb-0">Ajustar custo unit. (R$)</label>
+                                                        <input type="text" name="custo_unitario_aplicado" class="form-control form-control-sm" inputmode="decimal" data-mask-money="brl" placeholder="0,00" value="{{ $item->custo_unitario_aplicado !== null ? $item->custo_unitario_aplicado : '' }}" required>
+                                                        <button type="submit" class="btn btn-sm btn-outline-primary mt-1">Salvar</button>
+                                                    </form>
+                                                @else
+                                                    <span class="text-muted">—</span>
+                                                @endif
+                                            </td>
+                                        @endif
                                     </tr>
                                 @endforeach
                             </tbody>
