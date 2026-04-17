@@ -86,25 +86,36 @@
                 </div>
                 <div class="card-body">
                     @php
-                        $totalValor = $emprestimos->sum('valor_total');
                         $qtdTotal = $emprestimos->where('renovacoes_count', 0)->count();
                         $qtdRenovacao = $emprestimos->where('renovacoes_count', '>', 0)->count();
                     @endphp
-                    <div class="row mb-3">
-                        <div class="col-md-4">
-                            <div class="border rounded p-2 bg-light">
+                    <div class="row mb-3 g-2">
+                        <div class="col-12 col-sm-6 col-md-4">
+                            <div class="border rounded p-2 bg-light h-100">
                                 <small class="text-muted">Valor total quitado (principal)</small>
-                                <div class="fw-bold">R$ {{ number_format($totalValor, 2, ',', '.') }}</div>
+                                <div class="fw-bold">R$ {{ number_format($totalPrincipalQuitadoRelatorio, 2, ',', '.') }}</div>
                             </div>
                         </div>
-                        <div class="col-md-4">
-                            <div class="border rounded p-2 bg-light">
+                        <div class="col-12 col-sm-6 col-md-4">
+                            <div class="border rounded p-2 bg-light h-100">
+                                <small class="text-muted">Total pago (bruto)</small>
+                                <div class="fw-bold">R$ {{ number_format($totalPagoBrutoRelatorio, 2, ',', '.') }}</div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-sm-6 col-md-4">
+                            <div class="border rounded p-2 bg-light h-100">
+                                <small class="text-muted">Lucro <span class="text-muted fw-normal">(neste relatório)</span></small>
+                                <div class="fw-bold">R$ {{ number_format($totalLucroRelatorioQuitacoes, 2, ',', '.') }}</div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-sm-6 col-md-6">
+                            <div class="border rounded p-2 bg-light h-100">
                                 <small class="text-muted">Quitação total</small>
                                 <div class="fw-bold text-success">{{ $qtdTotal }}</div>
                             </div>
                         </div>
-                        <div class="col-md-4">
-                            <div class="border rounded p-2 bg-light">
+                        <div class="col-12 col-sm-6 col-md-6">
+                            <div class="border rounded p-2 bg-light h-100">
                                 <small class="text-muted">Quitado por renovação</small>
                                 <div class="fw-bold text-info">{{ $qtdRenovacao }}</div>
                             </div>
@@ -130,6 +141,8 @@
                                     <th>Operação</th>
                                     <th>Consultor</th>
                                     <th class="text-end">Valor total</th>
+                                    <th class="text-end">Total pago (bruto)</th>
+                                    <th class="text-end">Lucro <span class="text-muted fw-normal small">(relatório)</span></th>
                                     <th class="text-center">Data quitação</th>
                                     <th class="text-center">Frequência</th>
                                     <th class="text-center">Tipo</th>
@@ -148,6 +161,8 @@
                                         <td>{{ $e->operacao ? $e->operacao->nome : '-' }}</td>
                                         <td>{{ $e->consultor ? $e->consultor->name : '-' }}</td>
                                         <td class="text-end">R$ {{ number_format($e->valor_total, 2, ',', '.') }}</td>
+                                        <td class="text-end">R$ {{ number_format($e->valor_total_pago_bruto ?? 0, 2, ',', '.') }}</td>
+                                        <td class="text-end">R$ {{ number_format($e->lucro_relatorio_quitacao ?? 0, 2, ',', '.') }}</td>
                                         <td class="text-center">{{ $e->data_quitacao ? \Carbon\Carbon::parse($e->data_quitacao)->format('d/m/Y') : '-' }}</td>
                                         <td class="text-center">{{ $e->frequencia ? ucfirst($e->frequencia) : '-' }}</td>
                                         <td class="text-center">
@@ -160,7 +175,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="7" class="text-center text-muted py-4">Nenhuma quitação no período para os filtros informados.</td>
+                                        <td colspan="9" class="text-center text-muted py-4">Nenhuma quitação no período para os filtros informados.</td>
                                     </tr>
                                 @endforelse
                             </tbody>

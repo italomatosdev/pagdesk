@@ -629,11 +629,18 @@ class RelatorioController extends Controller
 
         $emprestimos->each(function ($e) {
             $e->data_quitacao = $e->parcelas->max('data_pagamento');
+            $bruto = round($e->parcelas->sum(fn ($p) => (float) ($p->valor_pago ?? 0)), 2);
+            $e->valor_total_pago_bruto = $bruto;
+            $e->lucro_relatorio_quitacao = round($bruto - (float) $e->valor_total, 2);
         });
 
         $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
             FichaContatoLookup::pairsFromEmprestimos($emprestimos)
         );
+
+        $totalPrincipalQuitadoRelatorio = round($emprestimos->sum(fn ($e) => (float) $e->valor_total), 2);
+        $totalPagoBrutoRelatorio = round($emprestimos->sum(fn ($e) => (float) ($e->valor_total_pago_bruto ?? 0)), 2);
+        $totalLucroRelatorioQuitacoes = round($totalPagoBrutoRelatorio - $totalPrincipalQuitadoRelatorio, 2);
 
         return view('relatorios.quitacoes', compact(
             'dateFrom',
@@ -645,7 +652,10 @@ class RelatorioController extends Controller
             'frequencia',
             'tipoQuitacao',
             'emprestimos',
-            'fichasContatoPorClienteOperacao'
+            'fichasContatoPorClienteOperacao',
+            'totalPrincipalQuitadoRelatorio',
+            'totalPagoBrutoRelatorio',
+            'totalLucroRelatorioQuitacoes'
         ));
     }
 
