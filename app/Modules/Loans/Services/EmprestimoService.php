@@ -1150,6 +1150,12 @@ class EmprestimoService
                 ]);
             }
 
+            if ($emprestimo->temRenovacaoFilhaCancelada()) {
+                throw ValidationException::withMessages([
+                    'emprestimo' => 'Não é possível cancelar com desfazimento: existe renovação (contrato filho) cancelada vinculada a este empréstimo.',
+                ]);
+            }
+
             $parcelasComPagamento = $emprestimo->parcelas->filter(fn ($p) => $p->valor_pago > 0 || $p->pagamentos->isNotEmpty());
             $pagamentoIds = $parcelasComPagamento->flatMap(fn ($p) => $p->pagamentos->pluck('id'))->unique()->filter()->values()->all();
 

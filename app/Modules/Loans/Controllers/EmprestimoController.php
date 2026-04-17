@@ -757,6 +757,8 @@ class EmprestimoController extends Controller
             });
         $podeCancelarRenovacaoComDevolucaoPrincipal = $podeVerAcoesGestorAdmin && $renovacaoSemParcelasPagas;
 
+        $temRenovacaoFilhaCancelada = $emprestimo->temRenovacaoFilhaCancelada();
+
         $fichaContatoEmprestimo = $this->operacaoDadosClienteService->obterParaOperacao(
             (int) $emprestimo->cliente_id,
             (int) $emprestimo->operacao_id
@@ -799,7 +801,8 @@ class EmprestimoController extends Controller
             'podeEditarGarantias',
             'mostrarAvisoCorrecaoDomingoLegado',
             'qtdParcelasDomingoAbertoLegado',
-            'podeCancelarRenovacaoComDevolucaoPrincipal'
+            'podeCancelarRenovacaoComDevolucaoPrincipal',
+            'temRenovacaoFilhaCancelada'
         ));
     }
 

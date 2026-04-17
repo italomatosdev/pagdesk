@@ -84,6 +84,36 @@ class CancelarRenovacaoDevolucaoPrincipalTest extends TestCase
     }
 
     /** @test */
+    public function apos_cancelar_renovacao_origem_nao_aceita_cancelar_com_desfazimento(): void
+    {
+        [$origem, $renovado] = $this->criarOrigemFinalizadoERenovadoAtivo();
+
+        $this->actingAs($this->gestor)->post(
+            route('emprestimos.cancelar-renovacao-devolucao-principal', $renovado->id),
+            [
+                '_token' => csrf_token(),
+                'motivo_cancelamento' => 'Cancelamento de teste com motivo suficiente.',
+                'confirmacao_devolucao_principal' => '1',
+            ]
+        )->assertRedirect(route('emprestimos.show', $renovado->id));
+
+        $this->assertTrue($origem->fresh()->temRenovacaoFilhaCancelada());
+
+        $response = $this->actingAs($this->gestor)->from(route('emprestimos.show', $origem->id))->post(
+            route('emprestimos.cancelar-com-desfazimento', $origem->id),
+            [
+                '_token' => csrf_token(),
+                'motivo_cancelamento' => 'Tentativa de desfazer no contrato origem após filho cancelado.',
+            ]
+        );
+
+        $response->assertRedirect(route('emprestimos.show', $origem->id));
+        $response->assertSessionHasErrors('emprestimo');
+
+        $this->assertSame('finalizado', $origem->fresh()->status);
+    }
+
+    /** @test */
     public function validacao_falha_sem_checkbox_de_confirmacao(): void
     {
         [, $renovado] = $this->criarOrigemFinalizadoERenovadoAtivo();

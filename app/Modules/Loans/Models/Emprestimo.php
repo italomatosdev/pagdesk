@@ -305,6 +305,19 @@ class Emprestimo extends Model
     }
 
     /**
+     * Contrato de origem com ao menos uma renovação direta cancelada (ex.: fluxo de devolução de principal).
+     * Usado para bloquear "cancelar com desfazimento" no pai e manter histórico coerente.
+     */
+    public function temRenovacaoFilhaCancelada(): bool
+    {
+        if ($this->isRenovacao()) {
+            return false;
+        }
+
+        return $this->renovacoes()->where('status', 'cancelado')->exists();
+    }
+
+    /**
      * Solicitação de aceite quando consultor cria empréstimo retroativo (uma por empréstimo, status aguardando/aprovado/rejeitado)
      */
     public function solicitacaoRetroativo()

@@ -562,6 +562,7 @@
                             $podeCancelarComDesfazimento = ($podeCancelarComDesfazimento ?? false) &&
                                 !$emprestimo->isCancelado() &&
                                 !$emprestimo->isRenovacao() &&
+                                !($temRenovacaoFilhaCancelada ?? false) &&
                                 ($temParcelasPagas || $emprestimo->isFinalizado() || ($emprestimo->liberacao && $emprestimo->liberacao->isPagoAoCliente()));
                         @endphp
                         @if($emprestimo->isRenovacao() && ($podeVerAcoesGestorAdmin ?? false) && !$emprestimo->isCancelado())
@@ -608,6 +609,13 @@
                                         <i class="bx bx-undo"></i> Cancelar e desfazer pagamentos
                                     </button>
                                 @endif
+                            </div>
+                        @endif
+                        @if(($podeVerAcoesGestorAdmin ?? false) && ($temRenovacaoFilhaCancelada ?? false) && ! $emprestimo->isRenovacao() && ! $emprestimo->isCancelado())
+                            <hr>
+                            <div class="alert alert-secondary mb-0">
+                                <i class="bx bx-info-circle"></i>
+                                <strong>Renovação cancelada:</strong> não é possível usar &quot;cancelar e desfazer pagamentos&quot; neste contrato de origem, pois existe renovação (contrato filho) cancelada vinculada a ele.
                             </div>
                         @endif
                         
