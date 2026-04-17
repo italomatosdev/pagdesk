@@ -181,7 +181,7 @@
                                     <td>{{ $p->codigo ?? '—' }}</td>
                                     <td>{{ $p->operacao->nome ?? '—' }}</td>
                                     <td class="text-end">R$ {{ number_format($p->preco_venda, 2, ',', '.') }}</td>
-                                    <td class="text-end">{{ number_format($qtdEstoque, 3, ',', '.') }}</td>
+                                    <td class="text-end">{{ $p->formatarQuantidadeEstoque() }}</td>
                                     <td>
                                         @if($statusEstoque === 'sem')
                                             <span class="badge bg-warning text-dark"><i class="bx bx-error"></i> Sem estoque</span>
@@ -191,7 +191,7 @@
                                             <span class="badge bg-success"><i class="bx bx-check"></i> Em estoque</span>
                                         @endif
                                     </td>
-                                    <td>{{ $p->unidade ?? '—' }}</td>
+                                    <td>{{ $p->rotuloUnidade() }}</td>
                                     <td>
                                         <span class="badge bg-{{ $p->ativo ? 'success' : 'secondary' }}">
                                             {{ $p->ativo ? 'Ativo' : 'Inativo' }}

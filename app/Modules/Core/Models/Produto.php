@@ -30,6 +30,105 @@ class Produto extends Model
     ];
 
     /**
+     * Códigos de unidade permitidos no cadastro (select): valor gravado em `unidade`.
+     *
+     * @return array<string, string> codigo => rótulo
+     */
+    public static function unidadesParaSelect(): array
+    {
+        return [
+            'un' => 'Un (peça)',
+            'pc' => 'Peça (PC)',
+            'cx' => 'Caixa',
+            'dz' => 'Dúzia',
+            'kg' => 'Quilograma (kg)',
+            'g' => 'Grama (g)',
+            'm' => 'Metro (m)',
+            'm2' => 'Metro quadrado (m²)',
+            'l' => 'Litro (l)',
+            'ml' => 'Mililitro (ml)',
+        ];
+    }
+
+    /**
+     * Códigos em que o estoque / quantidade na venda são inteiros.
+     *
+     * @return list<string>
+     */
+    public static function unidadesCodigosEstoqueInteiro(): array
+    {
+        return ['un', 'pc', 'cx', 'dz'];
+    }
+
+    /**
+     * Unidades de contagem: estoque e quantidade na venda devem ser inteiros.
+     * Valores legados (texto livre antigo) ainda são reconhecidos pelo padrão anterior.
+     */
+    public static function estoqueExigeInteiro(?string $unidade): bool
+    {
+        $u = mb_strtolower(trim((string) ($unidade ?? '')), 'UTF-8');
+        if ($u === '') {
+            return true;
+        }
+        if (in_array($u, self::unidadesCodigosEstoqueInteiro(), true)) {
+            return true;
+        }
+        if (array_key_exists($u, self::unidadesParaSelect())) {
+            return false;
+        }
+        $compacto = preg_replace('/\s+/u', '', $u);
+
+        return (bool) preg_match('/^(un(id(ade)?)?|und|pc|p[cç]a|pe[cç]a)$/u', $compacto);
+    }
+
+    /**
+     * Rótulo amigável para exibição; códigos fora do catálogo mostram o valor bruto (legado).
+     */
+    public function rotuloUnidade(): string
+    {
+        $u = $this->unidade;
+        if ($u === null || $u === '') {
+            return self::unidadesParaSelect()['un'];
+        }
+
+        return self::unidadesParaSelect()[$u] ?? (string) $u;
+    }
+
+    public function unidadeContagemInteira(): bool
+    {
+        return self::estoqueExigeInteiro($this->unidade);
+    }
+
+    /**
+     * Exibe estoque sem zeros decimais à toa; unidade de contagem só inteiro.
+     */
+    public function formatarQuantidadeEstoque(): string
+    {
+        $v = (float) $this->estoque;
+        if ($this->unidadeContagemInteira()) {
+            return number_format((int) round($v), 0, ',', '.');
+        }
+        $s = number_format($v, 3, ',', '.');
+        $s = rtrim(rtrim($s, '0'), ',');
+
+        return $s === '' ? '0' : $s;
+    }
+
+    /**
+     * Formata uma quantidade arbitrária (ex.: na venda) com a mesma regra do produto.
+     */
+    public function formatarQuantidade(float $quantidade): string
+    {
+        if ($this->unidadeContagemInteira()) {
+            return number_format((int) round($quantidade), 0, ',', '.');
+        }
+        $s = number_format($quantidade, 3, ',', '.');
+        $s = rtrim(rtrim($s, '0'), ',');
+
+        return $s === '' ? '0' : $s;
+    }
+
+    /**
      * Verifica se há estoque suficiente para a quantidade informada.
      */
     public function temEstoque(float $quantidade): bool

@@ -87,7 +87,7 @@
                                             <select name="itens[0][produto_id]" class="form-select form-select-produto">
                                                 <option value="">— Descrição livre —</option>
                                                 @foreach($produtos as $p)
-                                                    <option value="{{ $p->id }}" data-operacao-id="{{ $p->operacao_id }}" data-preco-vista="{{ $p->preco_venda }}" data-preco-crediario="{{ $p->preco_venda }}" data-estoque="{{ $p->estoque }}">{{ $p->nome }} (R$ {{ number_format($p->preco_venda, 2, ',', '.') }}) — Estoque: {{ number_format((float)$p->estoque, 3, ',', '.') }}</option>
+                                                    <option value="{{ $p->id }}" data-operacao-id="{{ $p->operacao_id }}" data-preco-vista="{{ $p->preco_venda }}" data-preco-crediario="{{ $p->preco_venda }}" data-estoque="{{ $p->estoque }}" data-estoque-exibicao="{{ $p->formatarQuantidadeEstoque() }}" data-qtd-step="{{ $p->unidadeContagemInteira() ? '1' : '0.001' }}">{{ $p->nome }} (R$ {{ number_format($p->preco_venda, 2, ',', '.') }}) — Estoque: {{ $p->formatarQuantidadeEstoque() }}</option>
                                                 @endforeach
                                             </select>
                                             <small class="text-muted d-block mt-1 estoque-disponivel" style="display:none !important;"></small>
@@ -200,6 +200,7 @@
             var pv = tr.querySelector('input[name*="preco_unitario_vista"]');
             var pc = tr.querySelector('input[name*="preco_unitario_crediario"]');
             var estoqueSpan = tr.querySelector('.estoque-disponivel');
+            var qtdInput = tr.querySelector('input[name*="quantidade"]');
             sel.addEventListener('change', function() {
                 var opt = this.options[this.selectedIndex];
                 if (opt.value) {
@@ -207,12 +208,22 @@
                     pc.value = opt.dataset.precoCrediario || opt.dataset.precoVista || 0;
                     desc.classList.add('d-none');
                     if (estoqueSpan) {
-                        estoqueSpan.textContent = 'Estoque disponível: ' + parseFloat(opt.dataset.estoque || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+                        var txtEx = opt.dataset.estoqueExibicao;
+                        estoqueSpan.textContent = 'Estoque disponível: ' + (txtEx || parseFloat(opt.dataset.estoque || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 3 }));
                         estoqueSpan.style.display = 'block';
+                    }
+                    if (qtdInput) {
+                        var st = opt.dataset.qtdStep || '0.001';
+                        qtdInput.step = st;
+                        qtdInput.min = st === '1' ? '1' : '0.001';
                     }
                 } else {
                     desc.classList.remove('d-none');
                     if (estoqueSpan) estoqueSpan.style.display = 'none';
+                    if (qtdInput) {
+                        qtdInput.step = '0.001';
+                        qtdInput.min = '0.001';
+                    }
                 }
             });
         }

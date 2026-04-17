@@ -11,6 +11,8 @@ use App\Support\OperacaoPreferida;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class ProdutoController extends Controller
@@ -153,7 +155,7 @@ class ProdutoController extends Controller
             'nome' => 'required|string|max:255',
             'codigo' => 'nullable|string|max:50',
             'preco_venda' => 'required|numeric|min:0',
-            'unidade' => 'nullable|string|max:20',
+            'unidade' => ['required', Rule::in(array_keys(Produto::unidadesParaSelect()))],
             'estoque' => 'required|numeric|min:0',
             'ativo' => 'boolean',
         ], [
@@ -173,7 +175,7 @@ class ProdutoController extends Controller
         }
 
         $validated['empresa_id'] = $user->empresa_id;
-        $validated['estoque'] = (float) $validated['estoque'];
+        $this->normalizarEstoqueParaUnidade($validated);
         $validated['ativo'] = $request->boolean('ativo', true);
 
         $produto = Produto::create($validated);
@@ -247,7 +249,7 @@ class ProdutoController extends Controller
                 'nome' => 'required|string|max:255',
                 'codigo' => 'nullable|string|max:50',
                 'preco_venda' => 'required|numeric|min:0',
-                'unidade' => 'nullable|string|max:20',
+                'unidade' => ['required', Rule::in($this->chavesUnidadePermitidas($produto))],
                 'estoque' => 'required|numeric|min:0',
                 'ativo' => 'nullable|boolean',
                 'anexos' => 'nullable|array',
@@ -264,7 +266,7 @@ class ProdutoController extends Controller
                 }
             }
 
-            $validated['estoque'] = (float) $validated['estoque'];
+            $this->normalizarEstoqueParaUnidade($validated);
             $validated['ativo'] = $request->boolean('ativo', true);
             unset($validated['anexos']);
 
@@ -303,6 +305,39 @@ class ProdutoController extends Controller
             \Log::error('ProdutoController::update falhou', ['id' => $id, 'error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
 
             return back()->with('error', 'Erro ao salvar: '.$e->getMessage())->withInput();
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function chavesUnidadePermitidas(Produto $produto): array
+    {
+        $keys = array_keys(Produto::unidadesParaSelect());
+        $atual = (string) ($produto->unidade ?? '');
+        if ($atual !== '' && ! in_array($atual, $keys, true)) {
+            $keys[] = $atual;
+        }
+
+        return $keys;
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    protected function normalizarEstoqueParaUnidade(array &$validated): void
+    {
+        $unidade = $validated['unidade'] ?? null;
+        $v = (float) $validated['estoque'];
+        if (Produto::estoqueExigeInteiro($unidade)) {
+            if (abs($v - round($v)) > 1e-9) {
+                throw ValidationException::withMessages([
+                    'estoque' => 'Para esta unidade (contagem em peças) o estoque deve ser um número inteiro.',
+                ]);
+            }
+            $validated['estoque'] = (float) (int) round($v);
+        } else {
+            $validated['estoque'] = round($v, 3);
         }
     }
 

@@ -48,14 +48,8 @@
                     </div>
                     <div class="row mb-2">
                         <div class="col-md-4 text-muted">Estoque</div>
-                        <div class="col-md-8">{{ number_format((float)$produto->estoque, 3, ',', '.') }} {{ $produto->unidade ?: 'un' }}</div>
+                        <div class="col-md-8">{{ $produto->formatarQuantidadeEstoque() }} {{ $produto->rotuloUnidade() }}</div>
                     </div>
-                    @if($produto->unidade)
-                        <div class="row mb-2">
-                            <div class="col-md-4 text-muted">Unidade</div>
-                            <div class="col-md-8">{{ $produto->unidade }}</div>
-                        </div>
-                    @endif
                     <div class="row mb-2">
                         <div class="col-md-4 text-muted">Status</div>
                         <div class="col-md-8">
