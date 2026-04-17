@@ -22,7 +22,7 @@
             </div>
         @endif
         <div class="row">
-            <div class="col-lg-8">
+            <div class="col-lg-10">
                 <!-- Informações do Empréstimo -->
                 <div class="card">
                     <div class="card-header">
