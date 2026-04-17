@@ -1,9 +1,13 @@
 @extends('layouts.master')
+@php
+    $ctxFichaOperacao = !empty($operacaoContextoShow);
+    $fichaOperacao = data_get($operacaoContextoShow, 'ficha');
+@endphp
 @section('title')
     Cliente #{{ $cliente->id }}
 @endsection
 @section('page-title')
-    Cliente: {{ data_get($operacaoContextoShow, 'ficha')?->nome ?? $cliente->nome }}
+    Cliente: {{ $ctxFichaOperacao ? ($fichaOperacao?->nome ?? $cliente->nome) : $cliente->nome }}
 @endsection
 @section('body')
 
@@ -104,14 +108,19 @@
                     </div>
                     <div class="card-body">
                         @php
-                            $fichaShow = data_get($operacaoContextoShow, 'ficha');
+                            $fichaShow = $fichaOperacao;
                         @endphp
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <strong>{{ $cliente->isPessoaFisica() ? 'CPF' : 'CNPJ' }}:</strong> {{ $cliente->documento_formatado }}
                             </div>
                             <div class="col-md-6 mb-3">
-                                <strong>Nome:</strong> {{ $fichaShow?->nome ?? $cliente->nome }}
+                                <strong>Nome:</strong>
+                                @if($ctxFichaOperacao)
+                                    {{ $fichaShow?->nome ?? '—' }}
+                                @else
+                                    {{ $cliente->nome }}
+                                @endif
                             </div>
                             @if(($isSuperAdmin ?? false) && $cliente->empresa)
                                 <div class="col-md-6 mb-3">
@@ -120,7 +129,11 @@
                                 </div>
                             @endif
                             @php
-                                $telExibir = $fichaShow?->telefone ?? $cliente->telefone;
+                                if ($ctxFichaOperacao) {
+                                    $telExibir = $fichaShow?->telefone;
+                                } else {
+                                    $telExibir = $fichaShow?->telefone ?? $cliente->telefone;
+                                }
                                 $digitsWa = preg_replace('/\D/', '', (string) ($telExibir ?? ''));
                                 if (strlen($digitsWa) >= 10 && !str_starts_with($digitsWa, '55')) {
                                     $digitsWa = '55'.$digitsWa;
@@ -134,83 +147,114 @@
                                     <a href="{{ $waUrl }}" target="_blank" class="btn btn-sm btn-success ms-2" rel="noopener" title="WhatsApp com o número exibido">
                                         <i class="bx bxl-whatsapp"></i> WhatsApp
                                     </a>
-                                @elseif($cliente->temWhatsapp() && !$fichaShow)
+                                @elseif(!$ctxFichaOperacao && $cliente->temWhatsapp() && !$fichaShow)
                                     <a href="{{ $cliente->whatsapp_link }}" target="_blank" class="btn btn-sm btn-success ms-2" title="Falar no WhatsApp">
                                         <i class="bx bxl-whatsapp"></i> WhatsApp
                                     </a>
                                 @endif
                             </div>
                             <div class="col-md-6 mb-3">
-                                <strong>Email:</strong> {{ $fichaShow?->email ?? $cliente->email ?? '-' }}
+                                <strong>Email:</strong>
+                                @if($ctxFichaOperacao)
+                                    {{ $fichaShow?->email ?: '—' }}
+                                @else
+                                    {{ $fichaShow?->email ?? $cliente->email ?? '-' }}
+                                @endif
                             </div>
-                            @if($cliente->isPessoaFisica() && ($fichaShow?->data_nascimento ?? $cliente->data_nascimento))
+                            @if($cliente->isPessoaFisica() && ($ctxFichaOperacao ? $fichaShow?->data_nascimento : ($fichaShow?->data_nascimento ?? $cliente->data_nascimento)))
                                 <div class="col-md-6 mb-3">
                                     <strong>Data de Nascimento:</strong>
-                                    {{ ($fichaShow?->data_nascimento ?? $cliente->data_nascimento)?->format('d/m/Y') ?? '-' }}
+                                    {{ ($ctxFichaOperacao ? $fichaShow?->data_nascimento : ($fichaShow?->data_nascimento ?? $cliente->data_nascimento))?->format('d/m/Y') ?? '-' }}
                                 </div>
                             @endif
                             
-                            @if($cliente->isPessoaJuridica() && ($fichaShow?->responsavel_nome ?? $cliente->responsavel_nome))
+                            @if($cliente->isPessoaJuridica() && ($ctxFichaOperacao ? $fichaShow?->responsavel_nome : ($fichaShow?->responsavel_nome ?? $cliente->responsavel_nome)))
                                 <div class="col-12 mb-3">
                                     <hr>
                                     <h6 class="mb-3">Responsável Legal</h6>
                                     <div class="row">
                                         <div class="col-md-6 mb-2">
-                                            <strong>Nome:</strong> {{ $fichaShow?->responsavel_nome ?? $cliente->responsavel_nome }}
+                                            <strong>Nome:</strong>
+                                            @if($ctxFichaOperacao)
+                                                {{ $fichaShow?->responsavel_nome ?: '—' }}
+                                            @else
+                                                {{ $fichaShow?->responsavel_nome ?? $cliente->responsavel_nome }}
+                                            @endif
                                         </div>
-                                        @if($fichaShow?->responsavel_cpf ?? $cliente->responsavel_cpf)
+                                        @if($ctxFichaOperacao ? $fichaShow?->responsavel_cpf : ($fichaShow?->responsavel_cpf ?? $cliente->responsavel_cpf))
                                             <div class="col-md-6 mb-2">
                                                 <strong>CPF:</strong>
                                                 @if($fichaShow?->responsavel_cpf)
-                                                    {{ \App\Helpers\ValidacaoDocumento::formatarCpf(preg_replace('/\D/', '', $fichaShow->responsavel_cpf)) }}
-                                                @else
+                                                    {{ \App\Helpers\ValidacaoDocumento::formatarCpf(preg_replace('/\D/', '', $fichaShow->responsavel_cpf ?? '')) }}
+                                                @elseif(!$ctxFichaOperacao)
                                                     {{ $cliente->responsavel_cpf_formatado }}
+                                                @else
+                                                    —
                                                 @endif
                                             </div>
                                         @endif
-                                        @if($fichaShow?->responsavel_rg ?? $cliente->responsavel_rg)
+                                        @if($ctxFichaOperacao ? $fichaShow?->responsavel_rg : ($fichaShow?->responsavel_rg ?? $cliente->responsavel_rg))
                                             <div class="col-md-6 mb-2">
-                                                <strong>RG:</strong> {{ $fichaShow?->responsavel_rg ?? $cliente->responsavel_rg }}
+                                                <strong>RG:</strong>
+                                                @if($ctxFichaOperacao)
+                                                    {{ $fichaShow?->responsavel_rg ?: '—' }}
+                                                @else
+                                                    {{ $fichaShow?->responsavel_rg ?? $cliente->responsavel_rg }}
+                                                @endif
                                             </div>
                                         @endif
-                                        @if($fichaShow?->responsavel_cnh ?? $cliente->responsavel_cnh)
+                                        @if($ctxFichaOperacao ? $fichaShow?->responsavel_cnh : ($fichaShow?->responsavel_cnh ?? $cliente->responsavel_cnh))
                                             <div class="col-md-6 mb-2">
-                                                <strong>CNH:</strong> {{ $fichaShow?->responsavel_cnh ?? $cliente->responsavel_cnh }}
+                                                <strong>CNH:</strong>
+                                                @if($ctxFichaOperacao)
+                                                    {{ $fichaShow?->responsavel_cnh ?: '—' }}
+                                                @else
+                                                    {{ $fichaShow?->responsavel_cnh ?? $cliente->responsavel_cnh }}
+                                                @endif
                                             </div>
                                         @endif
-                                        @if($fichaShow?->responsavel_cargo ?? $cliente->responsavel_cargo)
+                                        @if($ctxFichaOperacao ? $fichaShow?->responsavel_cargo : ($fichaShow?->responsavel_cargo ?? $cliente->responsavel_cargo))
                                             <div class="col-md-6 mb-2">
-                                                <strong>Cargo/Função:</strong> {{ $fichaShow?->responsavel_cargo ?? $cliente->responsavel_cargo }}
+                                                <strong>Cargo/Função:</strong>
+                                                @if($ctxFichaOperacao)
+                                                    {{ $fichaShow?->responsavel_cargo ?: '—' }}
+                                                @else
+                                                    {{ $fichaShow?->responsavel_cargo ?? $cliente->responsavel_cargo }}
+                                                @endif
                                             </div>
                                         @endif
                                     </div>
                                 </div>
                             @endif
                             
-                            @if(($fichaShow?->endereco ?? $cliente->endereco) || ($fichaShow?->cidade ?? $cliente->cidade) || ($fichaShow?->estado ?? $cliente->estado) || ($fichaShow?->cep ?? $cliente->cep))
+                            @if($ctxFichaOperacao ? ($fichaShow?->endereco || $fichaShow?->cidade || $fichaShow?->estado || $fichaShow?->cep) : (($fichaShow?->endereco ?? $cliente->endereco) || ($fichaShow?->cidade ?? $cliente->cidade) || ($fichaShow?->estado ?? $cliente->estado) || ($fichaShow?->cep ?? $cliente->cep)))
                                 <div class="col-12 mb-3">
                                     <strong>Endereço:</strong>
-                                    @if($fichaShow?->endereco ?? $cliente->endereco)
-                                        {{ $fichaShow?->endereco ?? $cliente->endereco }}
+                                    @if($ctxFichaOperacao ? $fichaShow?->endereco : ($fichaShow?->endereco ?? $cliente->endereco))
+                                        {{ $ctxFichaOperacao ? $fichaShow?->endereco : ($fichaShow?->endereco ?? $cliente->endereco) }}
                                     @endif
-                                    @if($fichaShow?->numero ?? $cliente->numero)
-                                        , {{ $fichaShow?->numero ?? $cliente->numero }}
+                                    @if($ctxFichaOperacao ? $fichaShow?->numero : ($fichaShow?->numero ?? $cliente->numero))
+                                        , {{ $ctxFichaOperacao ? $fichaShow?->numero : ($fichaShow?->numero ?? $cliente->numero) }}
                                     @endif
-                                    @if($cliente->bairro ?? null)
+                                    @if(!$ctxFichaOperacao && ($cliente->bairro ?? null))
                                         - {{ $cliente->bairro }}
                                     @endif
-                                    @if($fichaShow?->cidade ?? $cliente->cidade)
-                                        - {{ $fichaShow?->cidade ?? $cliente->cidade }}/{{ $fichaShow?->estado ?? $cliente->estado }}
+                                    @if($ctxFichaOperacao ? $fichaShow?->cidade : ($fichaShow?->cidade ?? $cliente->cidade))
+                                        - {{ $ctxFichaOperacao ? $fichaShow?->cidade : ($fichaShow?->cidade ?? $cliente->cidade) }}/{{ $ctxFichaOperacao ? $fichaShow?->estado : ($fichaShow?->estado ?? $cliente->estado) }}
                                     @endif
-                                    @if($fichaShow?->cep ?? $cliente->cep)
-                                        - CEP: {{ $fichaShow?->cep ?? $cliente->cep }}
+                                    @if($ctxFichaOperacao ? $fichaShow?->cep : ($fichaShow?->cep ?? $cliente->cep))
+                                        - CEP: {{ $ctxFichaOperacao ? $fichaShow?->cep : ($fichaShow?->cep ?? $cliente->cep) }}
                                     @endif
                                 </div>
                             @endif
-                            @if($fichaShow?->observacoes ?? $cliente->observacoes)
+                            @if($ctxFichaOperacao ? $fichaShow?->observacoes : ($fichaShow?->observacoes ?? $cliente->observacoes))
                                 <div class="col-12 mb-3">
                                     <strong>Observações:</strong><br>
-                                    {{ $fichaShow?->observacoes ?? $cliente->observacoes }}
+                                    @if($ctxFichaOperacao)
+                                        {{ $fichaShow?->observacoes ?: '—' }}
+                                    @else
+                                        {{ $fichaShow?->observacoes ?? $cliente->observacoes }}
+                                    @endif
                                 </div>
                             @endif
                         </div>
