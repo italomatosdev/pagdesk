@@ -429,6 +429,15 @@ class Emprestimo extends Model
     }
 
     /**
+     * Empréstimos com desembolso em dinheiro ao cliente exigem liberação (`pago_ao_cliente`) antes de registrar pagamento de parcela.
+     * Renovação e crediário (venda parcelada) não passam por esse fluxo.
+     */
+    public function exigeLiberacaoAntesPagamentoParcelas(): bool
+    {
+        return ! $this->isRenovacao() && ! $this->isCrediario();
+    }
+
+    /**
      * Contrato ligado a cadeia de renovação: é renovação ou já originou outro empréstimo.
      * Usado em relatórios — pagamentos só de juros costumam estar na parcela do contrato antigo (sem origem_id).
      */

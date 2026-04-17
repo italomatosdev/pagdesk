@@ -43,8 +43,8 @@ class PagamentoService
             }
 
             // VALIDAÇÃO 2: Verificar se dinheiro foi liberado e pago ao cliente
-            // EXCEÇÃO: Empréstimos renovados não precisam de liberação (dinheiro já foi pago no empréstimo original)
-            if (! $emprestimo->isRenovacao()) {
+            // EXCEÇÃO: Renovação e crediário (venda) não exigem liberação de desembolso.
+            if ($emprestimo->exigeLiberacaoAntesPagamentoParcelas()) {
                 $liberacao = $emprestimo->liberacao;
                 if (! $liberacao) {
                     throw ValidationException::withMessages([
@@ -266,7 +266,7 @@ class PagamentoService
             }
 
             $liberacao = $emprestimo->liberacao;
-            if (! $emprestimo->isRenovacao() && (! $liberacao || $liberacao->status !== 'pago_ao_cliente')) {
+            if ($emprestimo->exigeLiberacaoAntesPagamentoParcelas() && (! $liberacao || $liberacao->status !== 'pago_ao_cliente')) {
                 throw ValidationException::withMessages([
                     'liberacao' => 'O dinheiro do empréstimo ainda não foi liberado/pago ao cliente.',
                 ]);
@@ -408,7 +408,7 @@ class PagamentoService
             }
 
             $liberacao = $emprestimo->liberacao;
-            if (! $emprestimo->isRenovacao() && (! $liberacao || $liberacao->status !== 'pago_ao_cliente')) {
+            if ($emprestimo->exigeLiberacaoAntesPagamentoParcelas() && (! $liberacao || $liberacao->status !== 'pago_ao_cliente')) {
                 throw ValidationException::withMessages([
                     'liberacao' => 'O dinheiro do empréstimo ainda não foi liberado/pago ao cliente.',
                 ]);
@@ -932,7 +932,7 @@ class PagamentoService
                 ]);
             }
 
-            if (! $emprestimo->isRenovacao()) {
+            if ($emprestimo->exigeLiberacaoAntesPagamentoParcelas()) {
                 $liberacao = $emprestimo->liberacao;
                 if (! $liberacao || $liberacao->status !== 'pago_ao_cliente') {
                     throw ValidationException::withMessages([
@@ -1099,7 +1099,7 @@ class PagamentoService
                 ]);
             }
 
-            if (! $emprestimo->isRenovacao()) {
+            if ($emprestimo->exigeLiberacaoAntesPagamentoParcelas()) {
                 $liberacao = $emprestimo->liberacao;
                 if (! $liberacao || $liberacao->status !== 'pago_ao_cliente') {
                     throw ValidationException::withMessages([
