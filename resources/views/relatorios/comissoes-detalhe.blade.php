@@ -26,10 +26,67 @@
                 @else
                     — Frequência: <strong>Todas</strong>
                 @endif
+                @if(!empty($quitacaoTotalPorDataQuitacao))
+                    — <span class="badge bg-primary">Apenas quitação total por data de quitação</span>
+                @endif
             </p>
-            <p class="text-muted small mb-0">
-                Valores do período; <strong>valor quitado (principal)</strong> e <strong>juros recebidos</strong> usam a mesma repartição por pagamento do relatório principal.
-            </p>
+            @if(!empty($quitacaoTotalPorDataQuitacao))
+                <p class="text-muted small mb-0">
+                    Filtro ativo: entram apenas contratos <strong>finalizados</strong>, <strong>quitação total</strong> (sem renovação gerada) cuja <strong>data de quitação</strong>
+                    (maior <code class="small">data_pagamento</code> das parcelas) está no intervalo acima.
+                    Os valores por empréstimo consideram <strong>todos os pagamentos</strong> deste consultor nesses contratos, não só os com data de pagamento no período.
+                </p>
+            @else
+                <p class="text-muted small mb-0">
+                    Período aplicado à <strong>data do pagamento</strong> de cada lançamento. <strong>Valor quitado (principal)</strong> e <strong>juros recebidos</strong> usam a mesma repartição por pagamento do relatório principal.
+                </p>
+            @endif
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card border">
+                <div class="card-body py-2">
+                    <form method="get" action="{{ route('relatorios.comissoes-detalhe') }}" class="row g-2 align-items-center flex-wrap">
+                        <input type="hidden" name="consultor_id" value="{{ $consultorId }}">
+                        <input type="hidden" name="date_from" value="{{ $dateFrom->format('Y-m-d') }}">
+                        <input type="hidden" name="date_to" value="{{ $dateTo->format('Y-m-d') }}">
+                        @if($operacaoId !== null)
+                            <input type="hidden" name="operacao_id" value="{{ $operacaoId }}">
+                        @endif
+                        @if(!empty($frequencia))
+                            <input type="hidden" name="frequencia" value="{{ $frequencia }}">
+                        @endif
+                        <div class="col-12 col-md-auto">
+                            <div class="form-check mb-0">
+                                <input class="form-check-input" type="checkbox" name="quitacao_total_periodo_quitacao" value="1" id="chkQuitacaoTotalPeriodoQuitacao"
+                                    {{ !empty($quitacaoTotalPorDataQuitacao) ? 'checked' : '' }}>
+                                <label class="form-check-label small" for="chkQuitacaoTotalPeriodoQuitacao">
+                                    Apenas quitações nesse período <span class="text-muted">(por data de quitação; só quitação total)</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-auto">
+                            <button type="submit" class="btn btn-sm btn-primary">
+                                <i class="bx bx-filter-alt"></i> Aplicar
+                            </button>
+                            @if(!empty($quitacaoTotalPorDataQuitacao))
+                                @php
+                                    $paramsSemQuitacao = array_filter([
+                                        'consultor_id' => $consultorId,
+                                        'date_from' => $dateFrom->format('Y-m-d'),
+                                        'date_to' => $dateTo->format('Y-m-d'),
+                                        'operacao_id' => $operacaoId,
+                                        'frequencia' => !empty($frequencia) ? $frequencia : null,
+                                    ], fn ($v) => $v !== null && $v !== '');
+                                @endphp
+                                <a href="{{ route('relatorios.comissoes-detalhe', $paramsSemQuitacao) }}" class="btn btn-sm btn-outline-secondary ms-md-1">Remover filtro</a>
+                            @endif
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -39,7 +96,7 @@
                 <div class="card-body py-3">
                     <h6 class="text-muted font-size-13 mb-1">Empréstimos</h6>
                     <h4 class="mb-0 font-size-22">{{ number_format($totais['qtd_emprestimos'], 0, ',', '.') }}</h4>
-                    <small class="text-muted">com pagamento no período</small>
+                    <small class="text-muted">{{ !empty($quitacaoTotalPorDataQuitacao) ? 'quitação total no período (data quitação)' : 'com pagamento no período' }}</small>
                 </div>
             </div>
         </div>
@@ -55,9 +112,9 @@
         <div class="col-6 col-md-4 col-xl-2 mb-3">
             <div class="card h-100 border border-primary border-opacity-25">
                 <div class="card-body py-3">
-                    <h6 class="text-muted font-size-13 mb-1">Total pago (período)</h6>
+                    <h6 class="text-muted font-size-13 mb-1">{{ !empty($quitacaoTotalPorDataQuitacao) ? 'Total pago (contratos)' : 'Total pago (período)' }}</h6>
                     <h4 class="mb-0 font-size-22 text-primary">R$ {{ number_format($totais['soma_total_pago_periodo'], 2, ',', '.') }}</h4>
-                    <small class="text-muted">soma dos pagamentos</small>
+                    <small class="text-muted">{{ !empty($quitacaoTotalPorDataQuitacao) ? 'pagamentos do consultor nos contratos listados' : 'soma dos pagamentos' }}</small>
                 </div>
             </div>
         </div>
@@ -83,7 +140,13 @@
             <div class="card h-100 bg-light">
                 <div class="card-body py-3">
                     <h6 class="text-muted font-size-13 mb-1">Confere com o relatório</h6>
-                    <p class="small mb-0 text-muted">Principal + juros no período = total pago alocado (saldo de arredondamentos pode diferir em centavos).</p>
+                    <p class="small mb-0 text-muted">
+                        @if(!empty($quitacaoTotalPorDataQuitacao))
+                            Com o filtro por <strong>data de quitação</strong>, os totais desta tela <strong>não</strong> coincidem com a linha do consultor no relatório principal (aquele usa data de pagamento no período).
+                        @else
+                            Principal + juros no período = total pago alocado (saldo de arredondamentos pode diferir em centavos).
+                        @endif
+                    </p>
                 </div>
             </div>
         </div>
@@ -104,7 +167,7 @@
                                     <th>Cliente</th>
                                     <th>Consultor (contrato)</th>
                                     <th class="text-end">Total empréstimo</th>
-                                    <th class="text-end">Total pago (período)</th>
+                                    <th class="text-end">{{ !empty($quitacaoTotalPorDataQuitacao) ? 'Total pago (contrato)' : 'Total pago (período)' }}</th>
                                     <th class="text-end">Valor quitado (principal)</th>
                                     <th class="text-end">Juros recebidos</th>
                                     <th class="text-center">Data quitação</th>
@@ -127,7 +190,11 @@
                                 @empty
                                     <tr>
                                         <td colspan="8" class="text-center text-muted py-4">
-                                            Nenhum empréstimo com pagamento vinculado a parcela neste período para este consultor.
+                                            @if(!empty($quitacaoTotalPorDataQuitacao))
+                                                Nenhuma quitação total com data de quitação neste período para este consultor (e filtros atuais).
+                                            @else
+                                                Nenhum empréstimo com pagamento vinculado a parcela neste período para este consultor.
+                                            @endif
                                         </td>
                                     </tr>
                                 @endforelse
@@ -137,7 +204,7 @@
                                     <tr class="table-light border-top border-2">
                                         <td colspan="3" class="bg-light"></td>
                                         <th class="text-end">Total empréstimo</th>
-                                        <th class="text-end">Total pago (período)</th>
+                                        <th class="text-end">{{ !empty($quitacaoTotalPorDataQuitacao) ? 'Total pago (contrato)' : 'Total pago (período)' }}</th>
                                         <th class="text-end">Valor quitado (principal)</th>
                                         <th class="text-end">Juros recebidos</th>
                                         <td class="bg-light"></td>
