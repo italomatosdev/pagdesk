@@ -16,7 +16,7 @@
             <div class="col-lg-8 mx-auto">
                 <div class="card">
                     <div class="card-header">
-                        <h4 class="card-title mb-0">Registrar Pagamento</h4>
+                        <h4 class="card-title mb-0">{{ !empty($modoAdiantamentoValor) ? 'Adiantamento de valor' : 'Registrar Pagamento' }}</h4>
                     </div>
                     <div class="card-body">
                         @if($parcela)
@@ -60,6 +60,12 @@
                                     R$ {{ number_format($faltaPagarParcela, 2, ',', '.') }}
                                 @endif
                             </div>
+                            @if(!empty($modoAdiantamentoValor))
+                                <div class="alert alert-secondary mt-3 mb-0">
+                                    <strong>Adiantamento de valor</strong> — pagamento parcial antes do vencimento, na mesma parcela, <strong>sem</strong> novo empréstimo.
+                                    O valor nominal da parcela permanece; o que muda é o <strong>valor pago</strong> acumulado e o <strong>falta pagar</strong>.
+                                </div>
+                            @endif
                         @endif
 
                         <form action="{{ route('pagamentos.store') }}" method="POST" enctype="multipart/form-data" id="formRegistrarPagamento" data-no-loading>
@@ -69,6 +75,10 @@
                                 <input type="hidden" name="parcela_id" value="{{ $parcela->id }}">
                                 @if(isset($returnTo))
                                     <input type="hidden" name="return_to" value="{{ $returnTo }}">
+                                @endif
+                                @if(!empty($modoAdiantamentoValor))
+                                    <input type="hidden" name="adiantamento_valor" value="1">
+                                    <input type="hidden" name="tipo_juros" value="nenhum">
                                 @endif
                             @else
                                 <div class="mb-3">
@@ -120,7 +130,7 @@
                                 $valorJurosRenovacaoAutomatico = round($jurosOriginais + $jurosAtraso, 2);
                             @endphp
 
-                            @if($parcela && ($estaAtrasada || (isset($renovar) && $renovar && $podeRenovar && !$jurosJaPagos)))
+                            @if($parcela && empty($modoAdiantamentoValor ?? false) && ($estaAtrasada || (isset($renovar) && $renovar && $podeRenovar && !$jurosJaPagos)))
                                 <!-- Juros de atraso (para parcelas atrasadas ou quando renovação está disponível) -->
                                 <div class="mb-3">
                                     <label class="form-label"><strong>Juros de atraso</strong></label>
@@ -133,7 +143,7 @@
                                                     <strong>Sem juros de atraso</strong> - Pagar apenas o valor da parcela
                                                 </label>
                                                 <div class="ms-4 text-muted" id="resultado_nenhum">
-                                                    Total: R$ {{ number_format($parcela->valor, 2, ',', '.') }}
+                                                    Total: R$ {{ number_format($faltaPagarParcela, 2, ',', '.') }}
                                                 </div>
                                             </div>
 
@@ -390,18 +400,37 @@
                                 </div>
                             @endif
 
+                            @php
+                                $modoAdvPag = ! empty($modoAdiantamentoValor);
+                                $permiteEditarValorCampo = ! empty($diariaMultiplasParcelas) || $modoAdvPag;
+                                $faltaParaCampoValor = $parcela
+                                    ? max(0.0, round((float) $parcela->valor - (float) ($parcela->valor_pago ?? 0), 2))
+                                    : 0.0;
+                                if ($parcela && ! empty($diariaMultiplasParcelas) && isset($diariaValorDevido)) {
+                                    $valorDefaultPagamento = number_format((float) $diariaValorDevido, 2, ',', '.');
+                                } elseif ($parcela) {
+                                    $valorDefaultPagamento = number_format($faltaParaCampoValor, 2, ',', '.');
+                                } else {
+                                    $valorDefaultPagamento = '';
+                                }
+                            @endphp
                             <div class="mb-3 campos-pagamento">
                                 <label class="form-label">Valor do Pagamento <span class="text-danger">*</span></label>
                                 <input type="text" name="valor" id="valor_pagamento" class="form-control" inputmode="decimal" data-mask-money="brl"
                                        placeholder="0,00"
-                                       value="{{ $parcela ? number_format($parcela->valor, 2, ',', '.') : '' }}"
-                                       @if(empty($diariaMultiplasParcelas)) required readonly @else required @endif
+                                       value="{{ old('valor', $valorDefaultPagamento) }}"
+                                       @if($permiteEditarValorCampo) required @else required readonly @endif
+                                       @if($modoAdvPag) data-adiantamento-max="{{ number_format($faltaParaCampoValor, 2, '.', '') }}" @endif
                                        @if(!empty($diariaMaxAntecipacao)) data-diaria-max="{{ number_format($diariaMaxAntecipacao, 2, '.', '') }}" @endif>
                                 @if(!empty($diariaMultiplasParcelas) && isset($diariaValorDevido, $diariaMaxAntecipacao))
                                     <small class="text-muted d-block mt-1">
                                         <strong>Diária (várias parcelas):</strong> valor devido (referência) até R$ {{ number_format($diariaValorDevido, 2, ',', '.') }};
                                         máximo permitido (sem sobra) até R$ {{ number_format($diariaMaxAntecipacao, 2, ',', '.') }} — conforme juros de atraso selecionados abaixo, o sistema valida no envio.
                                         Abaixo do devido, o pagamento parcial vai para aprovação em Liberações e a parcela permanece em atraso até aprovar.
+                                    </small>
+                                @elseif($modoAdvPag)
+                                    <small class="text-muted d-block mt-1">
+                                        Informe o valor recebido (máximo R$ {{ number_format($faltaParaCampoValor, 2, ',', '.') }}, o que falta pagar na parcela).
                                     </small>
                                 @else
                                     <small class="text-muted">Este valor é calculado automaticamente conforme a opção de juros de atraso selecionada.</small>
@@ -415,7 +444,7 @@
                                     <option value="pix">PIX</option>
                                     <option value="transferencia">Transferência</option>
                                     <option value="outro">Outro</option>
-                                    @if($parcela)
+                                    @if($parcela && empty($modoAdiantamentoValor ?? false))
                                         <option value="produto_objeto">Produto/Objeto</option>
                                     @endif
                                 </select>
@@ -562,7 +591,7 @@
                 }
                 const metodo = document.querySelector('select[name="metodo"]').value;
                 const tipoJuros = document.querySelector('input[name="tipo_juros"]:checked')?.value || 'nenhum';
-                const valorOriginal = {{ $parcela ? $parcela->valor : 0 }};
+                const valorOriginal = {{ $parcela ? number_format($faltaParaCampoValor, 2, '.', '') : 0 }};
                 const temJuros = tipoJuros !== 'nenhum' && tipoJuros !== 'renovacao' && tipoJuros !== 'executar_garantia' && valor > valorOriginal;
                 const isRenovacao = tipoJuros === 'renovacao';
                 const isExecutarGarantia = tipoJuros === 'executar_garantia';
@@ -679,9 +708,9 @@
             });
 
             @if($parcela && ($estaAtrasada || (isset($renovar) && $renovar)))
-            // Cálculo de juros em tempo real
+            // Cálculo de juros em tempo real (valorOriginal = falta nominal na parcela, após pagamentos parciais)
             (function() {
-                const valorOriginal = {{ $parcela->valor }};
+                const valorOriginal = {{ number_format($faltaParaCampoValor, 2, '.', '') }};
                 const diasAtraso = {{ $diasAtraso ?? 0 }};
                 const taxaOperacao = {{ $operacao->taxa_juros_atraso ?? 0 }};
                 const tipoCalculo = '{{ $operacao->tipo_calculo_juros ?? 'por_dia' }}';

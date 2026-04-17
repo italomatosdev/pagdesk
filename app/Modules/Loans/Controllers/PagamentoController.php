@@ -35,6 +35,7 @@ class PagamentoController extends Controller
         $renovar = $request->input('renovar', false); // Parâmetro para pré-selecionar renovação
         $renovacaoTipo = $request->input('renovacao_tipo'); // 'nenhum' = só juros (sem atraso), 'com_abate' = renovar com abate no saldo
         $executarGarantia = $request->input('executar_garantia', false); // Parâmetro para pré-selecionar executar garantia
+        $modoAdiantamentoValor = $request->boolean('adiantamento');
 
         if ($parcelaId) {
             $parcela = Parcela::with(['emprestimo.cliente', 'emprestimo.operacao'])->findOrFail($parcelaId);
@@ -69,6 +70,17 @@ class PagamentoController extends Controller
             }
         }
 
+        if ($modoAdiantamentoValor && $parcela && ! $parcela->podeAdiantarValor()) {
+            return redirect()
+                ->route('pagamentos.create', ['parcela_id' => $parcela->id])
+                ->with('error', 'Adiantamento de valor não está disponível para esta parcela.');
+        }
+
+        $faltaPagarParcelaCreate = null;
+        if ($parcela) {
+            $faltaPagarParcelaCreate = max(0.0, round((float) $parcela->valor - (float) ($parcela->valor_pago ?? 0), 2));
+        }
+
         return view('pagamentos.create', compact(
             'parcela',
             'returnTo',
@@ -78,7 +90,9 @@ class PagamentoController extends Controller
             'nomeClienteExibicao',
             'diariaMultiplasParcelas',
             'diariaValorDevido',
-            'diariaMaxAntecipacao'
+            'diariaMaxAntecipacao',
+            'modoAdiantamentoValor',
+            'faltaPagarParcelaCreate'
         ));
     }
 
@@ -116,6 +130,7 @@ class PagamentoController extends Controller
             'taxa_juros_renovacao_manual' => 'nullable|numeric|min:0|max:100',
             'valor_juros_renovacao_fixo' => 'nullable|numeric|min:0',
             'valor_renovacao_abate' => 'nullable|numeric|min:0', // valor total a pagar na renovação com abate
+            'adiantamento_valor' => 'nullable|boolean',
         ], [
             'observacoes_executar_garantia.required_if' => 'O campo de observações/motivo é obrigatório ao executar garantia.',
             'observacoes_executar_garantia.min' => 'As observações devem ter pelo menos 10 caracteres.',
@@ -367,16 +382,34 @@ class PagamentoController extends Controller
             $tipoJurosForm = $validated['tipo_juros'] ?? 'nenhum';
 
             $faltaNominal = max(0, round($valorParcelaTotal - (float) ($parcela->valor_pago ?? 0), 2));
-            $pisoEfetivo = $tipoJurosForm === 'valor_inferior'
-                ? $valorPrincipal
-                : ($faltaNominal > 0 ? min($valorPrincipal, $faltaNominal) : $valorPrincipal);
+            $solicitouAdiantamento = $request->boolean('adiantamento_valor');
 
-            if (round($valorPagamento, 2) < round($pisoEfetivo, 2)) {
-                $msg = round($pisoEfetivo, 2) < round($valorPrincipal, 2)
-                    ? 'O valor do pagamento não pode ser menor que o mínimo permitido (R$ '.number_format($pisoEfetivo, 2, ',', '.').'; principal da parcela R$ '.number_format($valorPrincipal, 2, ',', '.').').'
-                    : 'O valor do pagamento não pode ser menor que o principal (R$ '.number_format($pisoEfetivo, 2, ',', '.').').';
+            if ($solicitouAdiantamento) {
+                if (($validated['metodo'] ?? '') === Pagamento::METODO_PRODUTO_OBJETO) {
+                    return back()->with('error', 'Adiantamento de valor não está disponível para pagamento em produto/objeto.')->withInput();
+                }
+                if (! $parcela->podeAdiantarValor()) {
+                    return back()->with('error', 'Adiantamento de valor não está disponível para esta parcela.')->withInput();
+                }
+                if ($valorPagamento <= 0 || round($valorPagamento, 2) > round($faltaNominal, 2)) {
+                    return back()->with('error', 'Informe um valor maior que zero e no máximo igual ao que falta pagar na parcela (R$ '.number_format($faltaNominal, 2, ',', '.').').')->withInput();
+                }
+                $obs = trim((string) ($validated['observacoes'] ?? ''));
+                $validated['observacoes'] = 'Adiantamento de valor'.($obs !== '' ? ': '.$obs : '.');
+                $validated['tipo_juros'] = 'nenhum';
+                $validated['adiantamento_valor'] = true;
+            } else {
+                $pisoEfetivo = $tipoJurosForm === 'valor_inferior'
+                    ? $valorPrincipal
+                    : ($faltaNominal > 0 ? min($valorPrincipal, $faltaNominal) : $valorPrincipal);
 
-                return back()->with('error', $msg)->withInput();
+                if (round($valorPagamento, 2) < round($pisoEfetivo, 2)) {
+                    $msg = round($pisoEfetivo, 2) < round($valorPrincipal, 2)
+                        ? 'O valor do pagamento não pode ser menor que o mínimo permitido (R$ '.number_format($pisoEfetivo, 2, ',', '.').'; principal da parcela R$ '.number_format($valorPrincipal, 2, ',', '.').').'
+                        : 'O valor do pagamento não pode ser menor que o principal (R$ '.number_format($pisoEfetivo, 2, ',', '.').').';
+
+                    return back()->with('error', $msg)->withInput();
+                }
             }
 
             $isConsultor = empty(auth()->user()->getOperacoesIdsOndeTemPapel(['gestor', 'administrador']));
