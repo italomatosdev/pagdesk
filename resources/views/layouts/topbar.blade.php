@@ -46,8 +46,8 @@
                     data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                     <i class="bx bx-wallet text-primary me-1" style="font-size: 20px;"></i>
                     <span class="d-none d-md-inline-block">
-                        <span id="saldo-valor" class="fw-semibold {{ $saldosHeader['total'] >= 0 ? 'text-success' : 'text-danger' }}">
-                            R$ {{ number_format($saldosHeader['total'], 2, ',', '.') }}
+                        <span id="saldo-valor" class="fw-semibold {{ ($saldosHeader['total_topo'] ?? $saldosHeader['total']) >= 0 ? 'text-success' : 'text-danger' }}">
+                            R$ {{ number_format($saldosHeader['total_topo'] ?? $saldosHeader['total'], 2, ',', '.') }}
                         </span>
                         <span id="saldo-oculto" class="fw-semibold text-muted" style="display: none;">
                             R$ •••••

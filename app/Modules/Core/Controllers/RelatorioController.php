@@ -9,6 +9,7 @@ use App\Modules\Core\Models\OperacaoDadosCliente;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\Parcela;
+use App\Modules\Loans\Services\QuitacaoService;
 use App\Support\FichaContatoLookup;
 use App\Support\OperacaoPreferida;
 use Carbon\Carbon;
@@ -987,8 +988,30 @@ class RelatorioController extends Controller
             ? Operacao::where('ativo', true)->whereIn('id', $operacoesIds)->orderBy('nome')->get()
             : collect([]);
 
-        $query = Emprestimo::with(['cliente', 'operacao', 'consultor'])
-            ->whereIn('status', ['aprovado', 'ativo', 'finalizado'])
+        $statusPermitidosRelatorio = ['aprovado', 'ativo', 'finalizado'];
+        $statusInput = $request->input('status');
+        $statusesFiltro = [];
+        if ($statusInput !== null && $statusInput !== '') {
+            $candidatos = is_array($statusInput) ? $statusInput : [$statusInput];
+            foreach ($candidatos as $s) {
+                $s = is_string($s) ? strtolower(trim($s)) : '';
+                if ($s !== '' && in_array($s, $statusPermitidosRelatorio, true)) {
+                    $statusesFiltro[] = $s;
+                }
+            }
+            $statusesFiltro = array_values(array_unique($statusesFiltro));
+        }
+        if ($statusesFiltro === []) {
+            $statusesFiltro = $statusPermitidosRelatorio;
+        }
+
+        $query = Emprestimo::with([
+            'cliente',
+            'operacao',
+            'consultor',
+            'parcelas' => fn ($q) => $q->orderBy('numero'),
+        ])
+            ->whereIn('status', $statusesFiltro)
             ->whereBetween('data_inicio', [$dateFrom->toDateString(), $dateTo->toDateString()]);
 
         if (! $user->isSuperAdmin() || $operacaoId) {
@@ -1003,8 +1026,41 @@ class RelatorioController extends Controller
 
         $emprestimos = $query->orderBy('data_inicio')->orderBy('id')->get();
 
+        $quitacaoService = app(QuitacaoService::class);
+        $metricasPorEmprestimoId = [];
+        $totalJurosContrato = 0.0;
+        $totalPagoParcelas = 0.0;
+        $totalSaldoDevedor = 0.0;
+
+        foreach ($emprestimos as $e) {
+            $parcelas = $e->parcelas;
+            $somaValorParcelas = round((float) $parcelas->sum(fn ($p) => (float) $p->valor), 2);
+            $principal = round((float) $e->valor_total, 2);
+            $jurosContrato = $parcelas->isEmpty()
+                ? 0.0
+                : round(max(0.0, $somaValorParcelas - $principal), 2);
+            $totalAPagar = round($principal + $jurosContrato, 2);
+            $totalPago = round((float) $parcelas->sum(fn ($p) => (float) ($p->valor_pago ?? 0)), 2);
+            $saldoDevedor = round((float) $quitacaoService->getSaldoDevedor($e), 2);
+
+            $metricasPorEmprestimoId[$e->id] = [
+                'juros_contrato' => $jurosContrato,
+                'total_a_pagar' => $totalAPagar,
+                'total_pago' => $totalPago,
+                'saldo_devedor' => $saldoDevedor,
+            ];
+            $totalJurosContrato += $jurosContrato;
+            $totalPagoParcelas += $totalPago;
+            $totalSaldoDevedor += $saldoDevedor;
+        }
+
         $totalPrincipal = round((float) $emprestimos->sum(fn (Emprestimo $e) => (float) $e->valor_total), 2);
         $qtdEmprestimos = $emprestimos->count();
+
+        $totalJurosContrato = round($totalJurosContrato, 2);
+        $totalAPagarCronograma = round($totalPrincipal + $totalJurosContrato, 2);
+        $totalPagoParcelas = round($totalPagoParcelas, 2);
+        $totalSaldoDevedor = round($totalSaldoDevedor, 2);
 
         $fichasContatoPorClienteOperacao = FichaContatoLookup::mapByClienteOperacaoPairs(
             FichaContatoLookup::pairsFromEmprestimos($emprestimos)
@@ -1018,7 +1074,14 @@ class RelatorioController extends Controller
             'emprestimos',
             'totalPrincipal',
             'qtdEmprestimos',
-            'fichasContatoPorClienteOperacao'
+            'fichasContatoPorClienteOperacao',
+            'statusPermitidosRelatorio',
+            'statusesFiltro',
+            'metricasPorEmprestimoId',
+            'totalJurosContrato',
+            'totalAPagarCronograma',
+            'totalPagoParcelas',
+            'totalSaldoDevedor'
         ));
     }
 
