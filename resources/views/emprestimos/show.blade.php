@@ -548,7 +548,7 @@
                         @php
                             $temParcelasPagas = false;
                             foreach ($emprestimo->parcelas as $parcela) {
-                                if ($parcela->valor_pago > 0 || $parcela->pagamentos->count() > 0) {
+                                if ($parcela->isQuitada() || $parcela->valor_pago > 0 || $parcela->pagamentos->count() > 0) {
                                     $temParcelasPagas = true;
                                     break;
                                 }
@@ -562,16 +562,35 @@
                             $podeCancelarComDesfazimento = ($podeCancelarComDesfazimento ?? false) &&
                                 !$emprestimo->isCancelado() &&
                                 !$emprestimo->isRenovacao() &&
+                                !($temRenovacaoFilhaCancelada ?? false) &&
                                 ($temParcelasPagas || $emprestimo->isFinalizado() || ($emprestimo->liberacao && $emprestimo->liberacao->isPagoAoCliente()));
                         @endphp
-                        @if($emprestimo->isRenovacao() && ($podeVerAcoesGestorAdmin ?? false))
+                        @if($emprestimo->isRenovacao() && ($podeVerAcoesGestorAdmin ?? false) && !$emprestimo->isCancelado())
                             <hr>
-                            <div class="alert alert-info mb-0">
-                                <i class="bx bx-info-circle"></i>
-                                <strong>Empréstimo Renovado:</strong> Este empréstimo não pode ser cancelado, pois é uma renovação.
-                                O empréstimo original já foi finalizado e o dinheiro foi pago ao cliente.
-                                As garantias foram transferidas e não podem ser revertidas automaticamente.
-                            </div>
+                            @if($podeCancelarRenovacaoComDevolucaoPrincipal ?? false)
+                                <div class="alert alert-warning mb-3">
+                                    <i class="bx bx-info-circle"></i>
+                                    <strong>Renovação:</strong> Você pode cancelar apenas esta ficha da renovação. O empréstimo de origem (finalizado) não será alterado.
+                                    Será registrada uma <strong>entrada no caixa</strong> no valor do <strong>principal emprestado deste contrato</strong> (R$ {{ number_format($emprestimo->valor_total, 2, ',', '.') }}), correspondente à devolução pelo cliente.
+                                </div>
+                                <div class="d-flex justify-content-end flex-wrap gap-2">
+                                    <button type="button" class="btn btn-outline-danger"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#cancelarRenovacaoDevolucaoPrincipalModal">
+                                        <i class="bx bx-x-circle"></i> Cancelar renovação (devolução principal)
+                                    </button>
+                                </div>
+                            @else
+                                <div class="alert alert-info mb-0">
+                                    <i class="bx bx-info-circle"></i>
+                                    <strong>Empréstimo renovado:</strong>
+                                    @if($temParcelasPagas)
+                                        Não é possível cancelar esta renovação com devolução de principal porque já existem parcelas pagas ou quitadas neste empréstimo.
+                                    @else
+                                        O cancelamento pelos fluxos comuns não se aplica a renovações. O empréstimo original permanece finalizado.
+                                    @endif
+                                </div>
+                            @endif
                         @endif
                         @if($podeCancelar || $podeCancelarComDesfazimento)
                             <hr>
@@ -590,6 +609,13 @@
                                         <i class="bx bx-undo"></i> Cancelar e desfazer pagamentos
                                     </button>
                                 @endif
+                            </div>
+                        @endif
+                        @if(($podeVerAcoesGestorAdmin ?? false) && ($temRenovacaoFilhaCancelada ?? false) && ! $emprestimo->isRenovacao() && ! $emprestimo->isCancelado())
+                            <hr>
+                            <div class="alert alert-secondary mb-0">
+                                <i class="bx bx-info-circle"></i>
+                                <strong>Renovação cancelada:</strong> não é possível usar &quot;cancelar e desfazer pagamentos&quot; neste contrato de origem, pois existe renovação (contrato filho) cancelada vinculada a ele.
                             </div>
                         @endif
                         
@@ -2487,6 +2513,66 @@
     </div>
     @endif
 
+    @if($podeCancelarRenovacaoComDevolucaoPrincipal ?? false)
+    <div class="modal fade" id="cancelarRenovacaoDevolucaoPrincipalModal" tabindex="-1" aria-labelledby="cancelarRenovacaoDevolucaoPrincipalModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form action="{{ route('emprestimos.cancelar-renovacao-devolucao-principal', $emprestimo->id) }}" method="POST" id="formCancelarRenovacaoDevolucaoPrincipal">
+                    @csrf
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title" id="cancelarRenovacaoDevolucaoPrincipalModalLabel">
+                            <i class="bx bx-x-circle"></i> Cancelar renovação (devolução principal)
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-warning">
+                            <i class="bx bx-info-circle"></i>
+                            <strong>Atenção:</strong> O empréstimo de origem (#{{ $emprestimo->emprestimo_origem_id }}) não será alterado. Esta renovação será marcada como cancelada.
+                        </div>
+                        <div class="mb-3">
+                            <strong>Principal (entrada no caixa):</strong>
+                            R$ {{ number_format($emprestimo->valor_total, 2, ',', '.') }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="motivo_cancelamento_renovacao_devolucao" class="form-label">
+                                Motivo do cancelamento <span class="text-danger">*</span>
+                            </label>
+                            <textarea name="motivo_cancelamento"
+                                      id="motivo_cancelamento_renovacao_devolucao"
+                                      class="form-control @error('motivo_cancelamento') is-invalid @enderror"
+                                      rows="4"
+                                      required
+                                      minlength="10"
+                                      maxlength="1000"
+                                      placeholder="Descreva o motivo (mínimo 10 caracteres)...">{{ old('motivo_cancelamento') }}</textarea>
+                            @error('motivo_cancelamento')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                            @error('confirmacao_devolucao_principal')
+                                <div class="text-danger small mt-1">{{ $message }}</div>
+                            @enderror
+                        </div>
+                        <div class="form-check mb-3">
+                            <input type="checkbox" name="confirmacao_devolucao_principal" value="1" class="form-check-input"
+                                   id="confirmacaoDevolucaoRenovacao">
+                            <label class="form-check-label" for="confirmacaoDevolucaoRenovacao">
+                                Confirmo que o valor emprestado (principal) desta renovação foi devolvido pelo cliente e que será registrada entrada no caixa nesse valor.
+                            </label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                        <button type="submit" class="btn btn-danger" id="btnSubmitCancelRenovacaoDevolucao" disabled>
+                            <i class="bx bx-x-circle"></i> Confirmar cancelamento
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    @endif
+
     @if(!empty($mostrarAvisoCorrecaoDomingoLegado) && $mostrarAvisoCorrecaoDomingoLegado)
     <div class="modal fade" id="modalCorrecaoVencimentoDomingoLegado" tabindex="-1" aria-labelledby="modalCorrecaoVencimentoDomingoLegadoLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -2545,6 +2631,19 @@
                 if (btnIr) {
                     btnIr.click();
                 }
+            }
+        });
+    </script>
+    @endif
+    @if($podeCancelarRenovacaoComDevolucaoPrincipal ?? false)
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var chk = document.getElementById('confirmacaoDevolucaoRenovacao');
+            var btn = document.getElementById('btnSubmitCancelRenovacaoDevolucao');
+            if (chk && btn) {
+                chk.addEventListener('change', function () {
+                    btn.disabled = !chk.checked;
+                });
             }
         });
     </script>

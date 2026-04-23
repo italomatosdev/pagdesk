@@ -1150,6 +1150,12 @@ class EmprestimoService
                 ]);
             }
 
+            if ($emprestimo->temRenovacaoFilhaCancelada()) {
+                throw ValidationException::withMessages([
+                    'emprestimo' => 'Não é possível cancelar com desfazimento: existe renovação (contrato filho) cancelada vinculada a este empréstimo.',
+                ]);
+            }
+
             $parcelasComPagamento = $emprestimo->parcelas->filter(fn ($p) => $p->valor_pago > 0 || $p->pagamentos->isNotEmpty());
             $pagamentoIds = $parcelasComPagamento->flatMap(fn ($p) => $p->pagamentos->pluck('id'))->unique()->filter()->values()->all();
 
@@ -1211,6 +1217,141 @@ class EmprestimoService
                     'tipo' => 'emprestimo_cancelado',
                     'titulo' => 'Empréstimo Cancelado',
                     'mensagem' => "O empréstimo #{$emprestimo->id} do cliente {$nomeCliente} foi cancelado (com desfazimento de pagamentos). Motivo: {$motivoCancelamento}",
+                    'url' => route('emprestimos.show', $emprestimo->id),
+                    'dados' => ['emprestimo_id' => $emprestimo->id],
+                ]);
+            }
+
+            return $emprestimo->fresh();
+        });
+    }
+
+    /**
+     * Cancelar apenas o empréstimo de renovação: origem permanece intacto (finalizado).
+     * Registra entrada no caixa pelo principal (valor_total do renovado). Exige renovação sem parcelas pagas/quitadas.
+     *
+     * @throws ValidationException
+     */
+    public function cancelarRenovacaoComDevolucaoPrincipal(int $emprestimoId, int $userId, string $motivoCancelamento): Emprestimo
+    {
+        return DB::transaction(function () use ($emprestimoId, $userId, $motivoCancelamento) {
+            $emprestimo = Emprestimo::with(['liberacao', 'parcelas', 'garantias'])
+                ->lockForUpdate()
+                ->findOrFail($emprestimoId);
+
+            if ($emprestimo->isCancelado()) {
+                throw ValidationException::withMessages([
+                    'emprestimo' => 'Este empréstimo já está cancelado.',
+                ]);
+            }
+
+            if (! $emprestimo->isRenovacao()) {
+                throw ValidationException::withMessages([
+                    'emprestimo' => 'Este fluxo é permitido apenas para empréstimos de renovação.',
+                ]);
+            }
+
+            foreach ($emprestimo->parcelas as $parcela) {
+                if ($parcela->isQuitada()) {
+                    throw ValidationException::withMessages([
+                        'emprestimo' => 'Não é possível cancelar esta renovação: existem parcelas quitadas ou pagas.',
+                    ]);
+                }
+                if ((float) ($parcela->valor_pago ?? 0) > 0) {
+                    throw ValidationException::withMessages([
+                        'emprestimo' => 'Não é possível cancelar esta renovação: existem parcelas com valor pago.',
+                    ]);
+                }
+                if ($parcela->pagamentos()->exists()) {
+                    throw ValidationException::withMessages([
+                        'emprestimo' => 'Não é possível cancelar esta renovação: existem pagamentos registrados em parcelas.',
+                    ]);
+                }
+            }
+
+            $valorPrincipal = (float) $emprestimo->valor_total;
+            if ($valorPrincipal <= 0) {
+                throw ValidationException::withMessages([
+                    'emprestimo' => 'Valor emprestado inválido para registrar devolução ao caixa.',
+                ]);
+            }
+
+            if (! $emprestimo->consultor_id) {
+                throw ValidationException::withMessages([
+                    'emprestimo' => 'Empréstimo sem consultor vinculado; não é possível registrar a entrada no caixa.',
+                ]);
+            }
+
+            $oldStatus = $emprestimo->status;
+
+            if ($emprestimo->liberacao) {
+                $emprestimo->liberacao->update(['status' => 'cancelado']);
+            }
+
+            foreach ($emprestimo->parcelas as $parcela) {
+                $parcela->delete();
+            }
+
+            if ($emprestimo->isEmpenho() && $emprestimo->garantias->isNotEmpty()) {
+                foreach ($emprestimo->garantias as $garantia) {
+                    if ($garantia->isAtiva()) {
+                        $observacoesAnteriores = $garantia->observacoes ?? '';
+                        $observacaoCancelamento = "\n\n[CANCELADA EM ".Carbon::now()->format('d/m/Y H:i')."]\n".
+                                                   "Empréstimo #{$emprestimo->id} (renovação) cancelado com devolução de principal.\n".
+                                                   "Motivo: {$motivoCancelamento}";
+
+                        $garantia->update([
+                            'status' => 'cancelada',
+                            'observacoes' => $observacoesAnteriores.$observacaoCancelamento,
+                        ]);
+
+                        self::auditar(
+                            'cancelar_garantia',
+                            $garantia,
+                            ['status' => 'ativa'],
+                            ['status' => 'cancelada', 'observacoes' => $garantia->observacoes],
+                            "Garantia cancelada — cancelamento renovação #{$emprestimo->id}. Motivo: {$motivoCancelamento}"
+                        );
+                    }
+                }
+            }
+
+            $emprestimo->update([
+                'status' => 'cancelado',
+                'aprovado_por' => $userId,
+                'aprovado_em' => now(),
+                'motivo_rejeicao' => $motivoCancelamento,
+            ]);
+
+            $cashService = app(\App\Modules\Cash\Services\CashService::class);
+            $cashService->registrarMovimentacao([
+                'operacao_id' => $emprestimo->operacao_id,
+                'consultor_id' => $emprestimo->consultor_id,
+                'tipo' => 'entrada',
+                'origem' => 'automatica',
+                'valor' => $valorPrincipal,
+                'data_movimentacao' => now(),
+                'descricao' => 'Devolução principal — cancelamento renovação empréstimo #'.$emprestimo->id,
+                'referencia_tipo' => 'devolucao_principal_cancelamento_renovacao',
+                'referencia_id' => $emprestimo->id,
+            ]);
+
+            self::auditar(
+                'cancelar_renovacao_devolucao_principal',
+                $emprestimo,
+                ['status' => $oldStatus],
+                ['status' => 'cancelado', 'motivo_rejeicao' => $motivoCancelamento, 'valor_devolucao_principal' => $valorPrincipal],
+                'Renovação cancelada com registro de devolução de principal ao caixa (R$ '.number_format($valorPrincipal, 2, ',', '.')."). Motivo: {$motivoCancelamento}"
+            );
+
+            $notificacaoService = app(NotificacaoService::class);
+            $nomeCliente = NotificacaoClienteDisplayName::forEmprestimo($emprestimo);
+            if ($emprestimo->consultor_id) {
+                $notificacaoService->criar([
+                    'user_id' => $emprestimo->consultor_id,
+                    'tipo' => 'emprestimo_cancelado',
+                    'titulo' => 'Renovação cancelada',
+                    'mensagem' => "A renovação (empréstimo #{$emprestimo->id}) do cliente {$nomeCliente} foi cancelada com devolução de principal ao caixa. Motivo: {$motivoCancelamento}",
                     'url' => route('emprestimos.show', $emprestimo->id),
                     'dados' => ['emprestimo_id' => $emprestimo->id],
                 ]);
