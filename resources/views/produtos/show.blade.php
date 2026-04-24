@@ -19,7 +19,9 @@
     <div class="row mb-3">
         <div class="col">
             <a href="{{ route('produtos.index') }}" class="btn btn-secondary"><i class="bx bx-arrow-back me-1"></i> Voltar</a>
-            <a href="{{ route('produtos.edit', $produto->id) }}" class="btn btn-warning"><i class="bx bx-edit me-1"></i> Editar</a>
+            @if($podeGerenciarProdutos ?? true)
+                <a href="{{ route('produtos.edit', $produto->id) }}" class="btn btn-warning"><i class="bx bx-edit me-1"></i> Editar</a>
+            @endif
         </div>
     </div>
 
@@ -46,14 +48,8 @@
                     </div>
                     <div class="row mb-2">
                         <div class="col-md-4 text-muted">Estoque</div>
-                        <div class="col-md-8">{{ number_format((float)$produto->estoque, 3, ',', '.') }} {{ $produto->unidade ?: 'un' }}</div>
+                        <div class="col-md-8">{{ $produto->formatarQuantidadeEstoque() }} {{ $produto->rotuloUnidade() }}</div>
                     </div>
-                    @if($produto->unidade)
-                        <div class="row mb-2">
-                            <div class="col-md-4 text-muted">Unidade</div>
-                            <div class="col-md-8">{{ $produto->unidade }}</div>
-                        </div>
-                    @endif
                     <div class="row mb-2">
                         <div class="col-md-4 text-muted">Status</div>
                         <div class="col-md-8">

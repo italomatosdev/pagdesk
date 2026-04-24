@@ -151,7 +151,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::get('/api/buscar', [App\Modules\Core\Controllers\ClienteController::class, 'buscar'])->name('api.buscar');
     });
 
-    // Vendas (Administrador e Gestor)
+    // Vendas: administrador/gestor; ou consultor se a operação tiver consultor_pode_vender
     Route::prefix('vendas')->name('vendas.')->group(function () {
         Route::get('/', [App\Modules\Core\Controllers\VendaController::class, 'index'])->name('index');
         Route::get('/create', [App\Modules\Core\Controllers\VendaController::class, 'create'])->name('create');
@@ -160,7 +160,7 @@ Route::middleware(['auth', 'throttle.sensitive'])->group(function () {
         Route::get('/{id}', [App\Modules\Core\Controllers\VendaController::class, 'show'])->name('show');
     });
 
-    // Produtos (Administrador e Gestor)
+    // Produtos: leitura para consultor com permissão na operação; escrita só admin/gestor
     Route::prefix('produtos')->name('produtos.')->group(function () {
         Route::get('/', [App\Modules\Core\Controllers\ProdutoController::class, 'index'])->name('index');
         Route::get('/create', [App\Modules\Core\Controllers\ProdutoController::class, 'create'])->name('create');

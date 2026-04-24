@@ -2,15 +2,15 @@
 
 namespace App\Modules\Core\Services;
 
+use App\Modules\Cash\Services\CashService;
 use App\Modules\Core\Models\Cliente;
 use App\Modules\Core\Models\FormaPagamentoVenda;
 use App\Modules\Core\Models\Operacao;
+use App\Modules\Core\Models\OperationClient;
 use App\Modules\Core\Models\Produto;
 use App\Modules\Core\Models\Venda;
 use App\Modules\Core\Models\VendaItem;
-use App\Modules\Core\Models\OperationClient;
 use App\Modules\Core\Traits\Auditable;
-use App\Modules\Cash\Services\CashService;
 use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Services\EmprestimoService;
 use App\Modules\Loans\Services\Strategies\LoanStrategyFactory;
@@ -21,11 +21,12 @@ use Illuminate\Validation\ValidationException;
 class VendaService
 {
     use Auditable;
+
     /**
      * Registrar uma nova venda (itens + formas de pagamento). Se houver forma crediário, cria o empréstimo e as parcelas.
      *
-     * @param array $dados ['cliente_id', 'operacao_id', 'data_venda', 'observacoes', 'itens' => [...], 'formas' => [...]]
-     * @return Venda
+     * @param  array  $dados  ['cliente_id', 'operacao_id', 'data_venda', 'observacoes', 'itens' => [...], 'formas' => [...]]
+     *
      * @throws ValidationException
      */
     public function registrar(array $dados): Venda
@@ -34,16 +35,16 @@ class VendaService
             $user = auth()->user();
             $operacao = Operacao::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)
                 ->find($dados['operacao_id']);
-            if (!$operacao) {
+            if (! $operacao) {
                 throw ValidationException::withMessages(['operacao_id' => 'Operação não encontrada.']);
             }
             $empresaId = $operacao->empresa_id ?? $user->empresa_id;
-            if (!$empresaId) {
+            if (! $empresaId) {
                 throw ValidationException::withMessages(['operacao_id' => 'Operação sem empresa definida.']);
             }
 
             $cliente = Cliente::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)->find($dados['cliente_id']);
-            if (!$cliente) {
+            if (! $cliente) {
                 throw ValidationException::withMessages(['cliente_id' => 'Cliente não encontrado.']);
             }
 
@@ -62,23 +63,29 @@ class VendaService
             $quantidadePorProduto = [];
             foreach ($itens as $item) {
                 $produtoId = $item['produto_id'] ?? null;
-                if (!$produtoId) {
+                if (! $produtoId) {
                     continue;
                 }
                 $qtd = (float) ($item['quantidade'] ?? 0);
                 if ($qtd <= 0) {
                     continue;
                 }
+                $produtoLinha = Produto::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)->find($produtoId);
+                if ($produtoLinha && $produtoLinha->unidadeContagemInteira() && abs($qtd - round($qtd)) > 1e-9) {
+                    throw ValidationException::withMessages([
+                        'itens' => 'O produto "'.$produtoLinha->nome.'" usa unidade de contagem (ex.: un, pc, peça). Informe quantidade inteira em cada item.',
+                    ]);
+                }
                 $quantidadePorProduto[$produtoId] = ($quantidadePorProduto[$produtoId] ?? 0) + $qtd;
             }
             foreach ($quantidadePorProduto as $produtoId => $qtdNecessaria) {
                 $produto = Produto::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)->find($produtoId);
-                if (!$produto) {
+                if (! $produto) {
                     throw ValidationException::withMessages(['itens' => 'Produto selecionado não encontrado.']);
                 }
-                if (!$produto->temEstoque($qtdNecessaria)) {
+                if (! $produto->temEstoque($qtdNecessaria)) {
                     throw ValidationException::withMessages([
-                        'itens' => "Estoque insuficiente para o produto \"{$produto->nome}\". Disponível: " . number_format((float) $produto->estoque, 3, ',', '.') . ", solicitado: " . number_format($qtdNecessaria, 3, ',', '.') . '.',
+                        'itens' => 'Estoque insuficiente para o produto "'.$produto->nome.'". Disponível: '.$produto->formatarQuantidadeEstoque().', solicitado: '.$produto->formatarQuantidade($qtdNecessaria).'.',
                     ]);
                 }
                 if ((float) $produto->estoque <= 0) {
@@ -171,9 +178,9 @@ class VendaService
                 // Formas à vista (dinheiro, pix, cartão) geram entrada no caixa da operação
                 if ($formaTipo !== FormaPagamentoVenda::FORMA_CREDIARIO) {
                     $formaLabel = FormaPagamentoVenda::formasDisponiveis()[$formaTipo] ?? $formaTipo;
-                    $descricaoMov = 'Venda #' . $venda->id . ' - ' . $formaLabel;
+                    $descricaoMov = 'Venda #'.$venda->id.' - '.$formaLabel;
                     if ($descricaoForma) {
-                        $descricaoMov .= ' (' . $descricaoForma . ')';
+                        $descricaoMov .= ' ('.$descricaoForma.')';
                     }
                     $cashService = app(CashService::class);
                     $dadosMov = [
@@ -217,7 +224,7 @@ class VendaService
                         'taxa_juros' => 0,
                         'tipo' => 'crediario',
                         'status' => 'ativo',
-                        'observacoes' => 'Crediário - Venda #' . $venda->id,
+                        'observacoes' => 'Crediário - Venda #'.$venda->id,
                         'empresa_id' => $empresaId,
                         'venda_id' => $venda->id,
                     ]);
@@ -225,7 +232,7 @@ class VendaService
                     $strategy->gerarEstruturaPagamento($emprestimo);
                     $formaPagamento->update(['emprestimo_id' => $emprestimo->id]);
 
-                    self::auditar('criar_emprestimo_crediario', $emprestimo, null, $emprestimo->toArray(), 'Crediário gerado pela venda #' . $venda->id . '.');
+                    self::auditar('criar_emprestimo_crediario', $emprestimo, null, $emprestimo->toArray(), 'Crediário gerado pela venda #'.$venda->id.'.');
                 }
             }
 

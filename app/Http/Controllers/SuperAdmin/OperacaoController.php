@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\SuperAdmin;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Core\Models\Empresa;
 use App\Modules\Core\Models\Operacao;
 use App\Modules\Core\Models\OperacaoDocumentoObrigatorio;
-use App\Modules\Core\Models\Empresa;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class OperacaoController extends Controller
@@ -30,11 +30,11 @@ class OperacaoController extends Controller
             $busca = $request->input('busca');
             $query->where(function ($q) use ($busca) {
                 $q->where('nome', 'like', "%{$busca}%")
-                  ->orWhere('codigo', 'like', "%{$busca}%")
-                  ->orWhere('descricao', 'like', "%{$busca}%")
-                  ->orWhereHas('empresa', function ($qe) use ($busca) {
-                      $qe->where('nome', 'like', "%{$busca}%");
-                  });
+                    ->orWhere('codigo', 'like', "%{$busca}%")
+                    ->orWhere('descricao', 'like', "%{$busca}%")
+                    ->orWhereHas('empresa', function ($qe) use ($busca) {
+                        $qe->where('nome', 'like', "%{$busca}%");
+                    });
             });
         }
 
@@ -81,7 +81,7 @@ class OperacaoController extends Controller
         $operacao = Operacao::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)
             ->with(['empresa', 'documentosObrigatorios'])
             ->findOrFail($id);
-        
+
         $empresas = Empresa::orderBy('nome')->get();
         $tiposDocumento = OperacaoDocumentoObrigatorio::tiposDisponiveis();
 
@@ -122,6 +122,7 @@ class OperacaoController extends Controller
             'requer_liberacao' => 'nullable|boolean',
             'requer_autorizacao_pagamento_produto' => 'nullable|boolean',
             'permite_emprestimo_retroativo' => 'nullable|boolean',
+            'consultor_pode_vender' => 'nullable|boolean',
             'taxa_juros_atraso' => 'nullable|numeric|min:0|max:100',
             'tipo_calculo_juros' => 'nullable|in:por_dia,por_mes',
             'documentos_obrigatorios' => 'nullable|array',
@@ -134,6 +135,7 @@ class OperacaoController extends Controller
             $validated['requer_liberacao'] = $request->has('requer_liberacao') ? (bool) $request->input('requer_liberacao') : false;
             $validated['requer_autorizacao_pagamento_produto'] = $request->has('requer_autorizacao_pagamento_produto') ? (bool) $request->input('requer_autorizacao_pagamento_produto') : false;
             $validated['permite_emprestimo_retroativo'] = $request->has('permite_emprestimo_retroativo') && $request->permite_emprestimo_retroativo == '1';
+            $validated['consultor_pode_vender'] = $request->boolean('consultor_pode_vender');
             $validated['ativo'] = $request->has('ativo') && $request->ativo == '1';
 
             unset($validated['documentos_obrigatorios']);
@@ -143,7 +145,7 @@ class OperacaoController extends Controller
             return redirect()->route('super-admin.operacoes.show', $operacao->id)
                 ->with('success', 'Operação atualizada com sucesso!');
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao atualizar operação: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Erro ao atualizar operação: '.$e->getMessage())->withInput();
         }
     }
 }

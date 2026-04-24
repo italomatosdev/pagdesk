@@ -6,9 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Modules\Core\Models\Operacao;
 use App\Modules\Core\Models\OperacaoDocumentoObrigatorio;
 use App\Modules\Core\Services\OperacaoService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
-use Illuminate\Http\RedirectResponse;
 
 class OperacaoController extends Controller
 {
@@ -21,6 +21,7 @@ class OperacaoController extends Controller
             if (empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
                 abort(403, 'Acesso negado. Apenas administradores e gestores podem gerenciar operações.');
             }
+
             return $next($request);
         });
         $this->operacaoService = $operacaoService;
@@ -45,6 +46,7 @@ class OperacaoController extends Controller
                 $operacoes = Operacao::whereIn('id', $operacoesIds)->orderBy('nome')->paginate(15);
             }
         }
+
         return view('operacoes.index', compact('operacoes'));
     }
 
@@ -53,10 +55,11 @@ class OperacaoController extends Controller
      */
     public function create(): View
     {
-        if (!auth()->user()->isSuperAdmin()) {
+        if (! auth()->user()->isSuperAdmin()) {
             abort(403, 'Apenas o Super Admin pode criar operações. Criação desabilitada momentaneamente para administradores e gestores.');
         }
         $tiposDocumento = OperacaoDocumentoObrigatorio::tiposDisponiveis();
+
         return view('operacoes.create', compact('tiposDocumento'));
     }
 
@@ -65,7 +68,7 @@ class OperacaoController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        if (!auth()->user()->isSuperAdmin()) {
+        if (! auth()->user()->isSuperAdmin()) {
             abort(403, 'Apenas o Super Admin pode criar operações.');
         }
         $validated = $request->validate([
@@ -79,6 +82,7 @@ class OperacaoController extends Controller
             'requer_autorizacao_pagamento_produto' => 'boolean',
             'permite_emprestimo_retroativo' => 'boolean',
             'consultores_veem_apenas_proprios_emprestimos' => 'boolean',
+            'consultor_pode_vender' => 'boolean',
             'taxa_juros_atraso' => 'nullable|numeric|min:0|max:100',
             'tipo_calculo_juros' => 'nullable|in:por_dia,por_mes',
             'documentos_obrigatorios' => 'nullable|array',
@@ -92,14 +96,16 @@ class OperacaoController extends Controller
             $validated['requer_autorizacao_pagamento_produto'] = $request->has('requer_autorizacao_pagamento_produto') ? (bool) $request->input('requer_autorizacao_pagamento_produto') : false;
             $validated['permite_emprestimo_retroativo'] = $request->has('permite_emprestimo_retroativo');
             $validated['consultores_veem_apenas_proprios_emprestimos'] = $request->boolean('consultores_veem_apenas_proprios_emprestimos');
+            $validated['consultor_pode_vender'] = $request->boolean('consultor_pode_vender');
 
             unset($validated['documentos_obrigatorios']);
             $operacao = $this->operacaoService->criar($validated);
             $operacao->syncDocumentosObrigatorios($request->input('documentos_obrigatorios', []));
+
             return redirect()->route('operacoes.index')
                 ->with('success', 'Operação criada com sucesso!');
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao criar operação: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Erro ao criar operação: '.$e->getMessage())->withInput();
         }
     }
 
@@ -112,12 +118,13 @@ class OperacaoController extends Controller
         $operacao = Operacao::withCount(['operationClients', 'emprestimos'])
             ->with(['usuarios.roles'])
             ->findOrFail($id);
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $ids = $user->getOperacoesIds();
-            if (empty($ids) || !in_array((int) $id, $ids, true)) {
+            if (empty($ids) || ! in_array((int) $id, $ids, true)) {
                 abort(403, 'Você não tem acesso a esta operação.');
             }
         }
+
         return view('operacoes.show', compact('operacao'));
     }
 
@@ -128,13 +135,14 @@ class OperacaoController extends Controller
     {
         $user = auth()->user();
         $operacao = Operacao::with('documentosObrigatorios')->findOrFail($id);
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $ids = $user->getOperacoesIds();
-            if (empty($ids) || !in_array((int) $id, $ids, true)) {
+            if (empty($ids) || ! in_array((int) $id, $ids, true)) {
                 abort(403, 'Você não tem acesso a esta operação.');
             }
         }
         $tiposDocumento = OperacaoDocumentoObrigatorio::tiposDisponiveis();
+
         return view('operacoes.edit', compact('operacao', 'tiposDocumento'));
     }
 
@@ -144,15 +152,15 @@ class OperacaoController extends Controller
     public function update(Request $request, int $id): RedirectResponse
     {
         $user = auth()->user();
-        if (!$user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
             $ids = $user->getOperacoesIds();
-            if (empty($ids) || !in_array((int) $id, $ids, true)) {
+            if (empty($ids) || ! in_array((int) $id, $ids, true)) {
                 abort(403, 'Você não tem acesso a esta operação.');
             }
         }
         $validated = $request->validate([
             'nome' => 'required|string|max:255',
-            'codigo' => 'nullable|string|max:50|unique:operacoes,codigo,' . $id,
+            'codigo' => 'nullable|string|max:50|unique:operacoes,codigo,'.$id,
             'descricao' => 'nullable|string',
             'ativo' => 'boolean',
             'valor_aprovacao_automatica' => 'nullable|numeric|min:0',
@@ -161,6 +169,7 @@ class OperacaoController extends Controller
             'requer_autorizacao_pagamento_produto' => 'boolean',
             'permite_emprestimo_retroativo' => 'boolean',
             'consultores_veem_apenas_proprios_emprestimos' => 'boolean',
+            'consultor_pode_vender' => 'boolean',
             'taxa_juros_atraso' => 'nullable|numeric|min:0|max:100',
             'tipo_calculo_juros' => 'nullable|in:por_dia,por_mes',
             'documentos_obrigatorios' => 'nullable|array',
@@ -174,14 +183,16 @@ class OperacaoController extends Controller
             $validated['requer_autorizacao_pagamento_produto'] = $request->has('requer_autorizacao_pagamento_produto') ? (bool) $request->input('requer_autorizacao_pagamento_produto') : false;
             $validated['permite_emprestimo_retroativo'] = $request->has('permite_emprestimo_retroativo');
             $validated['consultores_veem_apenas_proprios_emprestimos'] = $request->boolean('consultores_veem_apenas_proprios_emprestimos');
+            $validated['consultor_pode_vender'] = $request->boolean('consultor_pode_vender');
 
             unset($validated['documentos_obrigatorios']);
             $operacao = $this->operacaoService->atualizar($id, $validated);
             $operacao->syncDocumentosObrigatorios($request->input('documentos_obrigatorios', []));
+
             return redirect()->route('operacoes.index')
                 ->with('success', 'Operação atualizada com sucesso!');
         } catch (\Exception $e) {
-            return back()->with('error', 'Erro ao atualizar operação: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Erro ao atualizar operação: '.$e->getMessage())->withInput();
         }
     }
 }

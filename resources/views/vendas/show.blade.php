@@ -76,8 +76,19 @@
                             <tbody>
                                 @foreach($venda->itens as $item)
                                     <tr>
-                                        <td>{{ $item->produto->nome ?? $item->descricao ?? '-' }}</td>
-                                        <td class="text-end">{{ number_format($item->quantidade, 3, ',', '.') }}</td>
+                                        <td>{{ $item->produto?->nome ?? $item->descricao ?? '-' }}</td>
+                                        <td class="text-end">
+                                            @if($item->produto)
+                                                {{ $item->produto->formatarQuantidade((float) $item->quantidade) }}
+                                            @else
+                                                @php
+                                                    $qtdItem = (float) $item->quantidade;
+                                                    $qtdStr = number_format($qtdItem, 3, ',', '.');
+                                                    $qtdStr = rtrim(rtrim($qtdStr, '0'), ',');
+                                                @endphp
+                                                {{ $qtdStr === '' ? '0' : $qtdStr }}
+                                            @endif
+                                        </td>
                                         <td class="text-end">R$ {{ number_format($item->preco_unitario_vista, 2, ',', '.') }}</td>
                                         <td class="text-end">R$ {{ number_format($item->preco_unitario_crediario, 2, ',', '.') }}</td>
                                         <td class="text-end">R$ {{ number_format($item->subtotal_vista, 2, ',', '.') }}</td>

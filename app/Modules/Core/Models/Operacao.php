@@ -23,6 +23,7 @@ class Operacao extends Model
         'requer_autorizacao_pagamento_produto',
         'permite_emprestimo_retroativo',
         'consultores_veem_apenas_proprios_emprestimos',
+        'consultor_pode_vender',
         'taxa_juros_atraso',
         'tipo_calculo_juros',
         'empresa_id', // Empresa da operação
@@ -35,6 +36,7 @@ class Operacao extends Model
         'requer_autorizacao_pagamento_produto' => 'boolean',
         'permite_emprestimo_retroativo' => 'boolean',
         'consultores_veem_apenas_proprios_emprestimos' => 'boolean',
+        'consultor_pode_vender' => 'boolean',
         'valor_aprovacao_automatica' => 'decimal:2',
         'taxa_juros_atraso' => 'decimal:2',
     ];
@@ -92,7 +94,7 @@ class Operacao extends Model
     /**
      * Sincroniza os tipos de documento obrigatórios para esta operação.
      *
-     * @param array $tipos Array de chaves (ex: ['documento_cliente', 'selfie_documento'])
+     * @param  array  $tipos  Array de chaves (ex: ['documento_cliente', 'selfie_documento'])
      */
     public function syncDocumentosObrigatorios(array $tipos): void
     {
@@ -129,4 +131,3 @@ class Operacao extends Model
         return (float) ($this->valor_aprovacao_automatica ?? 0);
     }
 }
-

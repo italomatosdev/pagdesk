@@ -40,7 +40,7 @@
                     <h4 class="card-title mb-0">Editar Produto #{{ $produto->id }}</h4>
                 </div>
                 <div class="card-body">
-                    <form action="{{ route('produtos.update', $produto->id) }}" method="POST" enctype="multipart/form-data">
+                    <form id="form-produto-edit" action="{{ route('produtos.update', $produto->id) }}" method="POST" enctype="multipart/form-data">
                         @csrf
                         @method('PUT')
                         <div class="mb-3">
@@ -70,15 +70,16 @@
                             <input type="text" id="preco_venda" name="preco_venda" class="form-control" inputmode="decimal" data-mask-money="brl" placeholder="0,00" value="{{ old('preco_venda', $produto->preco_venda) }}" required>
                             @error('preco_venda')<div class="text-danger">{{ $message }}</div>@enderror
                         </div>
+                        @php
+                            $unidadeValorEdit = old('unidade', $produto->unidade ?: 'un');
+                            $estoqueInteiroForm = \App\Modules\Core\Models\Produto::estoqueExigeInteiro($unidadeValorEdit);
+                        @endphp
+                        @include('produtos.partials.unidade-select', ['valorSelecionado' => $unidadeValorEdit])
                         <div class="mb-3">
                             <label class="form-label">Estoque <span class="text-danger">*</span></label>
-                            <input type="number" name="estoque" class="form-control" step="0.001" min="0" value="{{ old('estoque', $produto->estoque) }}" required>
+                            <input type="number" name="estoque" id="produto_estoque_input" class="form-control" step="{{ $estoqueInteiroForm ? '1' : '0.001' }}" min="0" value="{{ old('estoque', $produto->estoque) }}" required>
+                            <small class="text-muted">O passo do campo segue a unidade (inteiro ou até 3 decimais).</small>
                             @error('estoque')<div class="text-danger">{{ $message }}</div>@enderror
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Unidade</label>
-                            <input type="text" name="unidade" class="form-control" value="{{ old('unidade', $produto->unidade) }}" maxlength="20" placeholder="Ex: un, kg, m">
-                            @error('unidade')<div class="text-danger">{{ $message }}</div>@enderror
                         </div>
                         <div class="mb-4">
                             <div class="form-check">
@@ -137,4 +138,17 @@
     </div>
 @endsection
 @section('scripts')
+<script>
+(function () {
+    const u = document.getElementById('produto_unidade_select');
+    const e = document.getElementById('produto_estoque_input');
+    if (!u || !e) return;
+    const inteiro = new Set(@json(\App\Modules\Core\Models\Produto::unidadesCodigosEstoqueInteiro()));
+    function sync() {
+        e.step = inteiro.has(u.value) ? '1' : '0.001';
+    }
+    u.addEventListener('change', sync);
+    sync();
+})();
+</script>
 @endsection

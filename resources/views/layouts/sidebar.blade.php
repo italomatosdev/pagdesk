@@ -123,7 +123,7 @@
                     </ul>
                 </li>
 
-                @if(!empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor'])))
+                @if(!empty(auth()->user()->getOperacoesIdsParaModuloVendas()))
                 <li>
                     <a href="{{ route('vendas.index') }}">
                         <i class="bx bx-cart icon nav-icon"></i>

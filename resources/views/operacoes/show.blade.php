@@ -64,6 +64,12 @@
                                     {{ $operacao->requer_liberacao ? 'Sim' : 'Não' }}
                                 </span>
                             </div>
+                            <div class="col-md-6 mb-3">
+                                <strong>Consultor pode vender / ver produtos:</strong>
+                                <span class="badge bg-{{ ($operacao->consultor_pode_vender ?? false) ? 'primary' : 'secondary' }}">
+                                    {{ ($operacao->consultor_pode_vender ?? false) ? 'Sim' : 'Não' }}
+                                </span>
+                            </div>
                             @if($operacao->descricao)
                                 <div class="col-12 mb-3">
                                     <strong>Descrição:</strong><br>

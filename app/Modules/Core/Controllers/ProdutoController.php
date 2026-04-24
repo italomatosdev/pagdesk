@@ -8,24 +8,34 @@ use App\Modules\Core\Models\Produto;
 use App\Modules\Core\Models\ProdutoAnexo;
 use App\Modules\Core\Traits\Auditable;
 use App\Support\OperacaoPreferida;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
-use Illuminate\Http\RedirectResponse;
 
 class ProdutoController extends Controller
 {
     use Auditable;
+
     public function __construct()
     {
         $this->middleware('auth');
         $this->middleware(function ($request, $next) {
-            if (empty(auth()->user()->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
-                abort(403, 'Acesso negado. Apenas administradores e gestores podem gerenciar produtos.');
+            if (! auth()->user()->podeAcessarCatalogoProdutos()) {
+                abort(403, 'Acesso negado ao catálogo de produtos.');
             }
+
             return $next($request);
         });
+        $this->middleware(function ($request, $next) {
+            if (! auth()->user()->temPapelGestaoEmAlgumaOperacao()) {
+                abort(403, 'Acesso negado. Apenas administradores e gestores podem cadastrar ou editar produtos.');
+            }
+
+            return $next($request);
+        })->except(['index', 'show']);
     }
 
     /**
@@ -36,14 +46,17 @@ class ProdutoController extends Controller
         $user = auth()->user();
         $query = Produto::with('operacao');
 
-        // Filtro "sem operação": exibe apenas produtos sem operacao_id (para corrigir)
+        // Filtro "sem operação": só gestores/admins (consultor nunca vê cadastro solto)
         $semOperacao = $request->boolean('sem_operacao');
+        if ($semOperacao && ! $user->temPapelGestaoEmAlgumaOperacao()) {
+            $semOperacao = false;
+        }
         if ($semOperacao) {
             $query->whereNull('operacao_id');
         } else {
-            if (!$user->isSuperAdmin()) {
-                $operacoesIds = $user->getOperacoesIds();
-                if (!empty($operacoesIds)) {
+            if (! $user->isSuperAdmin()) {
+                $operacoesIds = $user->getOperacoesIdsParaModuloVendas();
+                if (! empty($operacoesIds)) {
                     $query->whereIn('operacao_id', $operacoesIds);
                 } else {
                     $query->whereRaw('1 = 0');
@@ -55,14 +68,14 @@ class ProdutoController extends Controller
             $termo = $request->search;
             $query->where(function ($q) use ($termo) {
                 $q->where('nome', 'like', "%{$termo}%")
-                  ->orWhere('codigo', 'like', "%{$termo}%");
+                    ->orWhere('codigo', 'like', "%{$termo}%");
             });
         }
 
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::orderBy('nome')->get();
         } else {
-            $opsIds = $user->getOperacoesIds();
+            $opsIds = $user->getOperacoesIdsParaModuloVendas();
             $operacoes = ! empty($opsIds)
                 ? Operacao::whereIn('id', $opsIds)->orderBy('nome')->get()
                 : collect([]);
@@ -70,7 +83,8 @@ class ProdutoController extends Controller
         $operacaoId = null;
         if (! $semOperacao) {
             $operacaoId = OperacaoPreferida::resolverParaFiltroGet($request, $operacoes->pluck('id')->all(), $user);
-            if ($operacaoId !== null && ($user->isSuperAdmin() || in_array($operacaoId, $user->getOperacoesIds(), true))) {
+            $idsFiltro = $user->isSuperAdmin() ? null : $user->getOperacoesIdsParaModuloVendas();
+            if ($operacaoId !== null && ($user->isSuperAdmin() || in_array($operacaoId, $idsFiltro ?? [], true))) {
                 $query->where('operacao_id', $operacaoId);
             }
         }
@@ -102,10 +116,14 @@ class ProdutoController extends Controller
 
         $produtos = $query->orderBy('nome')->paginate(20)->withQueryString();
 
-        // Contagem de produtos sem operação (para exibir aviso)
-        $produtosSemOperacaoCount = Produto::whereNull('operacao_id')->count();
+        // Contagem de produtos sem operação (para exibir aviso) — só relevante para gestão
+        $produtosSemOperacaoCount = $user->temPapelGestaoEmAlgumaOperacao()
+            ? Produto::whereNull('operacao_id')->count()
+            : 0;
 
-        return view('produtos.index', compact('produtos', 'stats', 'operacoes', 'produtosSemOperacaoCount', 'semOperacao', 'operacaoId'));
+        $podeGerenciarProdutos = $user->temPapelGestaoEmAlgumaOperacao();
+
+        return view('produtos.index', compact('produtos', 'stats', 'operacoes', 'produtosSemOperacaoCount', 'semOperacao', 'operacaoId', 'podeGerenciarProdutos'));
     }
 
     /**
@@ -117,8 +135,8 @@ class ProdutoController extends Controller
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::orderBy('nome')->get();
         } else {
-            $opsIds = $user->getOperacoesIds();
-            $operacoes = !empty($opsIds)
+            $opsIds = $user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']);
+            $operacoes = ! empty($opsIds)
                 ? Operacao::whereIn('id', $opsIds)->orderBy('nome')->get()
                 : collect([]);
         }
@@ -137,7 +155,7 @@ class ProdutoController extends Controller
             'nome' => 'required|string|max:255',
             'codigo' => 'nullable|string|max:50',
             'preco_venda' => 'required|numeric|min:0',
-            'unidade' => 'nullable|string|max:20',
+            'unidade' => ['required', Rule::in(array_keys(Produto::unidadesParaSelect()))],
             'estoque' => 'required|numeric|min:0',
             'ativo' => 'boolean',
         ], [
@@ -146,18 +164,18 @@ class ProdutoController extends Controller
         ]);
 
         $user = auth()->user();
-        if (!$user->empresa_id) {
+        if (! $user->empresa_id) {
             return back()->with('error', 'Usuário sem empresa vinculada.')->withInput();
         }
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if (empty($opsIds) || !in_array((int) $validated['operacao_id'], $opsIds, true)) {
+        if (! $user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']);
+            if (empty($opsIds) || ! in_array((int) $validated['operacao_id'], $opsIds, true)) {
                 return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
             }
         }
 
         $validated['empresa_id'] = $user->empresa_id;
-        $validated['estoque'] = (float) $validated['estoque'];
+        $this->normalizarEstoqueParaUnidade($validated);
         $validated['ativo'] = $request->boolean('ativo', true);
 
         $produto = Produto::create($validated);
@@ -174,13 +192,16 @@ class ProdutoController extends Controller
     {
         $produto = Produto::with('anexos')->findOrFail($id);
         $user = auth()->user();
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if ($produto->operacao_id === null || empty($opsIds) || !in_array((int) $produto->operacao_id, $opsIds, true)) {
+        if (! $user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIdsParaModuloVendas();
+            if ($produto->operacao_id === null || empty($opsIds) || ! in_array((int) $produto->operacao_id, $opsIds, true)) {
                 abort(403, 'Acesso negado a este produto.');
             }
         }
-        return view('produtos.show', compact('produto'));
+
+        $podeGerenciarProdutos = $user->temPapelGestaoEmAlgumaOperacao();
+
+        return view('produtos.show', compact('produto', 'podeGerenciarProdutos'));
     }
 
     /**
@@ -190,20 +211,21 @@ class ProdutoController extends Controller
     {
         $user = auth()->user();
         $produto = Produto::with('anexos')->findOrFail($id);
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if ($produto->operacao_id === null || empty($opsIds) || !in_array((int) $produto->operacao_id, $opsIds, true)) {
+        if (! $user->isSuperAdmin()) {
+            $gestaoIds = $user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']);
+            if ($produto->operacao_id === null || empty($gestaoIds) || ! in_array((int) $produto->operacao_id, $gestaoIds, true)) {
                 abort(403, 'Acesso negado a este produto.');
             }
         }
         if ($user->isSuperAdmin()) {
             $operacoes = Operacao::orderBy('nome')->get();
         } else {
-            $opsIds = $user->getOperacoesIds();
-            $operacoes = !empty($opsIds)
+            $opsIds = $user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']);
+            $operacoes = ! empty($opsIds)
                 ? Operacao::whereIn('id', $opsIds)->orderBy('nome')->get()
                 : collect([]);
         }
+
         return view('produtos.edit', compact('produto', 'operacoes'));
     }
 
@@ -215,9 +237,9 @@ class ProdutoController extends Controller
         try {
             $user = auth()->user();
             $produto = Produto::findOrFail($id);
-            if (!$user->isSuperAdmin()) {
-                $opsIds = $user->getOperacoesIds();
-                if ($produto->operacao_id === null || empty($opsIds) || !in_array((int) $produto->operacao_id, $opsIds, true)) {
+            if (! $user->isSuperAdmin()) {
+                $gestaoIds = $user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']);
+                if ($produto->operacao_id === null || empty($gestaoIds) || ! in_array((int) $produto->operacao_id, $gestaoIds, true)) {
                     abort(403, 'Acesso negado a este produto.');
                 }
             }
@@ -227,7 +249,7 @@ class ProdutoController extends Controller
                 'nome' => 'required|string|max:255',
                 'codigo' => 'nullable|string|max:50',
                 'preco_venda' => 'required|numeric|min:0',
-                'unidade' => 'nullable|string|max:20',
+                'unidade' => ['required', Rule::in($this->chavesUnidadePermitidas($produto))],
                 'estoque' => 'required|numeric|min:0',
                 'ativo' => 'nullable|boolean',
                 'anexos' => 'nullable|array',
@@ -237,14 +259,14 @@ class ProdutoController extends Controller
                 'operacao_id.exists' => 'A operação selecionada não é válida.',
             ]);
 
-            if (!$user->isSuperAdmin()) {
-                $opsIds = $user->getOperacoesIds();
-                if (empty($opsIds) || !in_array((int) $validated['operacao_id'], $opsIds, true)) {
+            if (! $user->isSuperAdmin()) {
+                $gestaoIds = $user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']);
+                if (empty($gestaoIds) || ! in_array((int) $validated['operacao_id'], $gestaoIds, true)) {
                     return back()->with('error', 'Você não tem acesso a esta operação.')->withInput();
                 }
             }
 
-            $validated['estoque'] = (float) $validated['estoque'];
+            $this->normalizarEstoqueParaUnidade($validated);
             $validated['ativo'] = $request->boolean('ativo', true);
             unset($validated['anexos']);
 
@@ -254,10 +276,10 @@ class ProdutoController extends Controller
             if ($request->hasFile('anexos')) {
                 $ordem = $produto->anexos()->max('ordem') ?? 0;
                 foreach ($request->file('anexos') as $arquivo) {
-                    if (!$arquivo->isValid()) {
+                    if (! $arquivo->isValid()) {
                         continue;
                     }
-                    $caminho = $arquivo->store('produtos/' . $produto->id, 'public');
+                    $caminho = $arquivo->store('produtos/'.$produto->id, 'public');
                     $ext = strtolower($arquivo->getClientOriginalExtension());
                     $tipo = ProdutoAnexo::determinarTipo($ext);
                     $ordem++;
@@ -281,7 +303,41 @@ class ProdutoController extends Controller
             throw $e;
         } catch (\Throwable $e) {
             \Log::error('ProdutoController::update falhou', ['id' => $id, 'error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
-            return back()->with('error', 'Erro ao salvar: ' . $e->getMessage())->withInput();
+
+            return back()->with('error', 'Erro ao salvar: '.$e->getMessage())->withInput();
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function chavesUnidadePermitidas(Produto $produto): array
+    {
+        $keys = array_keys(Produto::unidadesParaSelect());
+        $atual = (string) ($produto->unidade ?? '');
+        if ($atual !== '' && ! in_array($atual, $keys, true)) {
+            $keys[] = $atual;
+        }
+
+        return $keys;
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    protected function normalizarEstoqueParaUnidade(array &$validated): void
+    {
+        $unidade = $validated['unidade'] ?? null;
+        $v = (float) $validated['estoque'];
+        if (Produto::estoqueExigeInteiro($unidade)) {
+            if (abs($v - round($v)) > 1e-9) {
+                throw ValidationException::withMessages([
+                    'estoque' => 'Para esta unidade (contagem em peças) o estoque deve ser um número inteiro.',
+                ]);
+            }
+            $validated['estoque'] = (float) (int) round($v);
+        } else {
+            $validated['estoque'] = round($v, 3);
         }
     }
 
@@ -292,14 +348,15 @@ class ProdutoController extends Controller
     {
         $produto = Produto::findOrFail($id);
         $user = auth()->user();
-        if (!$user->isSuperAdmin()) {
-            $opsIds = $user->getOperacoesIds();
-            if ($produto->operacao_id === null || empty($opsIds) || !in_array((int) $produto->operacao_id, $opsIds, true)) {
+        if (! $user->isSuperAdmin()) {
+            $gestaoIds = $user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']);
+            if ($produto->operacao_id === null || empty($gestaoIds) || ! in_array((int) $produto->operacao_id, $gestaoIds, true)) {
                 abort(403, 'Acesso negado a este produto.');
             }
         }
         $anexo = $produto->anexos()->findOrFail($anexoId);
         $anexo->delete();
+
         return back()->with('success', 'Anexo removido.');
     }
 }
