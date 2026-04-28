@@ -93,6 +93,27 @@ class VendaService
                 }
             }
 
+            $nomesSemCusto = [];
+            foreach ($itens as $item) {
+                $produtoId = $item['produto_id'] ?? null;
+                if (! $produtoId) {
+                    continue;
+                }
+                $qtd = (float) ($item['quantidade'] ?? 0);
+                if ($qtd <= 0) {
+                    continue;
+                }
+                $produtoLinha = Produto::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)->find($produtoId);
+                if ($produtoLinha && ! $produtoLinha->temCustoVigenteDefinido()) {
+                    $nomesSemCusto[$produtoLinha->id] = $produtoLinha->nome;
+                }
+            }
+            if ($nomesSemCusto !== []) {
+                throw ValidationException::withMessages([
+                    'itens' => 'Não é possível registrar a venda: informe o preço de custo nos produtos: '.implode(', ', array_values($nomesSemCusto)).'.',
+                ]);
+            }
+
             $valorTotalBruto = 0;
             $valorTotalFinal = 0;
             foreach ($formas as $f) {
@@ -132,15 +153,27 @@ class VendaService
                 $pc = (float) ($item['preco_unitario_crediario'] ?? 0);
                 $subVista = round($qtd * $pv, 2);
                 $subCrediario = round($qtd * $pc, 2);
+                $produtoId = $item['produto_id'] ?? null;
+                $custoUnitAplicado = null;
+                $custoTotalAplicado = null;
+                if ($produtoId) {
+                    $produtoItem = Produto::withoutGlobalScope(\App\Models\Scopes\EmpresaScope::class)->find($produtoId);
+                    if ($produtoItem && $produtoItem->temCustoVigenteDefinido()) {
+                        $custoUnitAplicado = (float) $produtoItem->custo_unitario_vigente;
+                        $custoTotalAplicado = round($qtd * $custoUnitAplicado, 2);
+                    }
+                }
                 VendaItem::create([
                     'venda_id' => $venda->id,
-                    'produto_id' => $item['produto_id'] ?? null,
+                    'produto_id' => $produtoId,
                     'descricao' => $item['descricao'] ?? null,
                     'quantidade' => $qtd,
                     'preco_unitario_vista' => $pv,
                     'preco_unitario_crediario' => $pc,
                     'subtotal_vista' => $subVista,
                     'subtotal_crediario' => $subCrediario,
+                    'custo_unitario_aplicado' => $custoUnitAplicado,
+                    'custo_total_aplicado' => $custoTotalAplicado,
                 ]);
                 // Baixar estoque do produto
                 $produtoId = $item['produto_id'] ?? null;

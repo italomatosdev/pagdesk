@@ -7,7 +7,9 @@ use App\Modules\Core\Models\FormaPagamentoVenda;
 use App\Modules\Core\Models\Operacao;
 use App\Modules\Core\Models\Produto;
 use App\Modules\Core\Models\Venda;
+use App\Modules\Core\Models\VendaItem;
 use App\Modules\Core\Services\VendaService;
+use App\Modules\Core\Traits\Auditable;
 use App\Support\ClienteNomeExibicao;
 use App\Support\FichaContatoLookup;
 use App\Support\OperacaoPreferida;
@@ -19,6 +21,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class VendaController extends Controller
 {
+    use Auditable;
+
     protected VendaService $vendaService;
 
     public function __construct(VendaService $vendaService)
@@ -128,8 +132,9 @@ class VendaController extends Controller
         }
 
         $operacaoIdDefault = OperacaoPreferida::resolverParaFormularioOuQuery($request, $operacoes->pluck('id')->all(), $user);
+        $podeVerCustoProdutos = $user->podeVerCustoProdutos();
 
-        return view('vendas.create', compact('operacoes', 'produtos', 'formasDisponiveis', 'clientePreSelecionado', 'operacaoIdDefault'));
+        return view('vendas.create', compact('operacoes', 'produtos', 'formasDisponiveis', 'clientePreSelecionado', 'operacaoIdDefault', 'podeVerCustoProdutos'));
     }
 
     /**
@@ -260,7 +265,52 @@ class VendaController extends Controller
             ? ClienteNomeExibicao::forClienteOperacao($venda->cliente, (int) $venda->operacao_id)
             : 'Cliente';
 
-        return view('vendas.show', compact('venda', 'nomeClienteExibicao'));
+        $podeVerCustoProdutos = $user->podeVerCustoProdutos();
+
+        return view('vendas.show', compact('venda', 'nomeClienteExibicao', 'podeVerCustoProdutos'));
+    }
+
+    /**
+     * Corrigir custo aplicado em item de venda antigo (gestão / Super Admin).
+     */
+    public function updateItemCusto(Request $request, Venda $venda, VendaItem $vendaItem): RedirectResponse
+    {
+        $user = auth()->user();
+        if (! $user->podeVerCustoProdutos()) {
+            abort(403, 'Acesso negado.');
+        }
+        if ((int) $vendaItem->venda_id !== (int) $venda->id) {
+            abort(404);
+        }
+        if (! $user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIdsParaModuloVendas();
+            if (empty($opsIds) || ! in_array((int) $venda->operacao_id, $opsIds, true)) {
+                abort(403, 'Acesso negado a esta venda.');
+            }
+        }
+
+        if ($vendaItem->produto_id === null) {
+            return back()->with('error', 'Itens sem produto vinculado não possuem custo aplicado.');
+        }
+
+        $validated = $request->validate([
+            'custo_unitario_aplicado' => 'required|numeric|min:0',
+        ]);
+
+        $qtd = (float) $vendaItem->quantidade;
+        $novoUnit = (float) $validated['custo_unitario_aplicado'];
+        $novoTotal = round($qtd * $novoUnit, 2);
+
+        $old = $vendaItem->only(['custo_unitario_aplicado', 'custo_total_aplicado']);
+        $vendaItem->update([
+            'custo_unitario_aplicado' => $novoUnit,
+            'custo_total_aplicado' => $novoTotal,
+        ]);
+        $vendaItem->refresh();
+
+        self::auditar('corrigir_custo_item_venda', $vendaItem, $old, $vendaItem->only(['custo_unitario_aplicado', 'custo_total_aplicado']), 'Custo aplicado corrigido na venda #'.$venda->id.' (item #'.$vendaItem->id.').');
+
+        return back()->with('success', 'Custo do item atualizado.');
     }
 
     /**

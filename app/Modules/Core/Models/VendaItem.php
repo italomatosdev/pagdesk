@@ -20,6 +20,8 @@ class VendaItem extends Model
         'preco_unitario_crediario',
         'subtotal_vista',
         'subtotal_crediario',
+        'custo_unitario_aplicado',
+        'custo_total_aplicado',
     ];
 
     protected $casts = [
@@ -28,6 +30,8 @@ class VendaItem extends Model
         'preco_unitario_crediario' => 'decimal:2',
         'subtotal_vista' => 'decimal:2',
         'subtotal_crediario' => 'decimal:2',
+        'custo_unitario_aplicado' => 'decimal:2',
+        'custo_total_aplicado' => 'decimal:2',
     ];
 
     public function venda()

@@ -25,6 +25,8 @@ class Produto extends Model
 
     protected $casts = [
         'preco_venda' => 'decimal:2',
+        'custo_unitario_vigente' => 'decimal:2',
+        'custo_vigente_atualizado_em' => 'datetime',
         'estoque' => 'decimal:3',
         'ativo' => 'boolean',
     ];
@@ -162,6 +164,19 @@ class Produto extends Model
     public function vendaItens()
     {
         return $this->hasMany(VendaItem::class, 'produto_id');
+    }
+
+    public function custoHistoricos()
+    {
+        return $this->hasMany(ProdutoCustoHistorico::class, 'produto_id')->orderByDesc('valido_de');
+    }
+
+    /**
+     * True quando existe custo vigente informado (inclui 0,00 explícito).
+     */
+    public function temCustoVigenteDefinido(): bool
+    {
+        return $this->custo_unitario_vigente !== null;
     }
 
     /**

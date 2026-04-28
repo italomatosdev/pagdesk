@@ -215,4 +215,38 @@
     body[data-sidebar="dark"][data-sidebar-size="sm"] #sidebar-menu > ul > li.mm-active > a i {
         color: #fff !important; /* Ícone (tag i) branco */
     }
+
+    /* Impressão: relatórios e telas que usam .no-print nos filtros/ações */
+    @media print {
+        .no-print,
+        #layout-wrapper .vertical-menu,
+        #layout-wrapper .app-menu.navbar-menu,
+        #layout-wrapper .navbar-header,
+        #layout-wrapper .footer,
+        .page-title-right,
+        .breadcrumb {
+            display: none !important;
+        }
+        body {
+            background: #fff !important;
+        }
+        #layout-wrapper .main-content {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        .page-content,
+        .container-fluid {
+            padding: 0 !important;
+        }
+        .card {
+            border: none !important;
+            box-shadow: none !important;
+        }
+        .table {
+            font-size: 0.75rem;
+        }
+        a[href]::after {
+            content: none !important;
+        }
+    }
 </style>

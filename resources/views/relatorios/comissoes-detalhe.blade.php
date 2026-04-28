@@ -44,7 +44,7 @@
         </div>
     </div>
 
-    <div class="row mb-3">
+    <div class="row mb-3 no-print">
         <div class="col-12">
             <div class="card border">
                 <div class="card-body py-2">
@@ -157,6 +157,7 @@
             <div class="card">
                 <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
                     <h5 class="card-title mb-0">Empréstimos — {{ $consultorNome }}</h5>
+                    @include('relatorios.partials.botoes-exportar-imprimir', ['exportRoute' => 'relatorios.comissoes-detalhe.export'])
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">

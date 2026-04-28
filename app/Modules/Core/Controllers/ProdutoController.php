@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Core\Models\Operacao;
 use App\Modules\Core\Models\Produto;
 use App\Modules\Core\Models\ProdutoAnexo;
+use App\Modules\Core\Services\ProdutoCustoService;
 use App\Modules\Core\Traits\Auditable;
 use App\Support\OperacaoPreferida;
 use Illuminate\Http\RedirectResponse;
@@ -19,7 +20,7 @@ class ProdutoController extends Controller
 {
     use Auditable;
 
-    public function __construct()
+    public function __construct(private ProdutoCustoService $produtoCustoService)
     {
         $this->middleware('auth');
         $this->middleware(function ($request, $next) {
@@ -102,6 +103,15 @@ class ProdutoController extends Controller
                 $query->where('estoque', '<=', 0);
             }
         }
+        if ($request->filled('custo')) {
+            if ($request->custo === 'sem') {
+                $query->whereNull('custo_unitario_vigente');
+            } elseif ($request->custo === 'com') {
+                $query->whereNotNull('custo_unitario_vigente');
+            }
+        }
+
+        $podeVerCustoProdutos = $user->podeVerCustoProdutos();
 
         // Totalizadores (respeitam os mesmos filtros da listagem)
         $stats = [
@@ -113,6 +123,9 @@ class ProdutoController extends Controller
             'total_unidades' => (clone $query)->sum(DB::raw('COALESCE(estoque, 0)')),
         ];
         $stats['valor_estoque'] = (clone $query)->selectRaw('SUM(COALESCE(estoque, 0) * preco_venda) as total')->value('total') ?? 0;
+        $stats['sem_custo'] = $podeVerCustoProdutos
+            ? (clone $query)->whereNull('custo_unitario_vigente')->count()
+            : 0;
 
         $produtos = $query->orderBy('nome')->paginate(20)->withQueryString();
 
@@ -123,7 +136,7 @@ class ProdutoController extends Controller
 
         $podeGerenciarProdutos = $user->temPapelGestaoEmAlgumaOperacao();
 
-        return view('produtos.index', compact('produtos', 'stats', 'operacoes', 'produtosSemOperacaoCount', 'semOperacao', 'operacaoId', 'podeGerenciarProdutos'));
+        return view('produtos.index', compact('produtos', 'stats', 'operacoes', 'produtosSemOperacaoCount', 'semOperacao', 'operacaoId', 'podeGerenciarProdutos', 'podeVerCustoProdutos'));
     }
 
     /**
@@ -141,8 +154,9 @@ class ProdutoController extends Controller
                 : collect([]);
         }
         $operacaoIdDefault = OperacaoPreferida::resolverParaFormularioOuQuery($request, $operacoes->pluck('id')->all(), $user);
+        $podeVerCustoProdutos = $user->podeVerCustoProdutos();
 
-        return view('produtos.create', compact('operacoes', 'operacaoIdDefault'));
+        return view('produtos.create', compact('operacoes', 'operacaoIdDefault', 'podeVerCustoProdutos'));
     }
 
     /**
@@ -155,6 +169,7 @@ class ProdutoController extends Controller
             'nome' => 'required|string|max:255',
             'codigo' => 'nullable|string|max:50',
             'preco_venda' => 'required|numeric|min:0',
+            'preco_custo' => 'required|numeric|min:0',
             'unidade' => ['required', Rule::in(array_keys(Produto::unidadesParaSelect()))],
             'estoque' => 'required|numeric|min:0',
             'ativo' => 'boolean',
@@ -177,8 +192,12 @@ class ProdutoController extends Controller
         $validated['empresa_id'] = $user->empresa_id;
         $this->normalizarEstoqueParaUnidade($validated);
         $validated['ativo'] = $request->boolean('ativo', true);
+        $precoCusto = (float) $validated['preco_custo'];
+        unset($validated['preco_custo']);
 
         $produto = Produto::create($validated);
+        $this->produtoCustoService->definirCustoVigente($produto, $precoCusto, null, $user);
+        $produto->refresh();
         self::auditar('criar_produto', $produto, null, $produto->toArray());
 
         return redirect()->route('produtos.index')
@@ -200,8 +219,29 @@ class ProdutoController extends Controller
         }
 
         $podeGerenciarProdutos = $user->temPapelGestaoEmAlgumaOperacao();
+        $podeVerCustoProdutos = $user->podeVerCustoProdutos();
 
-        return view('produtos.show', compact('produto', 'podeGerenciarProdutos'));
+        return view('produtos.show', compact('produto', 'podeGerenciarProdutos', 'podeVerCustoProdutos'));
+    }
+
+    /**
+     * Histórico de preço de custo (apenas gestão / Super Admin).
+     */
+    public function custosHistorico(int $id): View
+    {
+        $user = auth()->user();
+        if (! $user->podeVerCustoProdutos()) {
+            abort(403, 'Acesso negado.');
+        }
+        $produto = Produto::with(['custoHistoricos.user'])->findOrFail($id);
+        if (! $user->isSuperAdmin()) {
+            $opsIds = $user->getOperacoesIdsParaModuloVendas();
+            if ($produto->operacao_id === null || empty($opsIds) || ! in_array((int) $produto->operacao_id, $opsIds, true)) {
+                abort(403, 'Acesso negado a este produto.');
+            }
+        }
+
+        return view('produtos.custos-historico', compact('produto'));
     }
 
     /**
@@ -226,7 +266,9 @@ class ProdutoController extends Controller
                 : collect([]);
         }
 
-        return view('produtos.edit', compact('produto', 'operacoes'));
+        $podeVerCustoProdutos = $user->podeVerCustoProdutos();
+
+        return view('produtos.edit', compact('produto', 'operacoes', 'podeVerCustoProdutos'));
     }
 
     /**
@@ -244,7 +286,17 @@ class ProdutoController extends Controller
                 }
             }
 
-            $validated = $request->validate([
+            $regrasCusto = [];
+            if ($user->podeVerCustoProdutos()) {
+                if (! $produto->temCustoVigenteDefinido()) {
+                    $regrasCusto['novo_custo_unitario'] = 'required|numeric|min:0';
+                } else {
+                    $regrasCusto['novo_custo_unitario'] = 'nullable|numeric|min:0';
+                }
+                $regrasCusto['novo_custo_observacao'] = 'nullable|string|max:500';
+            }
+
+            $validated = $request->validate(array_merge([
                 'operacao_id' => ['required', 'exists:operacoes,id'],
                 'nome' => 'required|string|max:255',
                 'codigo' => 'nullable|string|max:50',
@@ -254,7 +306,7 @@ class ProdutoController extends Controller
                 'ativo' => 'nullable|boolean',
                 'anexos' => 'nullable|array',
                 'anexos.*' => 'file|max:5120|mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx,xls,xlsx,txt',
-            ], [
+            ], $regrasCusto), [
                 'operacao_id.required' => 'O produto deve estar vinculado a uma operação.',
                 'operacao_id.exists' => 'A operação selecionada não é válida.',
             ]);
@@ -268,10 +320,23 @@ class ProdutoController extends Controller
 
             $this->normalizarEstoqueParaUnidade($validated);
             $validated['ativo'] = $request->boolean('ativo', true);
+            $novoCusto = null;
+            $novoCustoObs = null;
+            if ($user->podeVerCustoProdutos()) {
+                if (array_key_exists('novo_custo_unitario', $validated) && $validated['novo_custo_unitario'] !== null && $validated['novo_custo_unitario'] !== '') {
+                    $novoCusto = (float) $validated['novo_custo_unitario'];
+                }
+                $novoCustoObs = $validated['novo_custo_observacao'] ?? null;
+                unset($validated['novo_custo_unitario'], $validated['novo_custo_observacao']);
+            }
             unset($validated['anexos']);
 
             $oldValues = $produto->toArray();
             $produto->update($validated);
+
+            if ($user->podeVerCustoProdutos() && $novoCusto !== null) {
+                $this->produtoCustoService->definirCustoVigente($produto, $novoCusto, is_string($novoCustoObs) ? $novoCustoObs : null, $user);
+            }
 
             if ($request->hasFile('anexos')) {
                 $ordem = $produto->anexos()->max('ordem') ?? 0;

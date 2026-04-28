@@ -10,14 +10,17 @@ use App\Modules\Loans\Models\Emprestimo;
 use App\Modules\Loans\Models\Pagamento;
 use App\Modules\Loans\Models\Parcela;
 use App\Modules\Loans\Services\QuitacaoService;
+use App\Support\ClienteNomeExibicao;
 use App\Support\FichaContatoLookup;
 use App\Support\OperacaoPreferida;
+use App\Support\RelatorioCsvStream;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class RelatorioController extends Controller
 {
@@ -361,6 +364,42 @@ class RelatorioController extends Controller
      */
     public function recebimentoJurosDia(Request $request): View
     {
+        return view('relatorios.recebimento-juros-dia', $this->buildRecebimentoJurosDiaDataset($request));
+    }
+
+    public function exportRecebimentoJurosDia(Request $request): StreamedResponse
+    {
+        $d = $this->buildRecebimentoJurosDiaDataset($request);
+
+        return RelatorioCsvStream::download('recebimento_juros_dia', function ($out) use ($d) {
+            fputcsv($out, ['Data', 'Consultor', 'Recebido', 'Investido', 'Juros'], ';');
+            foreach ($d['porDiaPorUsuario'] as $dia => $porUsuario) {
+                foreach ($porUsuario as $consultorId => $v) {
+                    $nome = $d['totalizadoresPorUsuario'][$consultorId]['nome'] ?? ('#'.$consultorId);
+                    fputcsv($out, [
+                        Carbon::parse($dia)->format('d/m/Y'),
+                        $nome,
+                        number_format($v['recebido'], 2, ',', '.'),
+                        number_format($v['investido'] ?? 0, 2, ',', '.'),
+                        number_format($v['juros'], 2, ',', '.'),
+                    ], ';');
+                }
+            }
+            fputcsv($out, [
+                'TOTAIS',
+                '',
+                number_format($d['totalizadores']['recebido'], 2, ',', '.'),
+                number_format($d['totalizadores']['investido'], 2, ',', '.'),
+                number_format($d['totalizadores']['juros'], 2, ',', '.'),
+            ], ';');
+        });
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildRecebimentoJurosDiaDataset(Request $request): array
+    {
         $user = auth()->user();
 
         if (empty($user->getOperacoesIdsOndeTemPapel(['administrador', 'gestor']))) {
@@ -455,7 +494,7 @@ class RelatorioController extends Controller
             ksort($porDiaPorUsuario);
         }
 
-        return view('relatorios.recebimento-juros-dia', compact(
+        return compact(
             'dateFrom',
             'dateTo',
             'operacoes',
@@ -465,13 +504,61 @@ class RelatorioController extends Controller
             'porDiaPorUsuario',
             'totalizadores',
             'totalizadoresPorUsuario'
-        ));
+        );
     }
 
     /**
      * Relatório: Parcelas atrasadas (situação em uma data, com filtros)
      */
     public function parcelasAtrasadas(Request $request): View
+    {
+        return view('relatorios.parcelas-atrasadas', $this->buildParcelasAtrasadasDataset($request));
+    }
+
+    public function exportParcelasAtrasadas(Request $request): StreamedResponse
+    {
+        $d = $this->buildParcelasAtrasadasDataset($request);
+        $map = $d['fichasPorClienteOperacao'] ?? collect();
+        $parcelas = $d['parcelas'];
+
+        return RelatorioCsvStream::download('parcelas_atrasadas', function ($out) use ($d, $map, $parcelas) {
+            fputcsv($out, [
+                'Cliente', 'Operação', 'Consultor', 'Parcela', 'Vencimento', 'Dias atraso', 'Valor', 'Valor pago', 'Saldo', 'Status',
+            ], ';');
+            foreach ($parcelas as $p) {
+                $nome = $p->emprestimo && $p->emprestimo->cliente
+                    ? ClienteNomeExibicao::fromParcelaMap($p, $map)
+                    : '';
+                fputcsv($out, [
+                    $nome,
+                    $p->emprestimo && $p->emprestimo->operacao ? $p->emprestimo->operacao->nome : '',
+                    $p->emprestimo && $p->emprestimo->consultor ? $p->emprestimo->consultor->name : '',
+                    $p->emprestimo ? $p->numero.'/'.$p->emprestimo->numero_parcelas : (string) $p->numero,
+                    $p->data_vencimento ? $p->data_vencimento->format('d/m/Y') : '',
+                    (string) ($p->dias_na_data_ref ?? ''),
+                    number_format((float) $p->valor, 2, ',', '.'),
+                    number_format((float) ($p->valor_pago ?? 0), 2, ',', '.'),
+                    number_format((float) ($p->saldo_receber ?? 0), 2, ',', '.'),
+                    (string) ($p->status ?? ''),
+                ], ';');
+            }
+            $tv = $parcelas->sum('valor');
+            $tp = $parcelas->sum(fn ($x) => (float) ($x->valor_pago ?? 0));
+            $ts = $parcelas->sum('saldo_receber');
+            fputcsv($out, [
+                'TOTAIS', '', '', '', '', '',
+                number_format((float) $tv, 2, ',', '.'),
+                number_format((float) $tp, 2, ',', '.'),
+                number_format((float) $ts, 2, ',', '.'),
+                '',
+            ], ';');
+        });
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildParcelasAtrasadasDataset(Request $request): array
     {
         $user = auth()->user();
 
@@ -535,14 +622,12 @@ class RelatorioController extends Controller
 
         $parcelas = $query->orderBy('data_vencimento', 'asc')->get();
 
-        // Calcular dias de atraso na data de referência e saldo a receber
         $dataRefCarbon = Carbon::parse($dataRef);
         $parcelas->each(function ($parcela) use ($dataRefCarbon) {
             $parcela->dias_na_data_ref = $parcela->data_vencimento->diffInDays($dataRefCarbon);
             $parcela->saldo_receber = (float) $parcela->valor - (float) ($parcela->valor_pago ?? 0);
         });
 
-        // Fichas por (cliente_id, operacao_id) para endereço na aba Rota (Fase 4 — dados por operação)
         $pairRows = $parcelas->filter(fn ($p) => $p->emprestimo && $p->emprestimo->cliente_id && $p->emprestimo->operacao_id)
             ->map(fn ($p) => [
                 'cliente_id' => (int) $p->emprestimo->cliente_id,
@@ -565,7 +650,7 @@ class RelatorioController extends Controller
             $fichasPorClienteOperacao = $q->get()->keyBy(fn ($f) => $f->cliente_id.'_'.$f->operacao_id);
         }
 
-        return view('relatorios.parcelas-atrasadas', compact(
+        return compact(
             'dataRef',
             'vencimentoDe',
             'vencimentoAte',
@@ -576,7 +661,7 @@ class RelatorioController extends Controller
             'diasAtrasoMin',
             'parcelas',
             'fichasPorClienteOperacao'
-        ));
+        );
     }
 
     /**
@@ -584,6 +669,54 @@ class RelatorioController extends Controller
      * Filtros: período, frequência, tipo (quitação total / renovação)
      */
     public function quitacoes(Request $request): View
+    {
+        return view('relatorios.quitacoes', $this->buildQuitacoesDataset($request));
+    }
+
+    public function exportQuitacoes(Request $request): StreamedResponse
+    {
+        $d = $this->buildQuitacoesDataset($request);
+        $map = $d['fichasContatoPorClienteOperacao'] ?? collect();
+
+        return RelatorioCsvStream::download('quitacoes', function ($out) use ($d, $map) {
+            fputcsv($out, [
+                'ID', 'Cliente', 'Operação', 'Consultor', 'Valor total', 'Total pago bruto', 'Lucro relatório', 'Data quitação', 'Frequência', 'Tipo quitação',
+            ], ';');
+            foreach ($d['emprestimos'] as $e) {
+                $nome = $e->cliente
+                    ? ClienteNomeExibicao::fromEmprestimoMap($e, $map)
+                    : '';
+                $tipoQuit = ((int) ($e->renovacoes_count ?? 0) > 0) ? 'Renovação' : 'Total';
+                fputcsv($out, [
+                    $e->id,
+                    $nome,
+                    $e->operacao?->nome ?? '',
+                    $e->consultor?->name ?? '',
+                    number_format((float) $e->valor_total, 2, ',', '.'),
+                    number_format((float) ($e->valor_total_pago_bruto ?? 0), 2, ',', '.'),
+                    number_format((float) ($e->lucro_relatorio_quitacao ?? 0), 2, ',', '.'),
+                    $e->data_quitacao ? Carbon::parse($e->data_quitacao)->format('d/m/Y') : '',
+                    $e->frequencia ? ucfirst((string) $e->frequencia) : '',
+                    $tipoQuit,
+                ], ';');
+            }
+            fputcsv($out, [
+                '',
+                'TOTAIS',
+                '',
+                '',
+                number_format($d['totalPrincipalQuitadoRelatorio'], 2, ',', '.'),
+                number_format($d['totalPagoBrutoRelatorio'], 2, ',', '.'),
+                number_format($d['totalLucroRelatorioQuitacoes'], 2, ',', '.'),
+                '', '', '',
+            ], ';');
+        });
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildQuitacoesDataset(Request $request): array
     {
         $user = auth()->user();
 
@@ -642,7 +775,6 @@ class RelatorioController extends Controller
             $query->whereIn('consultor_id', $consultoresIds);
         }
 
-        // Data da quitação = maior data_pagamento das parcelas; filtrar por período
         $query->whereRaw(
             '(SELECT MAX(p.data_pagamento) FROM parcelas p WHERE p.emprestimo_id = emprestimos.id AND p.deleted_at IS NULL) BETWEEN ? AND ?',
             [$dateFrom->format('Y-m-d'), $dateTo->format('Y-m-d')]
@@ -667,7 +799,7 @@ class RelatorioController extends Controller
         $totalPagoBrutoRelatorio = round($emprestimos->sum(fn ($e) => (float) ($e->valor_total_pago_bruto ?? 0)), 2);
         $totalLucroRelatorioQuitacoes = round($totalPagoBrutoRelatorio - $totalPrincipalQuitadoRelatorio, 2);
 
-        return view('relatorios.quitacoes', compact(
+        return compact(
             'dateFrom',
             'dateTo',
             'operacoes',
@@ -681,7 +813,7 @@ class RelatorioController extends Controller
             'totalPrincipalQuitadoRelatorio',
             'totalPagoBrutoRelatorio',
             'totalLucroRelatorioQuitacoes'
-        ));
+        );
     }
 
     /**
@@ -689,6 +821,44 @@ class RelatorioController extends Controller
      * Baseado em parcelas não pagas de empréstimos ativos.
      */
     public function receberPorCliente(Request $request): View
+    {
+        return view('relatorios.receber-por-cliente', $this->buildReceberPorClienteDataset($request));
+    }
+
+    public function exportReceberPorCliente(Request $request): StreamedResponse
+    {
+        $d = $this->buildReceberPorClienteDataset($request);
+
+        return RelatorioCsvStream::download('receber_por_cliente', function ($out) use ($d) {
+            fputcsv($out, [
+                'Cliente', 'Documento', 'Total a receber no período', 'Contrato sem juros', 'Principal (com juros)', 'Somente juros',
+            ], ';');
+            foreach ($d['rows'] as $r) {
+                fputcsv($out, [
+                    $r->cliente_nome,
+                    $r->cliente_documento,
+                    number_format((float) $r->total_a_receber_periodo, 2, ',', '.'),
+                    number_format((float) $r->parcela_sem_juros_contrato_no_periodo, 2, ',', '.'),
+                    number_format((float) $r->principal_com_juros_no_periodo, 2, ',', '.'),
+                    number_format((float) $r->somente_juros_no_periodo, 2, ',', '.'),
+                ], ';');
+            }
+            $t = $d['totais'];
+            fputcsv($out, [
+                'TOTAIS',
+                '',
+                number_format($t['total_a_receber_periodo'], 2, ',', '.'),
+                number_format($t['parcela_sem_juros_contrato_no_periodo'], 2, ',', '.'),
+                number_format($t['principal_com_juros_no_periodo'], 2, ',', '.'),
+                number_format($t['somente_juros_no_periodo'], 2, ',', '.'),
+            ], ';');
+        });
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildReceberPorClienteDataset(Request $request): array
     {
         $user = auth()->user();
 
@@ -712,7 +882,6 @@ class RelatorioController extends Controller
             $consultoresIds = $consultoresIds ? [$consultoresIds] : [];
         }
         $consultoresIds = array_values(array_filter(array_map('intval', $consultoresIds)));
-        // Checkbox não envia parâmetro quando desmarcado; hidden "0" + checkbox "1" garante o valor no GET.
         $somenteSemJuros = $request->has('somente_sem_juros')
             ? $request->boolean('somente_sem_juros')
             : true;
@@ -784,7 +953,7 @@ class RelatorioController extends Controller
             'principal_com_juros_no_periodo' => round((float) $rows->sum('principal_com_juros_no_periodo'), 2),
         ];
 
-        return view('relatorios.receber-por-cliente', compact(
+        return compact(
             'dateFrom',
             'dateTo',
             'operacoes',
@@ -794,7 +963,7 @@ class RelatorioController extends Controller
             'somenteSemJuros',
             'rows',
             'totais'
-        ));
+        );
     }
 
     /**
@@ -802,6 +971,35 @@ class RelatorioController extends Controller
      * Filtros: período, operação. Lista consultores com bases (valor quitado, juros recebidos) e permite escolher tipo de comissão + taxa % para calcular.
      */
     public function comissoes(Request $request): View
+    {
+        return view('relatorios.comissoes', $this->buildComissoesDataset($request));
+    }
+
+    public function exportComissoes(Request $request): StreamedResponse
+    {
+        $d = $this->buildComissoesDataset($request);
+
+        return RelatorioCsvStream::download('comissoes', function ($out) use ($d) {
+            fputcsv($out, ['Consultor', 'Valor quitado (principal)', 'Juros recebidos'], ';');
+            $sq = 0.0;
+            $sj = 0.0;
+            foreach ($d['consultoresComTotais'] as $row) {
+                fputcsv($out, [
+                    $row['nome'],
+                    number_format((float) $row['valor_quitado'], 2, ',', '.'),
+                    number_format((float) $row['juros_recebidos'], 2, ',', '.'),
+                ], ';');
+                $sq += (float) $row['valor_quitado'];
+                $sj += (float) $row['juros_recebidos'];
+            }
+            fputcsv($out, ['TOTAIS', number_format($sq, 2, ',', '.'), number_format($sj, 2, ',', '.')], ';');
+        });
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildComissoesDataset(Request $request): array
     {
         $user = auth()->user();
 
@@ -863,20 +1061,62 @@ class RelatorioController extends Controller
 
         $consultoresComTotais = array_values($totaisPorConsultor);
 
-        return view('relatorios.comissoes', compact(
+        return compact(
             'dateFrom',
             'dateTo',
             'operacoes',
             'operacaoId',
             'frequencia',
             'consultoresComTotais'
-        ));
+        );
     }
 
     /**
      * Tela de detalhe: empréstimos que compõem a linha do consultor no relatório de comissões (mesmo período, filtros e regra de repartição).
      */
     public function comissoesDetalheConsultor(Request $request): View
+    {
+        return view('relatorios.comissoes-detalhe', $this->buildComissoesDetalheConsultorDataset($request));
+    }
+
+    public function exportComissoesDetalheConsultor(Request $request): StreamedResponse
+    {
+        $d = $this->buildComissoesDetalheConsultorDataset($request);
+
+        return RelatorioCsvStream::download('comissoes_detalhe', function ($out) use ($d) {
+            fputcsv($out, [
+                'Empréstimo ID', 'Cliente', 'Consultor', 'Valor total contrato', 'Total pago período', 'Valor quitado', 'Juros recebidos', 'Data quitação',
+            ], ';');
+            foreach ($d['linhas'] as $linha) {
+                fputcsv($out, [
+                    $linha['emprestimo_id'],
+                    $linha['cliente_nome'],
+                    $linha['consultor_nome'],
+                    number_format((float) $linha['valor_total'], 2, ',', '.'),
+                    number_format((float) $linha['total_pago_periodo'], 2, ',', '.'),
+                    number_format((float) $linha['valor_quitado'], 2, ',', '.'),
+                    number_format((float) $linha['juros_recebidos'], 2, ',', '.'),
+                    $linha['data_quitacao'] ?? '',
+                ], ';');
+            }
+            $t = $d['totais'];
+            fputcsv($out, [
+                'TOTAIS',
+                '',
+                '',
+                number_format((float) $t['soma_valor_total_contratos'], 2, ',', '.'),
+                number_format((float) $t['soma_total_pago_periodo'], 2, ',', '.'),
+                number_format((float) $t['soma_valor_quitado'], 2, ',', '.'),
+                number_format((float) $t['soma_juros_recebidos'], 2, ',', '.'),
+                '',
+            ], ';');
+        });
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildComissoesDetalheConsultorDataset(Request $request): array
     {
         $user = auth()->user();
 
@@ -946,7 +1186,7 @@ class RelatorioController extends Controller
 
         $urlVoltarComissoes = route('relatorios.comissoes', $filtrosVoltar);
 
-        return view('relatorios.comissoes-detalhe', compact(
+        return compact(
             'dateFrom',
             'dateTo',
             'operacoes',
@@ -958,7 +1198,7 @@ class RelatorioController extends Controller
             'totais',
             'urlVoltarComissoes',
             'quitacaoTotalPorDataQuitacao'
-        ));
+        );
     }
 
     /**
@@ -966,6 +1206,53 @@ class RelatorioController extends Controller
      * Inclui empréstimos aprovados, ativos ou finalizados; exclui rascunho, pendente e cancelado.
      */
     public function valorEmprestadoPrincipal(Request $request): View
+    {
+        return view('relatorios.valor-emprestado-principal', $this->buildValorEmprestadoPrincipalDataset($request));
+    }
+
+    public function exportValorEmprestadoPrincipal(Request $request): StreamedResponse
+    {
+        $d = $this->buildValorEmprestadoPrincipalDataset($request);
+        $map = $d['fichasContatoPorClienteOperacao'] ?? collect();
+        $metricas = $d['metricasPorEmprestimoId'];
+
+        return RelatorioCsvStream::download('valor_emprestado_principal', function ($out) use ($d, $map, $metricas) {
+            fputcsv($out, [
+                'ID', 'Cliente', 'Operação', 'Consultor', 'Data início', 'Principal', 'Juros contrato', 'Total a pagar', 'Total pago', 'Saldo devedor', 'Status',
+            ], ';');
+            foreach ($d['emprestimos'] as $e) {
+                $m = $metricas[$e->id] ?? ['juros_contrato' => 0, 'total_a_pagar' => 0, 'total_pago' => 0, 'saldo_devedor' => 0];
+                $nome = $e->cliente ? ClienteNomeExibicao::fromEmprestimoMap($e, $map) : '';
+                fputcsv($out, [
+                    $e->id,
+                    $nome,
+                    $e->operacao?->nome ?? '',
+                    $e->consultor?->name ?? '',
+                    $e->data_inicio ? Carbon::parse($e->data_inicio)->format('d/m/Y') : '',
+                    number_format((float) $e->valor_total, 2, ',', '.'),
+                    number_format((float) $m['juros_contrato'], 2, ',', '.'),
+                    number_format((float) ($m['total_a_pagar'] ?? 0), 2, ',', '.'),
+                    number_format((float) ($m['total_pago'] ?? 0), 2, ',', '.'),
+                    number_format((float) ($m['saldo_devedor'] ?? 0), 2, ',', '.'),
+                    (string) $e->status,
+                ], ';');
+            }
+            fputcsv($out, [
+                'TOTAIS', '', '', '', '',
+                number_format($d['totalPrincipal'], 2, ',', '.'),
+                number_format($d['totalJurosContrato'], 2, ',', '.'),
+                number_format($d['totalAPagarCronograma'], 2, ',', '.'),
+                number_format($d['totalPagoParcelas'], 2, ',', '.'),
+                number_format($d['totalSaldoDevedor'], 2, ',', '.'),
+                '',
+            ], ';');
+        });
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildValorEmprestadoPrincipalDataset(Request $request): array
     {
         $user = auth()->user();
 
@@ -1066,7 +1353,7 @@ class RelatorioController extends Controller
             FichaContatoLookup::pairsFromEmprestimos($emprestimos)
         );
 
-        return view('relatorios.valor-emprestado-principal', compact(
+        return compact(
             'dateFrom',
             'dateTo',
             'operacoes',
@@ -1082,7 +1369,7 @@ class RelatorioController extends Controller
             'totalAPagarCronograma',
             'totalPagoParcelas',
             'totalSaldoDevedor'
-        ));
+        );
     }
 
     /**
@@ -1090,6 +1377,35 @@ class RelatorioController extends Controller
      * Filtros: período e operação.
      */
     public function entradasSaidasPorCategoria(Request $request): View
+    {
+        return view('relatorios.entradas-saidas-categoria', $this->buildEntradasSaidasPorCategoriaDataset($request));
+    }
+
+    public function exportEntradasSaidasPorCategoria(Request $request): StreamedResponse
+    {
+        $d = $this->buildEntradasSaidasPorCategoriaDataset($request);
+
+        return RelatorioCsvStream::download('entradas_saidas_categoria', function ($out) use ($d) {
+            fputcsv($out, ['Categoria', 'Entradas', 'Saídas'], ';');
+            foreach ($d['porCategoria'] as $row) {
+                fputcsv($out, [
+                    $row['nome'],
+                    number_format((float) $row['entradas'], 2, ',', '.'),
+                    number_format((float) $row['saidas'], 2, ',', '.'),
+                ], ';');
+            }
+            fputcsv($out, [
+                'TOTAIS',
+                number_format($d['totalEntradas'], 2, ',', '.'),
+                number_format($d['totalSaidas'], 2, ',', '.'),
+            ], ';');
+        });
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildEntradasSaidasPorCategoriaDataset(Request $request): array
     {
         $user = auth()->user();
 
@@ -1149,10 +1465,9 @@ class RelatorioController extends Controller
             }
         }
 
-        // Ordenar por nome da categoria
         uasort($porCategoria, fn ($a, $b) => strcasecmp($a['nome'], $b['nome']));
 
-        return view('relatorios.entradas-saidas-categoria', compact(
+        return compact(
             'dateFrom',
             'dateTo',
             'operacoes',
@@ -1160,7 +1475,7 @@ class RelatorioController extends Controller
             'porCategoria',
             'totalEntradas',
             'totalSaidas'
-        ));
+        );
     }
 
     /**
@@ -1168,6 +1483,51 @@ class RelatorioController extends Controller
      * Mostra empréstimos finalizados com detalhamento de juros contratuais e de atraso.
      */
     public function jurosQuitacoes(Request $request): View
+    {
+        return view('relatorios.juros-quitacoes', $this->buildJurosQuitacoesDataset($request));
+    }
+
+    public function exportJurosQuitacoes(Request $request): StreamedResponse
+    {
+        $d = $this->buildJurosQuitacoesDataset($request);
+        $map = $d['fichasContatoPorClienteOperacao'] ?? collect();
+
+        return RelatorioCsvStream::download('juros_quitacoes', function ($out) use ($d, $map) {
+            fputcsv($out, [
+                'Cliente', 'Operação', 'Tipo', 'Frequência', 'Emprestado', 'Recebido', 'Juros contrato', 'Juros atraso', 'Total juros', 'Data quitação',
+            ], ';');
+            foreach ($d['emprestimos'] as $e) {
+                $nome = $e->cliente ? ClienteNomeExibicao::fromEmprestimoMap($e, $map) : '';
+                fputcsv($out, [
+                    $nome,
+                    $e->operacao?->nome ?? '',
+                    $e->tipo_label ?? '',
+                    $e->frequencia_label ?? '',
+                    number_format((float) $e->valor_emprestado, 2, ',', '.'),
+                    number_format((float) $e->valor_recebido, 2, ',', '.'),
+                    number_format((float) $e->juros_contrato, 2, ',', '.'),
+                    number_format((float) $e->juros_atraso, 2, ',', '.'),
+                    number_format((float) $e->total_juros, 2, ',', '.'),
+                    $e->data_quitacao ? Carbon::parse($e->data_quitacao)->format('d/m/Y') : '',
+                ], ';');
+            }
+            $t = $d['totais'];
+            fputcsv($out, [
+                'TOTAIS', '', '', '',
+                number_format((float) $t['valor_emprestado'], 2, ',', '.'),
+                number_format((float) $t['valor_recebido'], 2, ',', '.'),
+                number_format((float) $t['juros_contrato'], 2, ',', '.'),
+                number_format((float) $t['juros_atraso'], 2, ',', '.'),
+                number_format((float) $t['total_juros'], 2, ',', '.'),
+                '',
+            ], ';');
+        });
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildJurosQuitacoesDataset(Request $request): array
     {
         $user = auth()->user();
 
@@ -1230,7 +1590,6 @@ class RelatorioController extends Controller
             $query->whereIn('consultor_id', $consultoresIds);
         }
 
-        // Filtrar por data de quitação (MAX data_pagamento das parcelas)
         $query->whereRaw(
             '(SELECT MAX(p.data_pagamento) FROM parcelas p WHERE p.emprestimo_id = emprestimos.id AND p.deleted_at IS NULL) BETWEEN ? AND ?',
             [$dateFrom->format('Y-m-d'), $dateTo->format('Y-m-d')]
@@ -1240,7 +1599,6 @@ class RelatorioController extends Controller
             '(SELECT MAX(p.data_pagamento) FROM parcelas p WHERE p.emprestimo_id = emprestimos.id AND p.deleted_at IS NULL) DESC'
         )->get();
 
-        // Calcular juros para cada empréstimo
         $tipoLabels = [
             'dinheiro' => 'Dinheiro',
             'empenho' => 'Empenho',
@@ -1279,7 +1637,6 @@ class RelatorioController extends Controller
                 }
             }
 
-            // Juros contratuais = (soma das parcelas) - valor emprestado
             $somaParcelas = $e->parcelas->sum('valor');
             $jurosContrato = max(0, $somaParcelas - $valorEmprestado);
 
@@ -1297,7 +1654,6 @@ class RelatorioController extends Controller
             $totais['total_juros'] += $jurosContrato + $jurosAtraso;
         });
 
-        // Arredondar totais
         $totais['valor_emprestado'] = round($totais['valor_emprestado'], 2);
         $totais['valor_recebido'] = round($totais['valor_recebido'], 2);
         $totais['juros_contrato'] = round($totais['juros_contrato'], 2);
@@ -1308,7 +1664,7 @@ class RelatorioController extends Controller
             FichaContatoLookup::pairsFromEmprestimos($emprestimos)
         );
 
-        return view('relatorios.juros-quitacoes', compact(
+        return compact(
             'dateFrom',
             'dateTo',
             'operacoes',
@@ -1323,6 +1679,6 @@ class RelatorioController extends Controller
             'tipoLabels',
             'freqLabels',
             'fichasContatoPorClienteOperacao'
-        ));
+        );
     }
 }

@@ -295,6 +295,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Preço de custo, histórico e margem: apenas gestão (e Super Admin).
+     */
+    public function podeVerCustoProdutos(): bool
+    {
+        return $this->temPapelGestaoEmAlgumaOperacao() || $this->isSuperAdmin();
+    }
+
+    /**
      * Verificar se o usuário tem acesso a uma operação específica.
      * Sem papel global: só Super Admin vê tudo; demais precisam estar em operacao_user (com role definido).
      */

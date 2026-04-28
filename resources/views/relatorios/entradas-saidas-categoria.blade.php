@@ -10,7 +10,7 @@
 @endsection
 @section('content')
     {{-- Filtros --}}
-    <div class="row">
+    <div class="row no-print">
         <div class="col-12 mb-3">
             <div class="card">
                 <div class="card-header">
@@ -53,8 +53,9 @@
     <div class="row mb-3">
         <div class="col-12">
             <div class="card">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <h5 class="card-title mb-0">Resumo do período</h5>
+                    @include('relatorios.partials.botoes-exportar-imprimir', ['exportRoute' => 'relatorios.entradas-saidas-categoria.export'])
                 </div>
                 <div class="card-body">
                     <div class="row g-3">
@@ -86,7 +87,7 @@
 
     {{-- Gráficos --}}
     @if(!empty($porCategoria) && ($totalEntradas > 0 || $totalSaidas > 0))
-    <div class="row mb-3">
+    <div class="row mb-3 no-print">
         <div class="col-12">
             <h5 class="mb-3">Gráficos</h5>
         </div>
@@ -127,8 +128,9 @@
     <div class="row">
         <div class="col-12">
             <div class="card">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <h5 class="card-title mb-0">Por categoria</h5>
+                    @include('relatorios.partials.botoes-exportar-imprimir', ['exportRoute' => 'relatorios.entradas-saidas-categoria.export'])
                 </div>
                 <div class="card-body">
                     @if(empty($porCategoria))

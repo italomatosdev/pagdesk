@@ -70,6 +70,29 @@
                             <input type="text" id="preco_venda" name="preco_venda" class="form-control" inputmode="decimal" data-mask-money="brl" placeholder="0,00" value="{{ old('preco_venda', $produto->preco_venda) }}" required>
                             @error('preco_venda')<div class="text-danger">{{ $message }}</div>@enderror
                         </div>
+                        @if($podeVerCustoProdutos ?? false)
+                            @if(!$produto->temCustoVigenteDefinido())
+                                <div class="alert alert-warning">
+                                    <i class="bx bx-error-circle me-1"></i> Este produto <strong>não tem preço de custo</strong>. Não será possível registrar vendas até informar o custo abaixo.
+                                </div>
+                            @endif
+                            <div class="mb-3">
+                                <label class="form-label">Preço de custo vigente (R$)</label>
+                                <p class="mb-1">{{ $produto->temCustoVigenteDefinido() ? 'R$ '.number_format((float) $produto->custo_unitario_vigente, 2, ',', '.') : '—' }}</p>
+                                <label class="form-label">{{ $produto->temCustoVigenteDefinido() ? 'Novo preço de custo (opcional)' : 'Preço de custo' }} @if(!$produto->temCustoVigenteDefinido())<span class="text-danger">*</span>@endif</label>
+                                <input type="text" id="novo_custo_unitario" name="novo_custo_unitario" class="form-control" inputmode="decimal" data-mask-money="brl" placeholder="0,00" value="{{ old('novo_custo_unitario') }}">
+                                <small class="text-muted">Ao informar um valor, é criada uma nova entrada no histórico (vendas futuras usam esse custo).</small>
+                                @error('novo_custo_unitario')<div class="text-danger">{{ $message }}</div>@enderror
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Observação da alteração de custo</label>
+                                <input type="text" name="novo_custo_observacao" class="form-control" value="{{ old('novo_custo_observacao') }}" maxlength="500" placeholder="Ex.: reajuste fornecedor, NF 1234">
+                                @error('novo_custo_observacao')<div class="text-danger">{{ $message }}</div>@enderror
+                            </div>
+                            <p class="small mb-3">
+                                <a href="{{ route('produtos.custos.historico', $produto->id) }}"><i class="bx bx-history me-1"></i> Ver histórico de custo</a>
+                            </p>
+                        @endif
                         @php
                             $unidadeValorEdit = old('unidade', $produto->unidade ?: 'un');
                             $estoqueInteiroForm = \App\Modules\Core\Models\Produto::estoqueExigeInteiro($unidadeValorEdit);

@@ -49,6 +49,14 @@
                             </div>
                             <i class="bx bx-chevron-right ms-auto"></i>
                         </a>
+                        <a href="{{ route('relatorios.juros-quitacoes') }}" class="list-group-item list-group-item-action d-flex align-items-center">
+                            <i class="bx bx-trending-up font-size-20 text-success me-3"></i>
+                            <div>
+                                <h6 class="mb-1">Juros por quitação</h6>
+                                <small class="text-muted">Juros associados a quitações no período, com filtros alinhados ao relatório de quitações.</small>
+                            </div>
+                            <i class="bx bx-chevron-right ms-auto"></i>
+                        </a>
                         <a href="{{ route('relatorios.valor-emprestado-principal') }}" class="list-group-item list-group-item-action d-flex align-items-center">
                             <i class="bx bx-money font-size-20 text-primary me-3"></i>
                             <div>

@@ -9,7 +9,7 @@
     <body>
 @endsection
 @section('content')
-    <div class="row">
+    <div class="row no-print">
         <div class="col-12 mb-3">
             <div class="card">
                 <div class="card-header">
@@ -61,8 +61,8 @@
     <div class="row">
         <div class="col-12">
             <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
+                <div class="card-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+                    <h5 class="card-title mb-0 flex-grow-1">
                         Comissões por consultor ({{ $dateFrom->format('d/m/Y') }} a {{ $dateTo->format('d/m/Y') }})
                         @if(!empty($frequencia))
                             @php
@@ -71,6 +71,7 @@
                             <span class="text-muted fw-normal">— {{ $freqTitulo }}</span>
                         @endif
                     </h5>
+                    @include('relatorios.partials.botoes-exportar-imprimir', ['exportRoute' => 'relatorios.comissoes.export'])
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
