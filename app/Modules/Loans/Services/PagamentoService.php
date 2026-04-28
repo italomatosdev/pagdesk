@@ -175,7 +175,7 @@ class PagamentoService
             ]);
 
             // Criar movimentação de caixa (entrada) — produto/objeto não gera caixa
-            $this->criarMovimentacaoCaixa($pagamento);
+            $this->criarMovimentacaoCaixa($pagamento, ! empty($dados['adiantamento_valor']));
 
             // Auditoria
             self::auditar('registrar_pagamento', $pagamento, null, $pagamento->toArray());
@@ -750,9 +750,10 @@ class PagamentoService
     /**
      * Criar movimentação de caixa a partir de um pagamento
      */
-    private function criarMovimentacaoCaixa(Pagamento $pagamento): CashLedgerEntry
+    private function criarMovimentacaoCaixa(Pagamento $pagamento, bool $adiantamentoValor = false): CashLedgerEntry
     {
         $emprestimo = $pagamento->parcela->emprestimo;
+        $sufixoAdiantamento = $adiantamentoValor ? ' (adiantamento de valor)' : '';
 
         // Usar CashService para garantir que empresa_id seja preenchido corretamente
         return $this->cashService->registrarMovimentacao([
@@ -762,7 +763,7 @@ class PagamentoService
             'tipo' => 'entrada',
             'origem' => 'automatica',
             'valor' => $pagamento->valor,
-            'descricao' => 'Pagamento de parcela #'.$pagamento->parcela->numero.' - Empréstimo #'.$emprestimo->id,
+            'descricao' => 'Pagamento de parcela #'.$pagamento->parcela->numero.' - Empréstimo #'.$emprestimo->id.$sufixoAdiantamento,
             'data_movimentacao' => $pagamento->data_pagamento,
             'referencia_tipo' => 'pagamento_parcela',
             'referencia_id' => $pagamento->parcela_id,

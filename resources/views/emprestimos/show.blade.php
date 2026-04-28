@@ -22,7 +22,7 @@
             </div>
         @endif
         <div class="row">
-            <div class="col-lg-8">
+            <div class="col-lg-10">
                 <!-- Informações do Empréstimo -->
                 <div class="card">
                     <div class="card-header">
@@ -497,6 +497,34 @@
                                         <i class="bx bx-money"></i> Quitar empréstimo
                                     </a>
                                 @endif
+                            </div>
+                        @endif
+
+                        <!-- Adiantamento de valor: 1 parcela, em dia, sem novo empréstimo -->
+                        @php
+                            $parcelaAdiantamento = $emprestimo->parcelas->first();
+                            $podeAdiantarValor = $parcelaAdiantamento && $parcelaAdiantamento->podeAdiantarValor();
+                            $faltaAdiantamento = $parcelaAdiantamento ? $parcelaAdiantamento->faltaPagar() : 0.0;
+                        @endphp
+                        @if($podeAdiantarValor)
+                            <hr>
+                            <div class="alert alert-secondary mb-3">
+                                <h6 class="alert-heading">
+                                    <i class="bx bx-down-arrow-circle"></i> Adiantamento de valor
+                                </h6>
+                                <p class="mb-2">
+                                    Registre um pagamento parcial <strong>antes do vencimento</strong> na mesma parcela, <strong>sem</strong> gerar novo empréstimo.
+                                </p>
+                                <div class="mb-2">
+                                    <strong>Falta pagar (parcela):</strong>
+                                    <span class="fw-bold">R$ {{ number_format($faltaAdiantamento, 2, ',', '.') }}</span>
+                                    @if($parcelaAdiantamento?->data_vencimento)
+                                        <span class="text-muted ms-1">· Vencimento: {{ $parcelaAdiantamento->data_vencimento->format('d/m/Y') }}</span>
+                                    @endif
+                                </div>
+                                <a href="{{ route('pagamentos.create', ['parcela_id' => $parcelaAdiantamento->id, 'adiantamento' => '1']) }}" class="btn btn-outline-secondary">
+                                    <i class="bx bx-money"></i> Registrar adiantamento
+                                </a>
                             </div>
                         @endif
 
@@ -2016,8 +2044,7 @@
                                             </td>
                                             <td>
                                                 @if(!$parcela->isQuitada())
-                                                    <a href="{{ route('pagamentos.create', ['parcela_id' => $parcela->id]) }}" 
-                                                       class="btn btn-sm btn-success">
+                                                    <a href="{{ route('pagamentos.create', ['parcela_id' => $parcela->id]) }}" class="btn btn-sm btn-success" title="Registrar pagamento">
                                                         <i class="bx bx-money"></i>
                                                     </a>
                                                 @endif

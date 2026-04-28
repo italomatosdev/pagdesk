@@ -199,6 +199,25 @@ class Parcela extends Model
     }
 
     /**
+     * Pagamento parcial antecipado (1 parcela, sem novo empréstimo): só quando em dia e há saldo nominal.
+     */
+    public function podeAdiantarValor(): bool
+    {
+        if ($this->isQuitada() || $this->isAtrasada()) {
+            return false;
+        }
+        if ($this->faltaPagar() <= 0) {
+            return false;
+        }
+        $em = $this->relationLoaded('emprestimo') ? $this->emprestimo : $this->emprestimo()->first();
+        if (! $em || ! $em->isAtivo()) {
+            return false;
+        }
+
+        return (int) $em->numero_parcelas === 1;
+    }
+
+    /**
      * Data do pagamento para exibição em detalhes do empréstimo: campo da parcela ou último registro em pagamentos.
      */
     public function dataPagamentoParaExibicao(): ?Carbon
