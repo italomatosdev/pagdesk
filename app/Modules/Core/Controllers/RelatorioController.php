@@ -98,13 +98,13 @@ class RelatorioController extends Controller
     }
 
     /**
-     * @return string vazio ou diaria|semanal|mensal
+     * @return string vazio ou diaria|semanal|mensal|quinzenal
      */
     private static function normalizarFrequenciaComissoes(mixed $raw): string
     {
         $val = is_string($raw) ? $raw : '';
 
-        return in_array($val, ['diaria', 'semanal', 'mensal'], true) ? $val : '';
+        return in_array($val, ['diaria', 'semanal', 'mensal', 'quinzenal'], true) ? $val : '';
     }
 
     /**
@@ -1608,6 +1608,7 @@ class RelatorioController extends Controller
         $freqLabels = [
             'diaria' => 'Diária',
             'semanal' => 'Semanal',
+            'quinzenal' => 'Quinzenal (15 dias)',
             'mensal' => 'Mensal',
         ];
 

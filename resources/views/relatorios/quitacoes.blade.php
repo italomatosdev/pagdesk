@@ -43,6 +43,7 @@
                                     <option value="">Todas</option>
                                     <option value="diaria" {{ $frequencia === 'diaria' ? 'selected' : '' }}>Diária</option>
                                     <option value="semanal" {{ $frequencia === 'semanal' ? 'selected' : '' }}>Semanal</option>
+                                    <option value="quinzenal" {{ $frequencia === 'quinzenal' ? 'selected' : '' }}>Quinzenal (15 dias)</option>
                                     <option value="mensal" {{ $frequencia === 'mensal' ? 'selected' : '' }}>Mensal</option>
                                 </select>
                             </div>

@@ -282,6 +282,7 @@
                                         <select name="frequencia" id="frequencia" class="form-select" required>
                                             <option value="diaria" {{ old('frequencia') == 'diaria' ? 'selected' : '' }}>Diária</option>
                                             <option value="semanal" {{ old('frequencia') == 'semanal' ? 'selected' : '' }}>Semanal</option>
+                                            <option value="quinzenal" {{ old('frequencia') == 'quinzenal' ? 'selected' : '' }}>Quinzenal (15 dias)</option>
                                             <option value="mensal" {{ old('frequencia') == 'mensal' ? 'selected' : '' }}>Mensal</option>
                                         </select>
                                         @error('frequencia')
@@ -1144,6 +1145,11 @@
                         d.setDate(d.getDate() + 7);
                         return d;
                     }
+                    if (frequencia === 'quinzenal') {
+                        const d = new Date(base.getTime());
+                        d.setDate(d.getDate() + 15);
+                        return d;
+                    }
                     return new Date(base.getTime());
                 }
 
@@ -1160,6 +1166,11 @@
                     }
                     if (frequencia === 'mensal') {
                         return proximoMesMesmoDia(cursor, 1);
+                    }
+                    if (frequencia === 'quinzenal') {
+                        const d = new Date(cursor.getTime());
+                        d.setDate(d.getDate() + 15);
+                        return d;
                     }
                     const d = new Date(cursor.getTime());
                     d.setDate(d.getDate() + 1);

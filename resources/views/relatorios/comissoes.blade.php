@@ -16,7 +16,7 @@
                     <h5 class="card-title mb-0">Filtros</h5>
                 </div>
                 <div class="card-body">
-                    <p class="text-muted small mb-2">Selecione o período, a operação e, se quiser, a frequência do contrato (diária, semanal, mensal). Em cada linha, escolha o tipo de comissão (Diária = em cima do valor quitado / Mensal = em cima dos juros) e informe a taxa % para calcular.</p>
+                    <p class="text-muted small mb-2">Selecione o período, a operação e, se quiser, a frequência do contrato (diária, semanal, quinzenal, mensal). Em cada linha, escolha o tipo de comissão (Diária = em cima do valor quitado / Mensal = em cima dos juros) e informe a taxa % para calcular.</p>
                     <form method="GET" action="{{ route('relatorios.comissoes') }}" class="row g-3 align-items-end">
                         <div class="col-6 col-sm-4 col-md-2">
                             <label class="form-label">Data inicial</label>
@@ -43,6 +43,7 @@
                                 <option value="" {{ ($frequencia ?? '') === '' ? 'selected' : '' }}>Todas</option>
                                 <option value="diaria" {{ ($frequencia ?? '') === 'diaria' ? 'selected' : '' }}>Diária</option>
                                 <option value="semanal" {{ ($frequencia ?? '') === 'semanal' ? 'selected' : '' }}>Semanal</option>
+                                <option value="quinzenal" {{ ($frequencia ?? '') === 'quinzenal' ? 'selected' : '' }}>Quinzenal (15 dias)</option>
                                 <option value="mensal" {{ ($frequencia ?? '') === 'mensal' ? 'selected' : '' }}>Mensal</option>
                             </select>
                         </div>
@@ -66,7 +67,7 @@
                         Comissões por consultor ({{ $dateFrom->format('d/m/Y') }} a {{ $dateTo->format('d/m/Y') }})
                         @if(!empty($frequencia))
                             @php
-                                $freqTitulo = ['diaria' => 'Diária', 'semanal' => 'Semanal', 'mensal' => 'Mensal'][$frequencia] ?? ucfirst($frequencia);
+                                $freqTitulo = ['diaria' => 'Diária', 'semanal' => 'Semanal', 'quinzenal' => 'Quinzenal (15 dias)', 'mensal' => 'Mensal'][$frequencia] ?? ucfirst($frequencia);
                             @endphp
                             <span class="text-muted fw-normal">— {{ $freqTitulo }}</span>
                         @endif

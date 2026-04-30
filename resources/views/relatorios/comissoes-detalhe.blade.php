@@ -20,7 +20,7 @@
                 @endif
                 @if(!empty($frequencia))
                     @php
-                        $freqDetalhe = ['diaria' => 'Diária', 'semanal' => 'Semanal', 'mensal' => 'Mensal'][$frequencia] ?? ucfirst($frequencia);
+                        $freqDetalhe = ['diaria' => 'Diária', 'semanal' => 'Semanal', 'quinzenal' => 'Quinzenal (15 dias)', 'mensal' => 'Mensal'][$frequencia] ?? ucfirst($frequencia);
                     @endphp
                     — Frequência: <strong>{{ $freqDetalhe }}</strong>
                 @else
