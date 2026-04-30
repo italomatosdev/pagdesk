@@ -205,6 +205,14 @@ class CadastroClienteController extends Controller
                     $operacao->empresa_id
                 );
 
+                $this->clienteService->copiarDocumentosReusoParaOperacao(
+                    (int) $clienteExistente->id,
+                    (int) $operacao->id,
+                    (int) $operacao->empresa_id,
+                    $documentoFile,
+                    $selfieFile
+                );
+
                 $this->clienteService->processarDocumentosParaOperacao(
                     $clienteExistente->id,
                     [

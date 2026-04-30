@@ -6,10 +6,13 @@ use App\Modules\Core\Models\Cliente;
 use App\Modules\Core\Models\ClienteDadosEmpresa;
 use App\Modules\Core\Models\ClientDocument;
 use App\Modules\Core\Models\EmpresaClienteVinculo;
+use App\Modules\Core\Models\Operacao;
 use App\Modules\Core\Models\OperacaoDadosCliente;
 use App\Modules\Core\Models\OperationClient;
+use App\Models\Scopes\EmpresaScope;
 use App\Modules\Core\Traits\Auditable;
 use App\Modules\Loans\Models\Emprestimo;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -186,12 +189,16 @@ class ClienteService
         ?int $consultorId = null,
         ?string $notasInternas = null
     ): OperationClient {
-        // Verificar se vínculo já existe
-        $vinculoExistente = OperationClient::where('cliente_id', $clienteId)
+        // Inclui soft-deletes: índice único (operacao_id, cliente_id) ainda bloqueia INSERT se só existir linha "apagada".
+        $vinculoExistente = OperationClient::withTrashed()
+            ->where('cliente_id', $clienteId)
             ->where('operacao_id', $operacaoId)
             ->first();
 
         if ($vinculoExistente) {
+            if ($vinculoExistente->trashed()) {
+                $vinculoExistente->restore();
+            }
             // Atualizar vínculo existente
             $vinculoExistente->update([
                 'limite_credito' => $limiteCredito,
@@ -774,6 +781,205 @@ class ClienteService
             
             return true;
         });
+    }
+
+    /**
+     * IDs de operações da empresa (inclui inativas e soft-deleted) para reuso de documentos:
+     * anexos antigos podem apontar para operação apagada e ainda assim pertencer à mesma empresa.
+     */
+    private function idsOperacoesDaEmpresaParaReusoDocumentos(int $empresaId): \Illuminate\Support\Collection
+    {
+        return Operacao::withoutGlobalScope(EmpresaScope::class)
+            ->withTrashed()
+            ->where('empresa_id', $empresaId)
+            ->pluck('id');
+    }
+
+    /**
+     * Resolve caminho gravado em `client_documents.arquivo_path` para o disco `public` (storage/app/public).
+     */
+    private function caminhoRelativoExistenteNoDiscoPublico(?string $arquivoPath): ?string
+    {
+        if ($arquivoPath === null || $arquivoPath === '') {
+            return null;
+        }
+        $normalized = str_replace('\\', '/', trim($arquivoPath));
+        $normalized = ltrim($normalized, '/');
+        $candidates = array_values(array_unique(array_filter([
+            $normalized,
+            preg_replace('#^storage/#', '', $normalized),
+            preg_replace('#^public/storage/#', '', $normalized),
+        ], static fn ($p) => $p !== null && $p !== '')));
+
+        foreach ($candidates as $rel) {
+            if (Storage::disk('public')->exists($rel)) {
+                return $rel;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Indica se já existe registro de documento/selfie reutilizável (mesma empresa ou legado sem operacao_id).
+     * Usado só para relaxar validação de upload no cadastro — não exige arquivo no disco (path legado/S3/etc.).
+     */
+    public function possuiDocumentoReutilizavelNaEmpresa(int $clienteId, int $empresaId, string $categoria): bool
+    {
+        if (! in_array($categoria, ['documento', 'selfie'], true)) {
+            return false;
+        }
+
+        $operacaoIds = $this->idsOperacoesDaEmpresaParaReusoDocumentos($empresaId);
+
+        return ClientDocument::query()
+            ->where('cliente_id', $clienteId)
+            ->where('categoria', $categoria)
+            ->whereNotNull('arquivo_path')
+            ->where('arquivo_path', '!=', '')
+            ->where(function ($q) use ($operacaoIds) {
+                $q->whereNull('operacao_id');
+                if ($operacaoIds->isNotEmpty()) {
+                    $q->orWhereIn('operacao_id', $operacaoIds);
+                }
+            })
+            ->exists();
+    }
+
+    /**
+     * Copia documento, selfie e anexos já existentes em operações da mesma empresa (ou legado sem operacao_id) para a operação destino.
+     * Não copia documento/selfie se o formulário enviou arquivo novo na mesma request (evita duplicata antes do processar uploads).
+     */
+    public function copiarDocumentosReusoParaOperacao(
+        int $clienteId,
+        int $operacaoDestinoId,
+        int $empresaId,
+        ?UploadedFile $documentoUpload = null,
+        ?UploadedFile $selfieUpload = null
+    ): void {
+        $operacaoIds = $this->idsOperacoesDaEmpresaParaReusoDocumentos($empresaId);
+
+        foreach (['documento', 'selfie'] as $categoria) {
+            if ($categoria === 'documento' && $documentoUpload instanceof UploadedFile) {
+                continue;
+            }
+            if ($categoria === 'selfie' && $selfieUpload instanceof UploadedFile) {
+                continue;
+            }
+
+            $docNoDestino = ClientDocument::query()
+                ->where('cliente_id', $clienteId)
+                ->where('operacao_id', $operacaoDestinoId)
+                ->where('categoria', $categoria)
+                ->orderByDesc('id')
+                ->first();
+            if ($docNoDestino && $this->caminhoRelativoExistenteNoDiscoPublico($docNoDestino->arquivo_path)) {
+                continue;
+            }
+
+            $source = ClientDocument::query()
+                ->where('cliente_id', $clienteId)
+                ->where('categoria', $categoria)
+                ->whereNotNull('arquivo_path')
+                ->where('arquivo_path', '!=', '')
+                ->where(function ($q) use ($operacaoIds) {
+                    $q->whereNull('operacao_id');
+                    if ($operacaoIds->isNotEmpty()) {
+                        $q->orWhereIn('operacao_id', $operacaoIds);
+                    }
+                })
+                ->orderByDesc('id')
+                ->get()
+                ->first(function (ClientDocument $row) {
+                    return (bool) $this->caminhoRelativoExistenteNoDiscoPublico($row->arquivo_path);
+                });
+
+            if (! $source) {
+                continue;
+            }
+
+            $srcPath = $this->caminhoRelativoExistenteNoDiscoPublico($source->arquivo_path);
+            if (! $srcPath) {
+                continue;
+            }
+
+            $dir = $categoria === 'selfie' ? 'clientes/selfies' : 'clientes/documentos';
+            $ext = pathinfo($srcPath, PATHINFO_EXTENSION) ?: ($categoria === 'selfie' ? 'jpg' : 'pdf');
+            $newPath = $dir.'/reuso_'.uniqid('', true).'.'.$ext;
+
+            if (! Storage::disk('public')->copy($srcPath, $newPath)) {
+                continue;
+            }
+
+            ClientDocument::create([
+                'cliente_id' => $clienteId,
+                'empresa_id' => null,
+                'operacao_id' => $operacaoDestinoId,
+                'categoria' => $categoria,
+                'tipo' => $source->tipo ?: ($categoria === 'selfie' ? 'selfie_documento' : 'documento_identidade'),
+                'arquivo_path' => $newPath,
+                'nome_arquivo' => $source->nome_arquivo ?: basename($newPath),
+            ]);
+        }
+
+        $nomesAnexoJaNaDestino = ClientDocument::query()
+            ->where('cliente_id', $clienteId)
+            ->where('operacao_id', $operacaoDestinoId)
+            ->where('categoria', 'anexo')
+            ->pluck('nome_arquivo')
+            ->filter()
+            ->all();
+        $nomesAnexoDestino = array_fill_keys($nomesAnexoJaNaDestino, true);
+
+        $sourceAnexos = ClientDocument::query()
+            ->where('cliente_id', $clienteId)
+            ->where('categoria', 'anexo')
+            ->whereNotNull('arquivo_path')
+            ->where('arquivo_path', '!=', '')
+            ->where(function ($q) use ($operacaoIds) {
+                $q->whereNull('operacao_id');
+                if ($operacaoIds->isNotEmpty()) {
+                    $q->orWhereIn('operacao_id', $operacaoIds);
+                }
+            })
+            ->where(function ($q) use ($operacaoDestinoId) {
+                $q->whereNull('operacao_id')->orWhere('operacao_id', '!=', $operacaoDestinoId);
+            })
+            ->orderBy('id')
+            ->get();
+
+        foreach ($sourceAnexos as $src) {
+            $nome = $src->nome_arquivo ?: basename((string) $src->arquivo_path);
+            if ($nome !== '' && isset($nomesAnexoDestino[$nome])) {
+                continue;
+            }
+
+            $srcPath = $this->caminhoRelativoExistenteNoDiscoPublico($src->arquivo_path);
+            if (! $srcPath) {
+                continue;
+            }
+
+            $ext = pathinfo($srcPath, PATHINFO_EXTENSION) ?: 'pdf';
+            $newPath = 'clientes/anexos/reuso_'.uniqid('', true).'.'.$ext;
+
+            if (! Storage::disk('public')->copy($srcPath, $newPath)) {
+                continue;
+            }
+
+            ClientDocument::create([
+                'cliente_id' => $clienteId,
+                'empresa_id' => null,
+                'operacao_id' => $operacaoDestinoId,
+                'categoria' => 'anexo',
+                'tipo' => $src->tipo ?: 'anexo',
+                'arquivo_path' => $newPath,
+                'nome_arquivo' => $nome,
+            ]);
+
+            if ($nome !== '') {
+                $nomesAnexoDestino[$nome] = true;
+            }
+        }
     }
 }
 

@@ -190,6 +190,8 @@
                                 <h5 class="mb-3">Documentos do Cliente</h5>
                                 <p class="text-muted small mb-2">Campos marcados com <span class="text-danger">*</span> são obrigatórios para a operação selecionada.</p>
 
+                                <div id="wrap-documentos-existentes-info" class="mb-3" style="display: none;"></div>
+
                                 <div class="mb-3" id="wrap-documento-cliente">
                                     <label class="form-label" id="label-documento-cliente">Documento do Cliente (RG/CNH)</label>
                                     <input type="file" name="documento_cliente" id="input-documento-cliente" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
@@ -251,31 +253,63 @@
                 const labelSelfieDoc = document.getElementById('label-selfie-documento');
                 const nomeInput = document.getElementById('nome');
 
+                function aplicarRelaxamentoDocumentosObrigatorios() {
+                    const b = window.buscaClienteCpf;
+                    if (!b || !b.pode_submeter_sem_upload_documentos) return;
+                    if (docInput) docInput.removeAttribute('required');
+                    if (selfieInput) selfieInput.removeAttribute('required');
+                }
+
+                function renderDocumentosExistentesInfo(documentosExistentes) {
+                    const wrap = document.getElementById('wrap-documentos-existentes-info');
+                    if (!wrap) return;
+                    const list = documentosExistentes || [];
+                    if (!list.length) {
+                        wrap.innerHTML = '';
+                        wrap.style.display = 'none';
+                        return;
+                    }
+                    wrap.style.display = '';
+                    const linhas = list.map((d) => {
+                        const label = d.categoria === 'selfie' ? 'Selfie com documento' : 'Documento (RG/CNH)';
+                        const link = d.url
+                            ? `<a href="${d.url}" target="_blank" rel="noopener">${d.nome_arquivo || 'Abrir arquivo'}</a>`
+                            : (d.nome_arquivo || '(sem URL)');
+                        return `<div class="mb-1">${label}: ${link}</div>`;
+                    }).join('');
+                    const reutil = window.buscaClienteCpf && window.buscaClienteCpf.pode_submeter_sem_upload_documentos
+                        ? '<p class="mb-0 mt-2 text-muted small">Nesta operação você pode enviar o cadastro <strong>sem novo upload</strong>: o sistema reutilizará os arquivos já salvos para esta empresa.</p>'
+                        : '';
+                    wrap.innerHTML = `<div class="alert alert-secondary small mb-0 text-start">${linhas}${reutil}</div>`;
+                }
+
                 function updateDocumentosObrigatorios() {
                     const operacaoId = operacaoSelect ? operacaoSelect.value : '';
                     const docs = (window.documentObrigatoriosPorOperacao && operacaoId) ? (window.documentObrigatoriosPorOperacao[operacaoId] || []) : [];
                     const docObrig = docs.indexOf('documento_cliente') !== -1;
                     const selfieObrig = docs.indexOf('selfie_documento') !== -1;
+                    const relax = window.buscaClienteCpf && window.buscaClienteCpf.pode_submeter_sem_upload_documentos;
                     if (docInput) {
-                        docInput.required = docObrig;
                         docInput.removeAttribute('required');
-                        if (docObrig) docInput.setAttribute('required', 'required');
+                        if (docObrig && !relax) docInput.setAttribute('required', 'required');
                     }
                     if (selfieInput) {
-                        selfieInput.required = selfieObrig;
                         selfieInput.removeAttribute('required');
-                        if (selfieObrig) selfieInput.setAttribute('required', 'required');
+                        if (selfieObrig && !relax) selfieInput.setAttribute('required', 'required');
                     }
                     if (labelDocCliente) {
-                        labelDocCliente.innerHTML = 'Documento do Cliente (RG/CNH)' + (docObrig ? ' <span class="text-danger">*</span>' : '');
+                        labelDocCliente.innerHTML = 'Documento do Cliente (RG/CNH)' + (docObrig && !relax ? ' <span class="text-danger">*</span>' : '');
                     }
                     if (labelSelfieDoc) {
-                        labelSelfieDoc.innerHTML = 'Selfie com Documento' + (selfieObrig ? ' <span class="text-danger">*</span>' : '');
+                        labelSelfieDoc.innerHTML = 'Selfie com Documento' + (selfieObrig && !relax ? ' <span class="text-danger">*</span>' : '');
                     }
                 }
 
                 if (operacaoSelect) {
-                    operacaoSelect.addEventListener('change', updateDocumentosObrigatorios);
+                    operacaoSelect.addEventListener('change', function() {
+                        window.buscaClienteCpf = null;
+                        updateDocumentosObrigatorios();
+                    });
                     updateDocumentosObrigatorios();
                 }
 
@@ -287,6 +321,71 @@
 
                     nomeInput.required = ativa;
                     if (ativa) updateDocumentosObrigatorios();
+                }
+
+                function obterOperacaoSelecionadaId() {
+                    if (!operacaoSelect || !operacaoSelect.value) return null;
+                    const n = parseInt(operacaoSelect.value, 10);
+                    return Number.isFinite(n) && n > 0 ? n : null;
+                }
+
+                function obterIdsOperacoesVinculadas(cliente) {
+                    const rows = cliente.operation_clients || cliente.operationClients || [];
+                    return rows
+                        .map((row) => parseInt(row.operacao_id ?? row?.operacao?.id, 10))
+                        .filter((id) => Number.isFinite(id) && id > 0);
+                }
+
+                function preencherFormularioComCliente(cliente, fichasPorOperacao, operacaoSelecionadaId, documentosExistentes) {
+                    if (!cliente) return;
+                    const list = fichasPorOperacao || [];
+                    let ficha = operacaoSelecionadaId
+                        ? list.find((f) => parseInt(f.operacao_id, 10) === operacaoSelecionadaId)
+                        : null;
+                    if (!ficha && list.length) {
+                        ficha = list[0];
+                    }
+                    const pick = (key) => {
+                        const vF = ficha && ficha[key] !== undefined && ficha[key] !== null && String(ficha[key]).trim() !== '';
+                        if (vF) return ficha[key];
+                        const vC = cliente[key] !== undefined && cliente[key] !== null && String(cliente[key]).trim() !== '';
+                        return vC ? cliente[key] : '';
+                    };
+                    if (nomeInput) nomeInput.value = pick('nome');
+                    const telIn = document.getElementById('telefone');
+                    if (telIn) telIn.value = pick('telefone');
+                    const formCriar = document.querySelector('form.form-criar-cliente');
+                    const emailIn = formCriar ? formCriar.querySelector('input[name="email"]') : null;
+                    if (emailIn) emailIn.value = pick('email');
+                    const dn = document.getElementById('data_nascimento');
+                    if (dn) dn.value = pick('data_nascimento') || '';
+                    const cep = document.getElementById('cep');
+                    if (cep) cep.value = pick('cep') || '';
+                    const end = document.getElementById('endereco');
+                    if (end) end.value = pick('endereco') || '';
+                    const num = document.getElementById('numero');
+                    if (num) num.value = pick('numero') || '';
+                    const cid = document.getElementById('cidade');
+                    if (cid) cid.value = pick('cidade') || '';
+                    const est = document.getElementById('estado');
+                    if (est) est.value = pick('estado') || '';
+                    const obs = formCriar ? formCriar.querySelector('textarea[name="observacoes"]') : null;
+                    if (obs) obs.value = pick('observacoes') || '';
+                    const rnome = document.getElementById('responsavel_nome');
+                    if (rnome) rnome.value = pick('responsavel_nome') || '';
+                    const rcpf = document.getElementById('responsavel_cpf');
+                    if (rcpf) rcpf.value = pick('responsavel_cpf') || '';
+                    const rrg = document.getElementById('responsavel_rg');
+                    if (rrg) rrg.value = pick('responsavel_rg') || '';
+                    const rcnh = document.getElementById('responsavel_cnh');
+                    if (rcnh) rcnh.value = pick('responsavel_cnh') || '';
+                    const rcargo = document.getElementById('responsavel_cargo');
+                    if (rcargo) rcargo.value = pick('responsavel_cargo') || '';
+
+                    const docsList = documentosExistentes !== undefined ? documentosExistentes : (window.buscaClienteCpf && window.buscaClienteCpf.documentos_existentes);
+                    renderDocumentosExistentesInfo(docsList || []);
+                    aplicarRelaxamentoDocumentosObrigatorios();
+                    updateDocumentosObrigatorios();
                 }
 
                 // Se voltou com old('nome') (erro de validação), já abre a etapa 2
@@ -413,8 +512,10 @@
                         }
                     }
 
-                    // Consultar backend
-                    const url = `{{ route('clientes.buscar.cpf') }}?cpf=${documento}`;
+                    // Consultar backend (operacao_id para reutilização de documentos / flags no mesmo fluxo)
+                    const opBuscaId = obterOperacaoSelecionadaId();
+                    const urlOp = opBuscaId ? `&operacao_id=${opBuscaId}` : '';
+                    const url = `{{ route('clientes.buscar.cpf') }}?cpf=${documento}${urlOp}`;
 
                     try {
                         // Mostrar loading no botão
@@ -430,6 +531,15 @@
                         
                         if (data.error) {
                             throw new Error(data.error);
+                        }
+
+                        if (!data?.existe || !data?.cliente || data?.consulta_cruzada) {
+                            window.buscaClienteCpf = null;
+                        } else {
+                            window.buscaClienteCpf = {
+                                pode_submeter_sem_upload_documentos: data.pode_submeter_sem_upload_documentos === true,
+                                documentos_existentes: data.documentos_existentes || [],
+                            };
                         }
 
                         // Se é consulta cruzada (cliente de outra empresa)
@@ -820,11 +930,36 @@
                                 ? `<div class="alert alert-warning mb-0 mt-3 text-start">
                                         <i class="bx bx-info-circle me-1"></i>
                                         <strong>Sem vínculo com operação.</strong> Não é possível abrir a ficha até existir vínculo.
-                                        Use <strong>Continuar preenchimento</strong>, preencha os dados e envie o formulário com a operação selecionada — o sistema vinculará este cadastro à operação (sem duplicar o CPF/CNPJ).
+                                        Use <strong>Usar nesta operação</strong>, preencha o que faltar e envie o formulário com a operação selecionada no topo — o sistema vinculará este cadastro à operação (sem duplicar o CPF/CNPJ).
                                    </div>`
                                 : '';
 
-                            Swal.fire({
+                            const operacaoSelecionadaId = obterOperacaoSelecionadaId();
+                            const vinculadosIds = obterIdsOperacoesVinculadas(cliente);
+                            const podeUsarNestaOperacao = operacaoSelecionadaId !== null
+                                && vinculadosIds.indexOf(operacaoSelecionadaId) === -1;
+
+                            const alertaJaVinculadoOperacao = (temVinculoOperacao && !podeUsarNestaOperacao && operacaoSelecionadaId !== null)
+                                ? `<div class="alert alert-light border mb-3 text-start">
+                                        <i class="bx bx-info-circle me-1"></i>
+                                        Este cliente <strong>já está vinculado à operação selecionada</strong> no topo do formulário.
+                                        Para vincular em <strong>outra</strong> operação, altere o select de operação e clique em <strong>Verificar</strong> de novo.
+                                   </div>`
+                                : '';
+
+                            const blocoUsarNestaOperacao = (temVinculoOperacao && podeUsarNestaOperacao)
+                                ? `<div class="alert alert-info small mb-3 text-start">
+                                        <i class="bx bx-info-circle me-1"></i>
+                                        Use <strong>Usar nesta operação</strong> para preencher os dados e vincular o cliente à operação selecionada no topo (sem duplicar o CPF/CNPJ). Ajustes finos podem ser feitos depois em <strong>Ver/editar ficha</strong>.
+                                   </div>`
+                                : '';
+
+                            const operacaoIdQuery = operacaoSelecionadaId ? `?operacao_id=${operacaoSelecionadaId}` : '';
+                            const linkEditarFichaHtml = `<p class="text-center mb-0 mt-2">
+                                        <a href="{{ url('/clientes') }}/${cliente.id}/edit${operacaoIdQuery}" class="btn btn-link btn-sm p-0">Ver/editar ficha</a>
+                                    </p>`;
+
+                            const swalMesmaEmpresaBase = {
                                 icon: 'info',
                                 title: 'Ficha do Cliente',
                                 width: 900,
@@ -850,6 +985,9 @@
                                                 </div>
                                             </div>
                                         </div>
+
+                                        ${alertaJaVinculadoOperacao}
+                                        ${blocoUsarNestaOperacao}
 
                                         ${fichasBlockMesmaEmpresa}
 
@@ -920,33 +1058,67 @@
                                                 </div>
                                             </div>
                                         </div>
+                                        ${temVinculoOperacao && podeUsarNestaOperacao ? linkEditarFichaHtml : ''}
                                         ${avisoSemVinculoMesmaEmpresa}
                                     </div>
                                 `,
-                                showCancelButton: true,
-                                showDenyButton: temVinculoOperacao,
-                                confirmButtonText: temVinculoOperacao ? 'Usar cadastro' : 'Continuar preenchimento',
-                                denyButtonText: 'Ver/Editar ficha',
-                                cancelButtonText: 'Cancelar',
-                                confirmButtonColor: temVinculoOperacao ? '#038edc' : '#f1b44c',
-                                denyButtonColor: '#f1b44c',
-                                cancelButtonColor: '#6c757d',
-                            }).then((result) => {
+                            };
+
+                            setEtapa2Ativa(false);
+
+                            if (temVinculoOperacao && podeUsarNestaOperacao) {
+                                swalMesmaEmpresaBase.showCancelButton = true;
+                                swalMesmaEmpresaBase.showDenyButton = true;
+                                swalMesmaEmpresaBase.confirmButtonText = 'Usar nesta operação';
+                                swalMesmaEmpresaBase.denyButtonText = 'Abrir ficha';
+                                swalMesmaEmpresaBase.cancelButtonText = 'Cancelar';
+                                swalMesmaEmpresaBase.confirmButtonColor = '#f1b44c';
+                                swalMesmaEmpresaBase.denyButtonColor = '#038edc';
+                                swalMesmaEmpresaBase.cancelButtonColor = '#6c757d';
+                            } else if (temVinculoOperacao) {
+                                swalMesmaEmpresaBase.showCancelButton = true;
+                                swalMesmaEmpresaBase.showDenyButton = true;
+                                swalMesmaEmpresaBase.confirmButtonText = 'Usar cadastro';
+                                swalMesmaEmpresaBase.denyButtonText = 'Ver/Editar ficha';
+                                swalMesmaEmpresaBase.cancelButtonText = 'Cancelar';
+                                swalMesmaEmpresaBase.confirmButtonColor = '#038edc';
+                                swalMesmaEmpresaBase.denyButtonColor = '#f1b44c';
+                                swalMesmaEmpresaBase.cancelButtonColor = '#6c757d';
+                            } else {
+                                swalMesmaEmpresaBase.showCancelButton = true;
+                                swalMesmaEmpresaBase.showDenyButton = false;
+                                swalMesmaEmpresaBase.confirmButtonText = 'Usar nesta operação';
+                                swalMesmaEmpresaBase.cancelButtonText = 'Cancelar';
+                                swalMesmaEmpresaBase.confirmButtonColor = '#f1b44c';
+                                swalMesmaEmpresaBase.cancelButtonColor = '#6c757d';
+                            }
+
+                            Swal.fire(swalMesmaEmpresaBase).then((result) => {
+                                if (temVinculoOperacao && podeUsarNestaOperacao) {
+                                    if (result.isConfirmed) {
+                                        preencherFormularioComCliente(cliente, fichasListMesmaEmpresa, operacaoSelecionadaId, data.documentos_existentes);
+                                        setEtapa2Ativa(true);
+                                        nomeInput?.focus();
+                                    } else if (result.isDenied) {
+                                        window.location.href = `{{ url('/clientes') }}/${cliente.id}`;
+                                    }
+                                    return;
+                                }
                                 if (temVinculoOperacao) {
                                     if (result.isConfirmed) {
                                         window.location.href = `{{ url('/clientes') }}/${cliente.id}`;
                                     } else if (result.isDenied) {
                                         window.location.href = `{{ url('/clientes') }}/${cliente.id}/edit`;
                                     }
-                                } else {
-                                    if (result.isConfirmed) {
-                                        setEtapa2Ativa(true);
-                                        nomeInput?.focus();
-                                    }
+                                    return;
+                                }
+                                if (result.isConfirmed) {
+                                    preencherFormularioComCliente(cliente, fichasListMesmaEmpresa, operacaoSelecionadaId, data.documentos_existentes);
+                                    setEtapa2Ativa(true);
+                                    nomeInput?.focus();
                                 }
                             });
 
-                            setEtapa2Ativa(false);
                             return;
                         }
 

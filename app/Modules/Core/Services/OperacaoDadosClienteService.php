@@ -147,15 +147,20 @@ class OperacaoDadosClienteService
             return $existente->fresh();
         }
 
-        $base = $this->payloadBrutoFromCliente($cliente, $empresaId);
-        $merged = array_merge($base, $filtrado);
+        // Nova ficha: só o que veio em $dados (não hidratar com colunas de `clientes` — evita vazar endereço/telefone
+        // de outra empresa na operação). `nome` é obrigatório na tabela; se o chamador não enviou, usa o do cliente.
+        $createPayload = array_merge(['empresa_id' => $empresaId], $filtrado);
+        if (! array_key_exists('nome', $createPayload) || $createPayload['nome'] === null || $createPayload['nome'] === '') {
+            $attrs = $cliente->getAttributes();
+            $createPayload['nome'] = (string) ($attrs['nome'] ?? '');
+        }
 
         return OperacaoDadosCliente::create(array_merge(
             [
                 'cliente_id' => $clienteId,
                 'operacao_id' => $operacaoId,
             ],
-            $merged
+            $createPayload
         ));
     }
 

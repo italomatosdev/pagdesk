@@ -52,13 +52,14 @@ class SincronizarVinculosClientes extends Command
         $bar->start();
 
         foreach ($combinacoes as $combinacao) {
-            $vinculo = OperationClient::where('cliente_id', $combinacao->cliente_id)
+            $vinculo = OperationClient::withTrashed()
+                ->where('cliente_id', $combinacao->cliente_id)
                 ->where('operacao_id', $combinacao->operacao_id)
                 ->first();
 
-            if (!$vinculo) {
+            if (! $vinculo) {
                 // Criar novo vínculo
-                if (!$dryRun) {
+                if (! $dryRun) {
                     OperationClient::create([
                         'cliente_id' => $combinacao->cliente_id,
                         'operacao_id' => $combinacao->operacao_id,
@@ -69,10 +70,13 @@ class SincronizarVinculosClientes extends Command
                 }
                 $criados++;
             } else {
-                // Vínculo já existe
-                if (!$vinculo->consultor_id && $combinacao->consultor_id) {
+                if ($vinculo->trashed() && ! $dryRun) {
+                    $vinculo->restore();
+                }
+                // Vínculo já existe (ou foi restaurado)
+                if (! $vinculo->consultor_id && $combinacao->consultor_id) {
                     // Atualizar consultor se não estiver definido
-                    if (!$dryRun) {
+                    if (! $dryRun) {
                         $vinculo->update(['consultor_id' => $combinacao->consultor_id]);
                     }
                     $atualizados++;

@@ -342,12 +342,38 @@ class ClienteController extends Controller
         $documentoFile = $request->file('documento_cliente');
         $selfieFile = $request->file('selfie_documento');
 
-        if (in_array('documento_cliente', $docsObrigatorios) && !$documentoFile) {
+        $documentoLimpoPre = preg_replace('/[^0-9]/', '', (string) $request->input('documento', ''));
+        $clienteExistentePre = strlen($documentoLimpoPre) >= 11 ? Cliente::buscarPorDocumento($documentoLimpoPre) : null;
+        $jaVinculadoPre = $clienteExistentePre && OperationClient::where('cliente_id', $clienteExistentePre->id)
+            ->where('operacao_id', $operacao->id)
+            ->exists();
+        $empresaOperacao = (int) $operacao->empresa_id;
+        $clienteJaTemOperacaoNaMesmaEmpresa = $clienteExistentePre && OperationClient::query()
+            ->withTrashed()
+            ->where('cliente_id', $clienteExistentePre->id)
+            ->whereHas('operacao', static function ($q) use ($empresaOperacao) {
+                $q->where('empresa_id', $empresaOperacao);
+            })
+            ->exists();
+        $mesmaEmpresaNovoVinculo = $clienteExistentePre && ! $jaVinculadoPre
+            && (
+                (int) $clienteExistentePre->empresa_id === $empresaOperacao
+                || $clienteJaTemOperacaoNaMesmaEmpresa
+            );
+
+        $relaxDoc = $mesmaEmpresaNovoVinculo && ! $documentoFile
+            && in_array('documento_cliente', $docsObrigatorios, true)
+            && $this->clienteService->possuiDocumentoReutilizavelNaEmpresa((int) $clienteExistentePre->id, (int) $operacao->empresa_id, 'documento');
+        $relaxSelfie = $mesmaEmpresaNovoVinculo && ! $selfieFile
+            && in_array('selfie_documento', $docsObrigatorios, true)
+            && $this->clienteService->possuiDocumentoReutilizavelNaEmpresa((int) $clienteExistentePre->id, (int) $operacao->empresa_id, 'selfie');
+
+        if (in_array('documento_cliente', $docsObrigatorios, true) && ! $documentoFile && ! $relaxDoc) {
             $errorMsg = 'O documento do cliente é obrigatório para esta operação e não foi enviado. ';
             $errorMsg .= 'Verifique: 1) Se selecionou um arquivo, 2) Se o tamanho não excede ' . ini_get('upload_max_filesize') . '.';
             return back()->with('error', $errorMsg)->withInput();
         }
-        if (in_array('selfie_documento', $docsObrigatorios) && !$selfieFile) {
+        if (in_array('selfie_documento', $docsObrigatorios, true) && ! $selfieFile && ! $relaxSelfie) {
             $errorMsg = 'A selfie com documento é obrigatória para esta operação e não foi enviada. ';
             $errorMsg .= 'Verifique: 1) Se selecionou um arquivo, 2) Se o tamanho não excede ' . ini_get('upload_max_filesize') . '.';
             return back()->with('error', $errorMsg)->withInput();
@@ -382,8 +408,12 @@ class ClienteController extends Controller
             return back()->with('error', $errorMessage)->withInput();
         }
 
-        $regrasDoc = in_array('documento_cliente', $docsObrigatorios) ? 'required|file|mimes:pdf,jpg,jpeg,png|max:5120' : 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120';
-        $regrasSelfie = in_array('selfie_documento', $docsObrigatorios) ? 'required|file|mimes:jpg,jpeg,png|max:5120' : 'nullable|file|mimes:jpg,jpeg,png|max:5120';
+        $regrasDoc = in_array('documento_cliente', $docsObrigatorios, true) && ! $relaxDoc
+            ? 'required|file|mimes:pdf,jpg,jpeg,png|max:5120'
+            : 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120';
+        $regrasSelfie = in_array('selfie_documento', $docsObrigatorios, true) && ! $relaxSelfie
+            ? 'required|file|mimes:jpg,jpeg,png|max:5120'
+            : 'nullable|file|mimes:jpg,jpeg,png|max:5120';
 
         $validated = $request->validate([
             'tipo_pessoa' => 'required|in:fisica,juridica',
@@ -457,6 +487,16 @@ class ClienteController extends Controller
                     $operacao->id,
                     $this->operacaoDadosClienteService->payloadFromFormularioValidado($validated),
                     $operacao->empresa_id
+                );
+
+                // Sempre tenta reuso por empresa da operação destino (não depender só de mesmaEmpresaNovoVinculo:
+                // cliente.empresa_id pode divergir mesmo com docs em outra operação da mesma empresa).
+                $this->clienteService->copiarDocumentosReusoParaOperacao(
+                    (int) $clienteExistente->id,
+                    (int) $operacao->id,
+                    (int) $operacao->empresa_id,
+                    $documentoFile,
+                    $selfieFile
                 );
 
                 $this->clienteService->processarDocumentosParaOperacao(
@@ -1196,6 +1236,18 @@ class ClienteController extends Controller
                 'tipo_pessoa' => $cliente->tipo_pessoa,
                 'telefone' => $cliente->telefone,
                 'email' => $cliente->email,
+                'data_nascimento' => $cliente->data_nascimento?->format('Y-m-d'),
+                'responsavel_nome' => $cliente->responsavel_nome,
+                'responsavel_cpf' => $cliente->responsavel_cpf,
+                'responsavel_rg' => $cliente->responsavel_rg,
+                'responsavel_cnh' => $cliente->responsavel_cnh,
+                'responsavel_cargo' => $cliente->responsavel_cargo,
+                'endereco' => $cliente->endereco,
+                'numero' => $cliente->numero,
+                'cidade' => $cliente->cidade,
+                'estado' => $cliente->estado,
+                'cep' => $cliente->cep,
+                'observacoes' => $cliente->observacoes,
                 'operation_clients' => $cliente->operationClients->map(function ($oc) {
                     return [
                         'id' => $oc->id,
@@ -1210,11 +1262,47 @@ class ClienteController extends Controller
                 }),
             ];
 
+            $empresaCliente = (int) ($cliente->empresa_id ?? 0);
+            $documentosExistentes = $empresaCliente > 0
+                ? $this->documentosExistentesParaBuscaCpf((int) $cliente->id, $empresaCliente)
+                : [];
+
+            $operacaoIdBusca = (int) ($request->query('operacao_id', $request->input('operacao_id', 0)));
+            $podeSubmeterSemUpload = false;
+            if ($isClienteDaEmpresaAtual && $operacaoIdBusca > 0 && $empresaCliente > 0) {
+                $opBusca = Operacao::with('documentosObrigatorios')->find($operacaoIdBusca);
+                if ($opBusca && (int) $opBusca->empresa_id === $empresaCliente) {
+                    $userBusca = auth()->user();
+                    if ($userBusca && ! $userBusca->isSuperAdmin()) {
+                        $allowedBusca = $userBusca->getOperacoesIds();
+                        if (empty($allowedBusca) || ! in_array($operacaoIdBusca, $allowedBusca, true)) {
+                            $opBusca = null;
+                        }
+                    }
+                    if ($opBusca) {
+                        $jaVinculadoBusca = OperationClient::where('cliente_id', $cliente->id)
+                            ->where('operacao_id', $operacaoIdBusca)
+                            ->exists();
+                        if (! $jaVinculadoBusca) {
+                            $docsOb = $opBusca->documentosObrigatorios->pluck('tipo_documento')->all();
+                            $needDoc = in_array('documento_cliente', $docsOb, true);
+                            $needSelfie = in_array('selfie_documento', $docsOb, true);
+                            $empIdOp = (int) $opBusca->empresa_id;
+                            $okDoc = ! $needDoc || $this->clienteService->possuiDocumentoReutilizavelNaEmpresa((int) $cliente->id, $empIdOp, 'documento');
+                            $okSelfie = ! $needSelfie || $this->clienteService->possuiDocumentoReutilizavelNaEmpresa((int) $cliente->id, $empIdOp, 'selfie');
+                            $podeSubmeterSemUpload = $okDoc && $okSelfie;
+                        }
+                    }
+                }
+            }
+
             return response()->json([
                 'existe' => true,
                 'cliente' => $clienteData,
                 'ficha' => $ficha,
                 'fichas_por_operacao' => $this->fichasPorOperacaoParaCliente((int) $cliente->id, $request),
+                'documentos_existentes' => $documentosExistentes,
+                'pode_submeter_sem_upload_documentos' => $podeSubmeterSemUpload,
                 'consulta_cruzada' => false, // Cliente da própria empresa
                 'pode_abrir_ficha' => $this->clientePodeAbrirFichaParaUsuario((int) $cliente->id),
             ]);
@@ -1436,6 +1524,54 @@ class ClienteController extends Controller
                     'nome' => $f->nome,
                     'telefone' => $f->telefone,
                     'email' => $f->email,
+                    'data_nascimento' => $f->data_nascimento?->format('Y-m-d'),
+                    'responsavel_nome' => $f->responsavel_nome,
+                    'responsavel_cpf' => $f->responsavel_cpf,
+                    'responsavel_rg' => $f->responsavel_rg,
+                    'responsavel_cnh' => $f->responsavel_cnh,
+                    'responsavel_cargo' => $f->responsavel_cargo,
+                    'endereco' => $f->endereco,
+                    'numero' => $f->numero,
+                    'cidade' => $f->cidade,
+                    'estado' => $f->estado,
+                    'cep' => $f->cep,
+                    'observacoes' => $f->observacoes,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Documentos já salvos (mesma empresa do cliente) para exibir no cadastro / busca por CPF.
+     *
+     * @return list<array{categoria: string, nome_arquivo: ?string, url: ?string, operacao_id: ?int}>
+     */
+    private function documentosExistentesParaBuscaCpf(int $clienteId, int $empresaId): array
+    {
+        $operacaoIds = Operacao::withoutGlobalScope(EmpresaScope::class)
+            ->where('empresa_id', $empresaId)
+            ->pluck('id');
+
+        $query = ClientDocument::query()
+            ->where('cliente_id', $clienteId)
+            ->whereIn('categoria', ['documento', 'selfie'])
+            ->whereNotNull('arquivo_path')
+            ->where(function ($q) use ($operacaoIds) {
+                $q->whereNull('operacao_id');
+                if ($operacaoIds->isNotEmpty()) {
+                    $q->orWhereIn('operacao_id', $operacaoIds);
+                }
+            })
+            ->orderByDesc('id');
+
+        return $query->get()
+            ->map(static function (ClientDocument $d) {
+                return [
+                    'categoria' => $d->categoria,
+                    'nome_arquivo' => $d->nome_arquivo,
+                    'url' => $d->url,
+                    'operacao_id' => $d->operacao_id !== null ? (int) $d->operacao_id : null,
                 ];
             })
             ->values()
